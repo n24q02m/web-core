@@ -49,3 +49,10 @@ source_pkgs = ["web_core"]
 
 [tool.coverage.report]
 fail_under = 95
+exclude_lines = [
+    "pragma: no cover",
+    "if sys.platform",
+    "if __name__",
+    "raise ImportError",
+    "except ImportError",
+]
