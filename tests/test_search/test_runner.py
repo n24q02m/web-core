@@ -478,6 +478,7 @@ class TestGetProcessKwargs:
             assert "preexec_fn" in kwargs
             assert kwargs["preexec_fn"] is sentinel
 
+    @pytest.mark.skipif(sys.platform != "win32", reason="CREATE_NEW_PROCESS_GROUP only exists on Windows")
     def test_windows_uses_creation_flags(self):
         """On Windows, uses CREATE_NEW_PROCESS_GROUP."""
         with patch("sys.platform", "win32"):
