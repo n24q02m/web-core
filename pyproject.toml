@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "web-core"
+name = "n24q02m-web-core"
 version = "1.0.0"
 description = "Shared web infrastructure: search, scraping, HTTP security, browsers"
 readme = "README.md"
