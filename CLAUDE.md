@@ -111,7 +111,7 @@ mise run fix       # ruff check --fix + ruff format
 
 ## Infisical
 
-- TODO: Tao Infisical project cho web-core. Hien tai dung PLACEHOLDER trong `.infisical.json`.
+- Project: `790b3d1e-188f-4ead-bfcc-da5dca110d50`
 
 ## Security
 
