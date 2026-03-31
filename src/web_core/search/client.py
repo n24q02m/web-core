@@ -145,7 +145,7 @@ async def search(
                 )
                 response.raise_for_status()
                 data = response.json()
-                results = data.get("results", [])[:max_results * 2]
+                results = data.get("results", [])[: max_results * 2]
 
                 # Format raw results into dicts
                 formatted = [

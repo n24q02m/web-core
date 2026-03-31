@@ -256,10 +256,7 @@ class TestSearch:
 
     async def test_domain_cap_applied(self, mock_httpx_client):
         """No more than MAX_PER_DOMAIN results from a single domain."""
-        raw_results = [
-            _raw_result(f"https://example.com/page{i}", f"Title {i}", f"Snippet {i}")
-            for i in range(10)
-        ]
+        raw_results = [_raw_result(f"https://example.com/page{i}", f"Title {i}", f"Snippet {i}") for i in range(10)]
         mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response(raw_results))
 
         with patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client):
@@ -269,10 +266,7 @@ class TestSearch:
 
     async def test_respects_max_results(self, mock_httpx_client):
         """Results should be limited to max_results."""
-        raw_results = [
-            _raw_result(f"https://d{i}.com/page", f"Title {i}", f"Snippet {i}")
-            for i in range(20)
-        ]
+        raw_results = [_raw_result(f"https://d{i}.com/page", f"Title {i}", f"Snippet {i}") for i in range(20)]
         mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response(raw_results))
 
         with patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client):

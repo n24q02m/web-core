@@ -6,9 +6,19 @@ build-backend = "hatchling.build"
 name = "web-core"
 version = "0.1.0"
 description = "Shared web infrastructure: search, scraping, HTTP security, browsers"
+readme = "README.md"
 requires-python = ">=3.13,<3.14"
 license = "MIT"
 authors = [{ name = "n24q02m" }]
+keywords = ["web", "scraping", "search", "searxng", "http", "ssrf", "crawl4ai"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Software Development :: Libraries",
+]
 dependencies = [
     "httpx>=0.28.1",
     "curl-cffi>=0.9.1",
@@ -25,9 +35,13 @@ dev = [
     "pytest>=8.4.1",
     "pytest-asyncio>=1.0.0",
     "pytest-cov>=6.2.1",
+    "pytest-timeout>=2.4.0",
     "ruff>=0.11.12",
     "ty>=0.0.1a10",
 ]
+
+[project.urls]
+Repository = "https://github.com/n24q02m/web-core"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/web_core"]
@@ -35,6 +49,7 @@ packages = ["src/web_core"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+addopts = "-m 'not integration and not live' --timeout=30"
 
 [tool.ruff]
 target-version = "py313"
@@ -44,8 +59,16 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
 
+[tool.ty.rules]
+unresolved-import = "ignore"
+unresolved-attribute = "ignore"
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+
 [tool.coverage.run]
 source_pkgs = ["web_core"]
+branch = true
 
 [tool.coverage.report]
 fail_under = 95

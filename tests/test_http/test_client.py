@@ -171,9 +171,7 @@ class TestPinnedGetaddrinfo:
     def test_returns_cached_results_when_fresh(self):
         """Cached DNS results should be returned when TTL has not expired."""
         hostname = "pinned-fresh-test.example.com"
-        cached_results = [
-            (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 0))
-        ]
+        cached_results = [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 0))]
 
         with _dns_cache_lock:
             _dns_cache[hostname] = (cached_results, time.monotonic())
@@ -192,17 +190,13 @@ class TestPinnedGetaddrinfo:
     def test_evicts_expired_cache_entry(self):
         """Expired cache entries should be evicted and fall through to real resolution."""
         hostname = "pinned-expired-test.example.com"
-        cached_results = [
-            (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 0))
-        ]
+        cached_results = [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 0))]
 
         # Cache with a timestamp far in the past (expired)
         with _dns_cache_lock:
             _dns_cache[hostname] = (cached_results, time.monotonic() - _DNS_CACHE_TTL - 10)
 
-        fresh_results = [
-            (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("1.2.3.4", 0))
-        ]
+        fresh_results = [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("1.2.3.4", 0))]
 
         try:
             with patch(
@@ -223,9 +217,7 @@ class TestPinnedGetaddrinfo:
     def test_falls_through_to_original_on_cache_miss(self):
         """When no cache entry exists, should call original getaddrinfo."""
         hostname = "pinned-miss-test.example.com"
-        fresh_results = [
-            (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("5.6.7.8", 0))
-        ]
+        fresh_results = [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("5.6.7.8", 0))]
 
         # Ensure no cache entry
         with _dns_cache_lock:

@@ -56,9 +56,7 @@ class APIDirectStrategy(BaseStrategy):
                 if api_url.startswith("/"):
                     api_url = urljoin(url, api_url)
 
-            api_response = await client.get(
-                api_url, headers={"Accept": "application/json"}, follow_redirects=True
-            )
+            api_response = await client.get(api_url, headers={"Accept": "application/json"}, follow_redirects=True)
             return ScrapingResult(
                 content=api_response.text,
                 url=api_url,

@@ -523,10 +523,10 @@ class TestIsProcessAlive:
 class TestKillStalePortProcess:
     def test_invalid_port_noop(self):
         """Invalid ports are silently ignored."""
-        _kill_stale_port_process(0)       # No error
-        _kill_stale_port_process(-1)      # No error
-        _kill_stale_port_process(70000)   # No error
-        _kill_stale_port_process("abc")   # type: ignore[arg-type]  # No error
+        _kill_stale_port_process(0)  # No error
+        _kill_stale_port_process(-1)  # No error
+        _kill_stale_port_process(70000)  # No error
+        _kill_stale_port_process("abc")  # type: ignore[arg-type]  # No error
 
     @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
     def test_windows_netstat(self):
@@ -730,7 +730,11 @@ class TestEnsureSearxng:
         with (
             patch("web_core.search.runner._try_reuse_existing", new_callable=AsyncMock, return_value=None),
             patch("web_core.search.runner._is_searxng_installed", return_value=True),
-            patch("web_core.search.runner._start_searxng_subprocess", new_callable=AsyncMock, return_value="http://127.0.0.1:18889"),
+            patch(
+                "web_core.search.runner._start_searxng_subprocess",
+                new_callable=AsyncMock,
+                return_value="http://127.0.0.1:18889",
+            ),
         ):
             url = await ensure_searxng()
             assert url == "http://127.0.0.1:18889"
@@ -743,7 +747,11 @@ class TestEnsureSearxng:
             patch("web_core.search.runner._try_reuse_existing", new_callable=AsyncMock, return_value=None),
             patch("web_core.search.runner._is_searxng_installed", return_value=False),
             patch("web_core.search.runner._install_searxng", return_value=True),
-            patch("web_core.search.runner._start_searxng_subprocess", new_callable=AsyncMock, return_value="http://127.0.0.1:18888"),
+            patch(
+                "web_core.search.runner._start_searxng_subprocess",
+                new_callable=AsyncMock,
+                return_value="http://127.0.0.1:18888",
+            ),
         ):
             url = await ensure_searxng()
             assert url == "http://127.0.0.1:18888"
@@ -826,7 +834,7 @@ class TestSettingsTemplate:
             enable_http2="true",
         )
         assert "port: 18888" in rendered
-        assert "secret_key: \"test_secret\"" in rendered
+        assert 'secret_key: "test_secret"' in rendered
         assert "enable_http2: true" in rendered
 
 

@@ -51,9 +51,7 @@ class StrategyCache:
         self.default_order = default_order or self.DEFAULT_ORDER.copy()
         self.min_attempts = min_attempts
         self._backend = backend
-        self._stats: dict[str, dict[str, StrategyStats]] = defaultdict(
-            lambda: defaultdict(StrategyStats)
-        )
+        self._stats: dict[str, dict[str, StrategyStats]] = defaultdict(lambda: defaultdict(StrategyStats))
 
     @staticmethod
     def _extract_domain(url: str) -> str:

@@ -1,3 +1,15 @@
 [tools]
 python = "3.13"
 uv = "latest"
+
+[tasks.setup]
+run = "uv sync --all-extras"
+
+[tasks.lint]
+run = ["uv run ruff check src/ tests/", "uv run ruff format --check src/ tests/"]
+
+[tasks.test]
+run = "uv run pytest --cov -q"
+
+[tasks.fix]
+run = ["uv run ruff check --fix --unsafe-fixes src/ tests/", "uv run ruff format src/ tests/"]

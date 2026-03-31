@@ -13,27 +13,29 @@ from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 # Tracking parameters to strip
 # ---------------------------------------------------------------------------
 
-_TRACKING_PARAMS = frozenset({
-    "utm_source",
-    "utm_medium",
-    "utm_campaign",
-    "utm_term",
-    "utm_content",
-    "utm_id",
-    "utm_cid",
-    "fbclid",
-    "gclid",
-    "gclsrc",
-    "msclkid",
-    "mc_cid",
-    "mc_eid",
-    "yclid",
-    "twclid",
-    "igshid",
-    "s",
-    "ref",
-    "ref_src",
-})
+_TRACKING_PARAMS = frozenset(
+    {
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "utm_term",
+        "utm_content",
+        "utm_id",
+        "utm_cid",
+        "fbclid",
+        "gclid",
+        "gclsrc",
+        "msclkid",
+        "mc_cid",
+        "mc_eid",
+        "yclid",
+        "twclid",
+        "igshid",
+        "s",
+        "ref",
+        "ref_src",
+    }
+)
 
 # ---------------------------------------------------------------------------
 # Domain validation regex

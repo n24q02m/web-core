@@ -12,9 +12,7 @@ class ScrapingError(Exception):
         self.url = url
         self.strategies_tried = strategies_tried
         self.final_error = final_error
-        super().__init__(
-            f"All strategies failed for {url}: tried {strategies_tried}, last error: {final_error}"
-        )
+        super().__init__(f"All strategies failed for {url}: tried {strategies_tried}, last error: {final_error}")
 
 
 class ScrapingState(TypedDict, total=False):

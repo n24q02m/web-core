@@ -1,0 +1,60 @@
+default_language_version:
+  python: python3.13
+
+repos:
+  # Secret detection -- MUST be first hook
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.3
+    hooks:
+      - id: gitleaks
+
+  # Ruff: linter + formatter
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: d19233b89771be2d89273f163f5edc5a39bbc34a # v0.11.12
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # Local hooks
+  - repo: local
+    hooks:
+      - id: ty
+        name: ty type check
+        entry: uv run ty check src/
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      - id: pytest
+        name: pytest
+        entry: uv run pytest tests/ -x -q --timeout=30 -m "not integration and not live"
+        language: system
+        types: [python]
+        pass_filenames: false
+
+  # Common checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: cef0300fd0fc4d2a87a85fa2093c6b283ea36f4b # v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude_types: [image]
+      - id: check-merge-conflict
+      - id: check-json
+        types: [json]
+      - id: check-yaml
+        types: [yaml]
+      - id: check-toml
+        types: [toml]
+      - id: end-of-file-fixer
+        exclude_types: [image]
+
+  # Commit message enforcement
+  - repo: local
+    hooks:
+      - id: enforce-conventional-commits
+        name: Enforce Conventional Commits
+        entry: >-
+          bash -c 'grep -qE "^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?: .+" "$1"'
+        language: system
+        stages: [commit-msg]

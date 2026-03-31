@@ -209,8 +209,6 @@ class ScrapingAgent:
             raise ScrapingError(
                 url=url,
                 strategies_tried=result.get("strategies_tried", []),
-                final_error=(
-                    result["errors"][-1] if result.get("errors") else "No strategies available"
-                ),
+                final_error=(result["errors"][-1] if result.get("errors") else "No strategies available"),
             )
         return result.get("content", "")
