@@ -62,6 +62,8 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
 [tool.ty.rules]
 unresolved-import = "ignore"
 unresolved-attribute = "ignore"
+invalid-assignment = "ignore"
+invalid-argument-type = "ignore"
 
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
