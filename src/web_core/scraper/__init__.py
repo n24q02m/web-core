@@ -1,15 +1,18 @@
-"""Multi-strategy scraping with LangGraph orchestration."""
+"""Multi-strategy web scraping with LangGraph orchestration."""
 
+from web_core.scraper.agent import ScrapingAgent
 from web_core.scraper.base import BaseStrategy, ScrapingResult
+from web_core.scraper.cache import StrategyCache, StrategyStats
+from web_core.scraper.registry import StrategyRegistry
 from web_core.scraper.state import ScrapingError, ScrapingState
-from web_core.scraper.strategies import APIDirectStrategy, BasicHTTPStrategy, TLSSpoofStrategy
 
 __all__ = [
-    "APIDirectStrategy",
     "BaseStrategy",
-    "BasicHTTPStrategy",
+    "ScrapingAgent",
     "ScrapingError",
     "ScrapingResult",
     "ScrapingState",
-    "TLSSpoofStrategy",
+    "StrategyCache",
+    "StrategyRegistry",
+    "StrategyStats",
 ]
