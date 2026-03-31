@@ -1,6 +1,6 @@
 # web-core
 
-Shared web infrastructure Python package (PRIVATE, git+ssh). Cung cap SearXNG search, multi-strategy scraping, SSRF-safe HTTP client, va stealth browsers cho knowledge-core va cac downstream apps.
+Shared web infrastructure Python package (PUBLIC, PyPI). Cung cap SearXNG search, multi-strategy scraping, SSRF-safe HTTP client, va stealth browsers cho knowledge-core va cac downstream apps.
 
 ## Architecture
 
@@ -84,11 +84,12 @@ mise run fix       # ruff check --fix + ruff format
 
 ## Release & Deploy
 
-- **KHONG publish len PyPI** -- day la private package, install qua `git+ssh://`
+- **PyPI**: `web-core` (OIDC Trusted Publishing, `uv publish`)
 - Conventional Commits. Tag format: `v{version}`
 - CD: workflow_dispatch, chon beta/stable
-- Pipeline: PSR v10 -> GitHub Release + Tag
-- Consumers pin version: `git+ssh://git@github.com/n24q02m/web-core.git@v0.1.0`
+- Pipeline: PSR v10 -> PyPI (uv publish) -> GitHub Release + Tag
+- SAST: **CodeQL** (public repo). KHONG dung Semgrep.
+- Consumers: `pip install web-core` hoac `"web-core>=0.1.0"` trong pyproject.toml
 
 ## Conventions
 
