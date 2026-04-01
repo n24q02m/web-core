@@ -7,7 +7,7 @@ comparison, and for validating domain names to prevent injection attacks.
 from __future__ import annotations
 
 import re
-from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 # ---------------------------------------------------------------------------
 # Tracking parameters to strip
@@ -78,9 +78,16 @@ def normalize_url(url: str) -> str:
     path = parsed.path.rstrip("/") or ""
 
     if parsed.query:
-        params = parse_qs(parsed.query, keep_blank_values=True)
-        cleaned = {k: v for k, v in params.items() if k not in _TRACKING_PARAMS}
-        query = urlencode(cleaned, doseq=True)
+        # Fast path check: most URLs do not contain tracking parameters.
+        # Check for substrings that cover all tracking parameters before doing expensive parsing.
+        q = parsed.query
+        if "utm_" in q or "clid" in q or "mc_" in q or "ref" in q or "s=" in q or "sclkid" in q:
+            # parse_qsl is faster than parse_qs and avoids dictionary allocations
+            params = parse_qsl(q, keep_blank_values=True)
+            cleaned = [(k, v) for k, v in params if k not in _TRACKING_PARAMS]
+            query = urlencode(cleaned) if len(cleaned) != len(params) else q
+        else:
+            query = q
     else:
         query = ""
 
