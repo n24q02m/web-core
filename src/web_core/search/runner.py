@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import atexit
+import contextlib
 import json as _json
 import logging
 import os
@@ -191,6 +192,8 @@ def _write_discovery(port: int, pid: int) -> None:
     """Write SearXNG discovery file for other instances to find."""
     try:
         _DISCOVERY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with contextlib.suppress(OSError):
+            _DISCOVERY_FILE.parent.chmod(0o700)
         _DISCOVERY_FILE.write_text(
             _json.dumps(
                 {
@@ -438,6 +441,8 @@ def _get_settings_path(port: int) -> Path:
     from the bundled template.
     """
     _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    with contextlib.suppress(OSError):
+        _CONFIG_DIR.chmod(0o700)
 
     # Per-process settings file (avoids race condition between instances).
     settings_file = _CONFIG_DIR / f"searxng_settings_{os.getpid()}.yml"
@@ -451,7 +456,9 @@ def _get_settings_path(port: int) -> Path:
         enable_http2=enable_http2,
     )
 
-    settings_file.write_text(content)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+    with os.fdopen(os.open(settings_file, flags, 0o600), "w", encoding="utf-8") as f:
+        f.write(content)
     logger.debug("SearXNG settings written to: %s", settings_file)
 
     return settings_file
