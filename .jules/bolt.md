@@ -1,0 +1,3 @@
+## 2025-05-15 - Improving Test Coverage for IP Parsing
+**Learning:** Comprehensive parametrized tests are essential for ensuring that all edge cases of utility functions like IP address validation are covered, especially the error handling paths (e.g., ValueError during parsing).
+**Action:** Always use @pytest.mark.parametrize for utility functions with multiple input variations to ensure robust coverage and clear test documentation.

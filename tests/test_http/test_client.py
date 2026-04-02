@@ -271,8 +271,25 @@ class TestCheckIpSafe:
         """IPv6 zone IDs (e.g., fe80::1%eth0) must be stripped before checking."""
         assert _check_ip_safe("fe80::1%eth0", "link-local") is False
 
-    def test_unparseable_ip_blocked(self):
-        assert _check_ip_safe("not-an-ip", "unknown") is False
+    @pytest.mark.parametrize(
+        "invalid_ip",
+        [
+            "",
+            "   ",
+            "not-an-ip",
+            "1.2.3",
+            "256.0.0.1",
+            "2001:db8::g",
+            "::1::2",
+            "%",
+            "%eth0",
+            "invalid%eth1",
+        ],
+    )
+    def test_unparseable_ip_blocked(self, invalid_ip, caplog):
+        with caplog.at_level("WARNING"):
+            assert _check_ip_safe(invalid_ip, "unknown") is False
+            assert f"Unparseable IP '{invalid_ip.split('%')[0]}' for host unknown, blocking" in caplog.text
 
 
 # ---------------------------------------------------------------------------
