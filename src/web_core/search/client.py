@@ -72,6 +72,72 @@ def _build_filtered_query(
     return " ".join(parts)
 
 
+def _prepare_search_params(
+    query: str,
+    categories: str,
+    time_range: str | None,
+    language: str | None,
+    include_domains: list[str] | None,
+    exclude_domains: list[str] | None,
+) -> dict[str, str]:
+    """Prepare query parameters for SearXNG."""
+    effective_query = _build_filtered_query(query, include_domains, exclude_domains)
+    params: dict[str, str] = {
+        "q": effective_query,
+        "format": "json",
+        "categories": categories,
+    }
+    if time_range and time_range in ("day", "week", "month", "year"):
+        params["time_range"] = time_range
+    if language:
+        params["language"] = language
+    return params
+
+
+def _process_search_results(
+    results: list[dict[str, object]],
+    max_results: int,
+) -> list[SearchResult]:
+    """Format, deduplicate, and domain-cap raw SearXNG results."""
+    # Format raw results into dicts
+    formatted = [
+        {
+            "url": str(r.get("url", "")),
+            "title": str(r.get("title", "")),
+            "snippet": str(r.get("content", "")),
+            "source": str(r.get("engine", "")),
+        }
+        for r in results
+    ]
+
+    # Deduplicate: merge sources, keep longest snippet
+    seen: dict[str, dict[str, str]] = {}
+    for item in formatted:
+        norm_url = normalize_url(item["url"])
+        if norm_url in seen:
+            existing = seen[norm_url]
+            if item["source"] and item["source"] not in existing["source"]:
+                existing["source"] += f", {item['source']}"
+            if len(item.get("snippet", "")) > len(existing.get("snippet", "")):
+                existing["snippet"] = item["snippet"]
+                existing["title"] = item["title"] or existing["title"]
+        else:
+            seen[norm_url] = item
+
+    # Domain cap + final limit
+    capped = _apply_domain_cap(list(seen.values()))[:max_results]
+
+    return [
+        SearchResult(
+            url=r["url"],
+            title=r["title"],
+            snippet=r["snippet"],
+            source=r["source"],
+        )
+        for r in capped
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -122,16 +188,14 @@ async def search(
     SearchError
         On 4xx (non-retryable) or after all retries are exhausted.
     """
-    effective_query = _build_filtered_query(query, include_domains, exclude_domains)
-    params: dict[str, str] = {
-        "q": effective_query,
-        "format": "json",
-        "categories": categories,
-    }
-    if time_range and time_range in ("day", "week", "month", "year"):
-        params["time_range"] = time_range
-    if language:
-        params["language"] = language
+    params = _prepare_search_params(
+        query,
+        categories,
+        time_range,
+        language,
+        include_domains,
+        exclude_domains,
+    )
 
     last_error: str | None = None
 
@@ -145,45 +209,9 @@ async def search(
                 )
                 response.raise_for_status()
                 data = response.json()
-                results = data.get("results", [])[: max_results * 2]
+                raw_results = data.get("results", [])[: max_results * 2]
 
-                # Format raw results into dicts
-                formatted = [
-                    {
-                        "url": r.get("url", ""),
-                        "title": r.get("title", ""),
-                        "snippet": r.get("content", ""),
-                        "source": r.get("engine", ""),
-                    }
-                    for r in results
-                ]
-
-                # Deduplicate: merge sources, keep longest snippet
-                seen: dict[str, dict[str, str]] = {}
-                for item in formatted:
-                    norm_url = normalize_url(item["url"])
-                    if norm_url in seen:
-                        existing = seen[norm_url]
-                        if item["source"] and item["source"] not in existing["source"]:
-                            existing["source"] += f", {item['source']}"
-                        if len(item.get("snippet", "")) > len(existing.get("snippet", "")):
-                            existing["snippet"] = item["snippet"]
-                            existing["title"] = item["title"] or existing["title"]
-                    else:
-                        seen[norm_url] = item
-
-                # Domain cap + final limit
-                capped = _apply_domain_cap(list(seen.values()))[:max_results]
-
-                return [
-                    SearchResult(
-                        url=r["url"],
-                        title=r["title"],
-                        snippet=r["snippet"],
-                        source=r["source"],
-                    )
-                    for r in capped
-                ]
+                return _process_search_results(raw_results, max_results)
 
             except httpx.HTTPStatusError as e:
                 status = e.response.status_code
