@@ -210,6 +210,16 @@ class TestStrategyCache:
         assert isinstance(stats, dict)
         assert "basic_http" in stats
 
+    async def test_get_stats_returns_independent_objects(self):
+        cache = StrategyCache()
+        await cache.record("https://example.com", "basic_http", success=True)
+
+        stats = await cache.get_stats("https://example.com")
+        stats["basic_http"].attempts = 999
+
+        new_stats = await cache.get_stats("https://example.com")
+        assert new_stats["basic_http"].attempts == 1
+
     # ------------------------------------------------------------------
     # clear
     # ------------------------------------------------------------------

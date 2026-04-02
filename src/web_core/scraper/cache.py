@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, ClassVar
@@ -25,6 +26,14 @@ class StrategyStats:
     def avg_time_ms(self) -> float:
         """Average response time across all attempts."""
         return self.total_time_ms / self.attempts if self.attempts > 0 else 0.0
+
+    def copy(self) -> StrategyStats:
+        """Return a copy of these stats."""
+        return StrategyStats(
+            attempts=self.attempts,
+            successes=self.successes,
+            total_time_ms=self.total_time_ms,
+        )
 
 
 class StrategyCache:
@@ -52,6 +61,7 @@ class StrategyCache:
         self.min_attempts = min_attempts
         self._backend = backend
         self._stats: dict[str, dict[str, StrategyStats]] = defaultdict(lambda: defaultdict(StrategyStats))
+        self._lock = threading.Lock()
 
     @staticmethod
     def _extract_domain(url: str) -> str:
@@ -67,45 +77,51 @@ class StrategyCache:
         time_ms: float = 0.0,
     ) -> None:
         """Record one attempt for (*domain*, *strategy_name*)."""
-        domain = self._extract_domain(url)
-        stats = self._stats[domain][strategy_name]
-        stats.attempts += 1
-        if success:
-            stats.successes += 1
-        stats.total_time_ms += time_ms
+        with self._lock:
+            domain = self._extract_domain(url)
+            stats = self._stats[domain][strategy_name]
+            stats.attempts += 1
+            if success:
+                stats.successes += 1
+            stats.total_time_ms += time_ms
 
     async def recommend(self, url: str) -> list[str]:
         """Return strategy names ordered by historical success rate for *url*'s domain.
 
         Strategies with fewer than ``min_attempts`` are appended in default order.
         """
-        domain = self._extract_domain(url)
-        domain_stats = self._stats.get(domain, {})
+        with self._lock:
+            domain = self._extract_domain(url)
+            domain_stats = self._stats.get(domain, {})
 
-        if not domain_stats:
-            return self.default_order.copy()
+            if not domain_stats:
+                return self.default_order.copy()
 
-        scored: list[tuple[str, float]] = []
-        unscored: list[str] = []
-        for name in self.default_order:
-            stats = domain_stats.get(name)
-            if stats and stats.attempts >= self.min_attempts:
-                scored.append((name, stats.success_rate))
-            else:
-                unscored.append(name)
+            scored: list[tuple[str, float]] = []
+            unscored: list[str] = []
+            for name in self.default_order:
+                stats = domain_stats.get(name)
+                if stats and stats.attempts >= self.min_attempts:
+                    scored.append((name, stats.success_rate))
+                else:
+                    unscored.append(name)
 
-        scored.sort(key=lambda x: x[1], reverse=True)
-        return [name for name, _ in scored] + unscored
+            scored.sort(key=lambda x: x[1], reverse=True)
+            return [name for name, _ in scored] + unscored
 
     async def get_stats(self, url: str) -> dict[str, StrategyStats]:
         """Return all strategy stats for *url*'s domain."""
-        domain = self._extract_domain(url)
-        return dict(self._stats.get(domain, {}))
+        with self._lock:
+            domain = self._extract_domain(url)
+            if domain not in self._stats:
+                return {}
+            return {k: v.copy() for k, v in self._stats[domain].items()}
 
     async def clear(self, url: str | None = None) -> None:
         """Clear stats for a specific domain, or all domains if *url* is None."""
-        if url is None:
-            self._stats.clear()
-        else:
-            domain = self._extract_domain(url)
-            self._stats.pop(domain, None)
+        with self._lock:
+            if url is None:
+                self._stats.clear()
+            else:
+                domain = self._extract_domain(url)
+                self._stats.pop(domain, None)
