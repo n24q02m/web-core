@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from langgraph.graph import END, START, StateGraph
@@ -177,13 +178,20 @@ class ScrapingAgent:
         url = state.get("url", "")
         success = state.get("success", False)
         tried = state.get("strategies_tried", [])
-        for strategy_name in tried:
-            is_success = success and strategy_name == tried[-1]
-            await self.strategy_cache.record(
+
+        if not tried:
+            return state
+
+        last_strategy = tried[-1]
+        tasks = [
+            self.strategy_cache.record(
                 url=url,
                 strategy_name=strategy_name,
-                success=is_success,
+                success=(success and strategy_name == last_strategy),
             )
+            for strategy_name in tried
+        ]
+        await asyncio.gather(*tasks)
         return state
 
     # ------------------------------------------------------------------
