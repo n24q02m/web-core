@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, ClassVar
@@ -52,6 +53,7 @@ class StrategyCache:
         self.min_attempts = min_attempts
         self._backend = backend
         self._stats: dict[str, dict[str, StrategyStats]] = defaultdict(lambda: defaultdict(StrategyStats))
+        self._lock = threading.Lock()
 
     @staticmethod
     def _extract_domain(url: str) -> str:
@@ -68,11 +70,12 @@ class StrategyCache:
     ) -> None:
         """Record one attempt for (*domain*, *strategy_name*)."""
         domain = self._extract_domain(url)
-        stats = self._stats[domain][strategy_name]
-        stats.attempts += 1
-        if success:
-            stats.successes += 1
-        stats.total_time_ms += time_ms
+        with self._lock:
+            stats = self._stats[domain][strategy_name]
+            stats.attempts += 1
+            if success:
+                stats.successes += 1
+            stats.total_time_ms += time_ms
 
     async def recommend(self, url: str) -> list[str]:
         """Return strategy names ordered by historical success rate for *url*'s domain.
@@ -80,7 +83,13 @@ class StrategyCache:
         Strategies with fewer than ``min_attempts`` are appended in default order.
         """
         domain = self._extract_domain(url)
-        domain_stats = self._stats.get(domain, {})
+        with self._lock:
+            domain_stats = self._stats.get(domain, {})
+            # Copy stats for this domain to avoid holding lock during scoring/sorting if it was complex
+            # but since it's fast we can just hold it or copy it.
+            # However, defaultdict will create the domain if we access it with [].
+            # get(domain, {}) returns a dict (the inner defaultdict)
+            domain_stats = dict(domain_stats)
 
         if not domain_stats:
             return self.default_order.copy()
@@ -100,12 +109,14 @@ class StrategyCache:
     async def get_stats(self, url: str) -> dict[str, StrategyStats]:
         """Return all strategy stats for *url*'s domain."""
         domain = self._extract_domain(url)
-        return dict(self._stats.get(domain, {}))
+        with self._lock:
+            return dict(self._stats.get(domain, {}))
 
     async def clear(self, url: str | None = None) -> None:
         """Clear stats for a specific domain, or all domains if *url* is None."""
-        if url is None:
-            self._stats.clear()
-        else:
-            domain = self._extract_domain(url)
-            self._stats.pop(domain, None)
+        with self._lock:
+            if url is None:
+                self._stats.clear()
+            else:
+                domain = self._extract_domain(url)
+                self._stats.pop(domain, None)
