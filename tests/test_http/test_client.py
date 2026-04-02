@@ -159,6 +159,16 @@ class TestIsSafeUrl:
         ):
             assert is_safe_url("http://dns-error.example.com") is False
 
+    def test_blocks_invalid_ipv6_url(self):
+        """Real invalid URLs like http://[ trigger a ValueError in urlparse."""
+        assert is_safe_url("http://[") is False
+
+    def test_blocks_non_string_url(self):
+        """Non-string inputs should be handled gracefully by returning False."""
+        # This triggers an AttributeError inside urlparse, caught by Exception
+        assert is_safe_url(None) is False  # type: ignore[arg-type]
+        assert is_safe_url(123) is False  # type: ignore[arg-type]
+
 
 # ---------------------------------------------------------------------------
 # _pinned_getaddrinfo
