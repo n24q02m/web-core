@@ -17,6 +17,7 @@ from web_core.http.client import (
     _pinned_getaddrinfo,
     _ssrf_event_hook,
     is_safe_url,
+    is_safe_url_async,
     safe_httpx_client,
 )
 
@@ -158,6 +159,20 @@ class TestIsSafeUrl:
             side_effect=RuntimeError("unexpected DNS error"),
         ):
             assert is_safe_url("http://dns-error.example.com") is False
+
+    async def test_is_safe_url_async_wraps_sync_version(self):
+        """is_safe_url_async should return the same result as is_safe_url."""
+        with patch(
+            "web_core.http.client._original_getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 0))],
+        ):
+            assert await is_safe_url_async("https://example.com") is True
+
+        with patch(
+            "web_core.http.client._original_getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("127.0.0.1", 0))],
+        ):
+            assert await is_safe_url_async("http://internal") is False
 
 
 # ---------------------------------------------------------------------------

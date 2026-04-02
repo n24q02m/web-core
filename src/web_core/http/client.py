@@ -13,6 +13,7 @@ Key protections:
 
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import logging
 import socket
@@ -134,6 +135,14 @@ def is_safe_url(url: str) -> bool:
     return True
 
 
+async def is_safe_url_async(url: str) -> bool:
+    """Asynchronous version of is_safe_url that doesn't block the event loop.
+
+    Wraps the synchronous DNS resolution in asyncio.to_thread.
+    """
+    return await asyncio.to_thread(is_safe_url, url)
+
+
 # ---------------------------------------------------------------------------
 # SSRF event hook + client factory
 # ---------------------------------------------------------------------------
@@ -142,7 +151,7 @@ def is_safe_url(url: str) -> bool:
 async def _ssrf_event_hook(request: httpx.Request) -> None:
     """httpx request event hook that blocks SSRF attempts."""
     url_str = str(request.url)
-    if not is_safe_url(url_str):
+    if not await is_safe_url_async(url_str):
         raise httpx.RequestError(f"SSRF blocked: {url_str}", request=request)
 
 
