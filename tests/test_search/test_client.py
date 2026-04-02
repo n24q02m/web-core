@@ -521,3 +521,20 @@ class TestSearch:
             await search(SEARXNG_URL, "test")
 
         mock_factory.assert_called_once_with(timeout=15.0)
+
+    async def test_source_merging_logic_fixed(self, mock_httpx_client):
+        """Test how sources are merged during deduplication, ensuring no leading comma and correct substring handling."""
+        raw_results = [
+            _raw_result("https://example.com/merge", "T1", "S1", ""),
+            _raw_result("https://example.com/merge", "T1", "S2", "bing"),
+            _raw_result("https://example.com/merge", "T1", "S3", "google_news"),
+            _raw_result("https://example.com/merge", "T1", "S4", "google"),
+        ]
+
+        mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response(raw_results))
+
+        with patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client):
+            results = await search(SEARXNG_URL, "test")
+
+        assert len(results) == 1
+        assert results[0].source == "bing, google_news, google"
