@@ -32,6 +32,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -649,6 +650,64 @@ def _is_process_alive() -> bool:
 # ---------------------------------------------------------------------------
 
 
+async def _prepare_searxng_port(start_port: int) -> int:
+    """Find an available port and kill any stale processes on it."""
+    port = await asyncio.to_thread(_find_available_port, start_port)
+    if port != start_port:
+        logger.info("Port %d in use, using %d", start_port, port)
+
+    # Kill any stale process on the target port.
+    await asyncio.to_thread(_kill_stale_port_process, port)
+    await asyncio.sleep(0.5)
+    return port
+
+
+def _get_searxng_launch_params(port: int, settings_path: Path) -> tuple[list[str], dict[str, str], Any]:
+    """Build command, environment, and stderr target for SearXNG."""
+    # Build environment for SearXNG.
+    env = os.environ.copy()
+    env["SEARXNG_SETTINGS_PATH"] = str(settings_path)
+
+    # On Windows, stderr=PIPE without a reader causes a deadlock.
+    stderr_target = subprocess.DEVNULL if sys.platform == "win32" else subprocess.PIPE
+
+    # On Windows, use waitress instead of Flask's Werkzeug dev server.
+    if sys.platform == "win32":
+        cmd = [
+            sys.executable,
+            "-c",
+            (
+                "from waitress import serve;"
+                " from searx.webapp import app;"
+                f" serve(app,"
+                f" host='127.0.0.1', port={port},"
+                f" threads=8, channel_timeout=120,"
+                f" cleanup_interval=30)"
+            ),
+        ]
+    else:
+        cmd = [sys.executable, "-m", "searx.webapp"]
+
+    return cmd, env, stderr_target
+
+
+async def _handle_searxng_startup_error(url: str, process: subprocess.Popen) -> None:
+    """Log details and cleanup when SearXNG fails to become healthy."""
+    logger.warning("SearXNG started but not healthy at %s", url)
+    if process.poll() is not None:
+        stderr = ""
+        if process.stderr:
+            stderr_raw = await asyncio.to_thread(process.stderr.read)
+            stderr = stderr_raw.decode()
+        logger.error("SearXNG process exited during startup: %s", stderr[:500])
+    else:
+        logger.warning(
+            "SearXNG process (PID=%d) alive but not serving, killing stuck process",
+            process.pid,
+        )
+        _force_kill_process(process)
+
+
 async def _start_searxng_subprocess(start_port: int) -> str | None:  # pragma: no cover
     """Start a fresh SearXNG subprocess.
 
@@ -665,46 +724,16 @@ async def _start_searxng_subprocess(start_port: int) -> str | None:  # pragma: n
         _searxng_port = None
 
     try:
-        # Find available port.
-        port = await asyncio.to_thread(_find_available_port, start_port)
-        if port != start_port:
-            logger.info("Port %d in use, using %d", start_port, port)
-
-        # Kill any stale process on the target port.
-        await asyncio.to_thread(_kill_stale_port_process, port)
-        await asyncio.sleep(0.5)
-
+        # 1. Prepare port.
+        port = await _prepare_searxng_port(start_port)
         _searxng_port = port
 
-        # Write settings with correct port.
+        # 2. Build launch parameters.
         settings_path = await asyncio.to_thread(_get_settings_path, port)
+        cmd, env, stderr_target = _get_searxng_launch_params(port, settings_path)
 
-        # Build environment for SearXNG.
-        env = os.environ.copy()
-        env["SEARXNG_SETTINGS_PATH"] = str(settings_path)
-
+        # 3. Start subprocess.
         logger.info("Starting SearXNG on port %d...", port)
-
-        # On Windows, stderr=PIPE without a reader causes a deadlock.
-        stderr_target = subprocess.DEVNULL if sys.platform == "win32" else subprocess.PIPE
-
-        # On Windows, use waitress instead of Flask's Werkzeug dev server.
-        if sys.platform == "win32":
-            cmd = [
-                sys.executable,
-                "-c",
-                (
-                    "from waitress import serve;"
-                    " from searx.webapp import app;"
-                    f" serve(app,"
-                    f" host='127.0.0.1', port={port},"
-                    f" threads=8, channel_timeout=120,"
-                    f" cleanup_interval=30)"
-                ),
-            ]
-        else:
-            cmd = [sys.executable, "-m", "searx.webapp"]
-
         _searxng_process = await asyncio.to_thread(
             lambda: subprocess.Popen(
                 cmd,
@@ -721,28 +750,15 @@ async def _start_searxng_subprocess(start_port: int) -> str | None:  # pragma: n
 
         url = f"http://127.0.0.1:{port}"
 
-        # Wait for SearXNG to be healthy.
+        # 4. Wait for SearXNG to be healthy.
         if await _wait_for_service(url, timeout=_STARTUP_HEALTH_TIMEOUT):
             logger.info("SearXNG ready at %s", url)
             await asyncio.to_thread(_write_discovery, port, _searxng_process.pid)
             _is_owner = True
             return url
 
-        # Health check timed out.
-        logger.warning("SearXNG started but not healthy at %s", url)
-        if _searxng_process.poll() is not None:
-            if _searxng_process.stderr:
-                stderr_raw = await asyncio.to_thread(_searxng_process.stderr.read)
-                stderr = stderr_raw.decode()
-            else:
-                stderr = ""
-            logger.error("SearXNG process exited during startup: %s", stderr[:500])
-        else:
-            logger.warning(
-                "SearXNG process (PID=%d) alive but not serving, killing stuck process",
-                _searxng_process.pid,
-            )
-            _force_kill_process(_searxng_process)
+        # 5. Handle startup error.
+        await _handle_searxng_startup_error(url, _searxng_process)
         _searxng_process = None
         _searxng_port = None
         return None
