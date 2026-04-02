@@ -7,7 +7,6 @@ Adapted from wet-mcp's searxng.py with web-core conventions:
 - Raises ``SearchError`` on failure instead of returning error payloads
 """
 
-from __future__ import annotations
 
 import asyncio
 import logging
