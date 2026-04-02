@@ -146,11 +146,10 @@ class TestIsSafeUrl:
         """Completely invalid URLs must be blocked."""
         assert is_safe_url("not-a-url") is False
 
-    def test_blocks_urlparse_exception(self, caplog):
+    def test_blocks_urlparse_exception(self):
         """If urlparse raises a generic Exception, is_safe_url returns False."""
         with patch("web_core.http.client.urlparse", side_effect=Exception("parse error")):
             assert is_safe_url("http://example.com") is False
-        assert "Unparseable URL in is_safe_url" in caplog.text
 
     def test_blocks_generic_dns_exception(self):
         """Generic exceptions during DNS resolution must be blocked (not just gaierror)."""

@@ -105,7 +105,6 @@ def is_safe_url(url: str) -> bool:
     try:
         parsed = urlparse(url)
     except Exception:
-        logger.warning("Unparseable URL in is_safe_url: %s", url)
         return False
 
     if parsed.scheme not in ("http", "https"):

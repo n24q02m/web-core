@@ -1,0 +1,26 @@
+--- tests/test_scraper/test_cache.py
++++ tests/test_scraper/test_cache.py
+@@ -3,6 +3,7 @@
+ from __future__ import annotations
+
+ import pytest
++from unittest.mock import patch
+
+ from web_core.scraper.cache import StrategyCache, StrategyStats
+
+@@ -87,6 +88,14 @@
+     def test_extract_domain_subdomain(self):
+         assert StrategyCache._extract_domain("https://sub.example.com/path") == "sub.example.com"
+
++    def test_extract_domain_exception_logs_warning(self, caplog):
++        """If urlparse raises, _extract_domain should log a warning and return fallback."""
++        url = "https://example.com/page"
++        # StrategyCache._extract_domain uses urlparse from web_core.scraper.cache
++        with patch("web_core.scraper.cache.urlparse", side_effect=Exception("parse fail")):
++            result = StrategyCache._extract_domain(url)
++            assert result == "https:"  # "https://example.com/page".split("/")[0]
++        assert "Unparseable URL in StrategyCache" in caplog.text
++
+     # ------------------------------------------------------------------
+     # record + get_stats
+     # ------------------------------------------------------------------

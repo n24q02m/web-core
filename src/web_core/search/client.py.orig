@@ -35,12 +35,7 @@ def _apply_domain_cap(items: list[dict[str, str]]) -> list[dict[str, str]]:
     domain_counts: dict[str, int] = {}
     result: list[dict[str, str]] = []
     for item in items:
-        url = item.get("url", "")
-        try:
-            parsed = urlparse(url)
-        except Exception:
-            logger.warning("Unparseable URL in _apply_domain_cap: %s", url)
-            continue
+        parsed = urlparse(item.get("url", ""))
         domain = parsed.netloc
         if domain.startswith("www."):
             domain = domain[4:]

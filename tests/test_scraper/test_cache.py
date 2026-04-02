@@ -239,3 +239,13 @@ class TestStrategyCache:
         """Clearing a domain with no stats should not raise."""
         cache = StrategyCache()
         await cache.clear("https://nonexistent.com")  # no error
+
+    def test_extract_domain_exception_logs_warning(self, caplog):
+        """If urlparse raises, _extract_domain should log a warning and return fallback."""
+        from unittest.mock import patch
+
+        url = "https://example.com/page"
+        with patch("web_core.scraper.cache.urlparse", side_effect=Exception("parse fail")):
+            result = StrategyCache._extract_domain(url)
+            assert result == "https:"
+        assert "Unparseable URL in StrategyCache" in caplog.text

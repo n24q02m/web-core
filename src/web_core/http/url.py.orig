@@ -6,11 +6,8 @@ comparison, and for validating domain names to prevent injection attacks.
 
 from __future__ import annotations
 
-import logging
 import re
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
-
-logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Tracking parameters to strip
@@ -70,7 +67,6 @@ def normalize_url(url: str) -> str:
     try:
         parsed = urlparse(url)
     except Exception:
-        logger.warning("Unparseable URL in normalize_url: %s", url)
         return url
 
     scheme = (parsed.scheme or "").lower()

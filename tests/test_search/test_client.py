@@ -521,3 +521,24 @@ class TestSearch:
             await search(SEARXNG_URL, "test")
 
         mock_factory.assert_called_once_with(timeout=15.0)
+
+    async def test_apply_domain_cap_exception_skips_item(self, caplog):
+        """If urlparse fails for one item, it should be skipped and a warning logged."""
+        from web_core.search.client import _apply_domain_cap
+
+        items = [
+            {"url": "https://example.com/1"},
+            {"url": "invalid-url"},
+            {"url": "https://example.com/2"},
+        ]
+
+        with patch(
+            "web_core.search.client.urlparse",
+            side_effect=[MagicMock(netloc="example.com"), Exception("parse fail"), MagicMock(netloc="example.com")],
+        ):
+            result = _apply_domain_cap(items)
+
+        assert len(result) == 2
+        assert result[0]["url"] == "https://example.com/1"
+        assert result[1]["url"] == "https://example.com/2"
+        assert "Unparseable URL in _apply_domain_cap" in caplog.text
