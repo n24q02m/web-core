@@ -262,3 +262,48 @@ class TestScrapingAgent:
         content = await agent.scrape("https://example.com")
 
         assert content == "x" * 200
+
+    # ------------------------------------------------------------------
+    # Edge cases
+    # ------------------------------------------------------------------
+
+    async def test_scrape_strategy_disappears_at_runtime(self):
+        """Test handling of a strategy that disappears from the dict during execution."""
+
+        class SaboteurStrategy(MockStrategy):
+            def __init__(self, agent, target_name):
+                super().__init__(name="saboteur", content="too short")
+                self.agent = agent
+                self.target_name = target_name
+
+            async def fetch(self, url, selectors=None):
+                if self.target_name in self.agent.strategies:
+                    del self.agent.strategies[self.target_name]
+                return await super().fetch(url, selectors)
+
+        agent = ScrapingAgent(min_content_length=100)
+        s1 = SaboteurStrategy(agent, "s2")
+        s2 = MockStrategy(name="s2")
+        agent.strategies = {"s1": s1, "s2": s2}
+
+        with pytest.raises(ScrapingError) as exc_info:
+            await agent.scrape("https://example.com")
+
+        assert "Strategy 's2' not found" in exc_info.value.final_error
+        assert "s1" in exc_info.value.strategies_tried
+        assert "s2" in exc_info.value.strategies_tried
+
+    async def test_scrape_handles_missing_success_in_result(self, monkeypatch):
+        """scrape should handle a result missing the 'success' key gracefully."""
+        agent = ScrapingAgent()
+
+        # Mock ainvoke to return a dict without 'success'
+        async def mock_ainvoke(state):
+            return {"errors": ["unexpected failure"], "strategies_tried": ["mock"]}
+
+        monkeypatch.setattr(agent._graph, "ainvoke", mock_ainvoke)
+
+        with pytest.raises(ScrapingError) as exc_info:
+            await agent.scrape("https://example.com")
+
+        assert "unexpected failure" in exc_info.value.final_error
