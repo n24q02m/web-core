@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from urllib.parse import urlparse
 
 import httpx
 
@@ -34,10 +35,13 @@ def _apply_domain_cap(items: list[dict[str, str]]) -> list[dict[str, str]]:
     domain_counts: dict[str, int] = {}
     result: list[dict[str, str]] = []
     for item in items:
-        # Use pre-extracted domain if available, otherwise fallback
+        # Use cached domain if available, otherwise fall back to parsing
         domain = item.get("_domain")
-        if not domain:
-            _, domain = get_url_info(item.get("url", ""))
+        if domain is None:
+            parsed = urlparse(item.get("url", ""))
+            domain = (parsed.netloc or "").lower()
+            if domain.startswith("www."):
+                domain = domain[4:]
 
         count = domain_counts.get(domain, 0)
         if count < _MAX_PER_DOMAIN:
@@ -163,7 +167,6 @@ async def search(
                 for item in formatted:
                     norm_url, domain = get_url_info(item["url"])
                     item["_domain"] = domain
-
                     if norm_url in seen:
                         existing = seen[norm_url]
                         if item["source"] and item["source"] not in existing["source"]:

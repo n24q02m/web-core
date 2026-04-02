@@ -49,13 +49,18 @@ _DOMAIN_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*\.[a-zA-Z]{2,}$")
 
 
 def get_url_info(url: str) -> tuple[str, str]:
-    """Get normalized URL and domain from a URL string.
+    """Get both normalized URL and normalized domain in one pass.
 
-    Returns a tuple of (normalized_url, domain).
-    The domain is lowercased and has the 'www.' prefix removed.
+    Transformations applied:
+    - Lowercase scheme and netloc
+    - Strip ``www.`` prefix from netloc
+    - Strip trailing slashes from path
+    - Remove tracking query parameters (UTM, click IDs, etc.)
+    - Remove fragment (``#section``)
 
-    Returns (url, "") if parsing fails.
-    Returns ("", "") for empty input.
+    Returns (normalized_url, domain).
+    The domain is lowercased and stripped of 'www.' prefix.
+    Returns (original_url, "") if parsing fails.
     """
     if not url:
         return "", ""
@@ -72,6 +77,7 @@ def get_url_info(url: str) -> tuple[str, str]:
         netloc = netloc[4:]
 
     domain = netloc
+
     path = parsed.path.rstrip("/") or ""
 
     if parsed.query:
@@ -82,8 +88,8 @@ def get_url_info(url: str) -> tuple[str, str]:
         query = ""
 
     # Fragment is always stripped (empty string)
-    normalized = urlunparse((scheme, netloc, path, parsed.params, query, ""))
-    return normalized, domain
+    normalized_url = urlunparse((scheme, netloc, path, parsed.params, query, ""))
+    return normalized_url, domain
 
 
 def normalize_url(url: str) -> str:
@@ -99,8 +105,7 @@ def normalize_url(url: str) -> str:
     Returns the original string unchanged if parsing fails.
     Returns empty string for empty input.
     """
-    normalized, _ = get_url_info(url)
-    return normalized
+    return get_url_info(url)[0]
 
 
 def strip_tracking_params(url: str) -> str:

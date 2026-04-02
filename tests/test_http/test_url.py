@@ -8,10 +8,45 @@ import pytest
 
 from web_core.http.url import (
     _TRACKING_PARAMS,
+    get_url_info,
     is_valid_domain,
     normalize_url,
     strip_tracking_params,
 )
+
+# ---------------------------------------------------------------------------
+# get_url_info
+# ---------------------------------------------------------------------------
+
+
+class TestGetUrlInfo:
+    """Test get_url_info for combined normalization and domain extraction."""
+
+    def test_basic_url(self):
+        norm, domain = get_url_info("https://www.example.com/page?utm_source=x")
+        assert norm == "https://example.com/page"
+        assert domain == "example.com"
+
+    def test_subdomain(self):
+        norm, domain = get_url_info("https://sub.example.com/path")
+        assert norm == "https://sub.example.com/path"
+        assert domain == "sub.example.com"
+
+    def test_no_www_strip_from_middle(self):
+        _norm, domain = get_url_info("https://mywww.com/path")
+        assert domain == "mywww.com"
+
+    def test_empty_string(self):
+        norm, domain = get_url_info("")
+        assert norm == ""
+        assert domain == ""
+
+    def test_invalid_url_returns_original(self):
+        with patch("web_core.http.url.urlparse", side_effect=Exception("fail")):
+            norm, domain = get_url_info("invalid-url")
+            assert norm == "invalid-url"
+            assert domain == ""
+
 
 # ---------------------------------------------------------------------------
 # normalize_url
