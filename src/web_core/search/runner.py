@@ -257,9 +257,9 @@ async def _try_reuse_existing() -> str | None:
         return None
 
     # Check if the SearXNG process is still alive
-    if not _is_pid_alive(pid):
+    if not await asyncio.to_thread(_is_pid_alive, pid):
         logger.debug("Discovery file points to dead process (PID=%d), cleaning up", pid)
-        _remove_discovery()
+        await asyncio.to_thread(_remove_discovery)
         return None
 
     # Health check the existing instance
@@ -268,7 +268,7 @@ async def _try_reuse_existing() -> str | None:
         return url
 
     logger.debug("Discovery file points to unhealthy instance at %s, cleaning up", url)
-    _remove_discovery()
+    await asyncio.to_thread(_remove_discovery)
     return None
 
 
@@ -660,7 +660,7 @@ async def _start_searxng_subprocess(start_port: int) -> str | None:  # pragma: n
 
     # Kill any existing process first.
     if _searxng_process is not None:
-        _force_kill_process(_searxng_process)
+        await asyncio.to_thread(_force_kill_process, _searxng_process)
         _searxng_process = None
         _searxng_port = None
 
@@ -742,7 +742,7 @@ async def _start_searxng_subprocess(start_port: int) -> str | None:  # pragma: n
                 "SearXNG process (PID=%d) alive but not serving, killing stuck process",
                 _searxng_process.pid,
             )
-            _force_kill_process(_searxng_process)
+            await asyncio.to_thread(_force_kill_process, _searxng_process)
         _searxng_process = None
         _searxng_port = None
         return None
@@ -750,7 +750,7 @@ async def _start_searxng_subprocess(start_port: int) -> str | None:  # pragma: n
     except Exception as e:
         logger.error("Failed to start SearXNG subprocess: %s", e)
         if _searxng_process is not None:
-            _force_kill_process(_searxng_process)
+            await asyncio.to_thread(_force_kill_process, _searxng_process)
             _searxng_process = None
             _searxng_port = None
         return None
@@ -821,7 +821,7 @@ async def _ensure_searxng_locked(*, auto_start: bool, start_port: int) -> str:
             _searxng_process.pid,
             url,
         )
-        _force_kill_process(_searxng_process)
+        await asyncio.to_thread(_force_kill_process, _searxng_process)
         _searxng_process = None
         _searxng_port = None
 
