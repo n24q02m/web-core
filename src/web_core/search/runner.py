@@ -190,17 +190,18 @@ def _read_discovery() -> dict | None:
 def _write_discovery(port: int, pid: int) -> None:
     """Write SearXNG discovery file for other instances to find."""
     try:
-        _DISCOVERY_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _DISCOVERY_FILE.write_text(
-            _json.dumps(
-                {
-                    "pid": pid,
-                    "port": port,
-                    "owner_pid": os.getpid(),
-                    "started_at": time.time(),
-                }
-            )
+        _DISCOVERY_FILE.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        content = _json.dumps(
+            {
+                "pid": pid,
+                "port": port,
+                "owner_pid": os.getpid(),
+                "started_at": time.time(),
+            }
         )
+        fd = os.open(_DISCOVERY_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(content)
     except Exception as e:
         logger.debug("Failed to write discovery file: %s", e)
 
@@ -437,7 +438,7 @@ def _get_settings_path(port: int) -> Path:
     server instances run simultaneously.  Generates settings inline
     from the bundled template.
     """
-    _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    _CONFIG_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
 
     # Per-process settings file (avoids race condition between instances).
     settings_file = _CONFIG_DIR / f"searxng_settings_{os.getpid()}.yml"
@@ -451,7 +452,9 @@ def _get_settings_path(port: int) -> Path:
         enable_http2=enable_http2,
     )
 
-    settings_file.write_text(content)
+    fd = os.open(settings_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(content)
     logger.debug("SearXNG settings written to: %s", settings_file)
 
     return settings_file
