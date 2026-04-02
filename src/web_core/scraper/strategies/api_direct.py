@@ -23,9 +23,12 @@ class APIDirectStrategy(BaseStrategy):
     ]
     _API_PATTERNS_COMPILED: ClassVar[list[re.Pattern[str]]] = [re.compile(p) for p in API_PATTERNS]
 
-    def __init__(self, timeout: float = 30.0, http_client: Any = None):
+    def __init__(self, timeout: float = 30.0, http_client: Any = None, **kwargs: Any):
         self.timeout = timeout
         self._http_client = http_client
+        # Store extra kwargs as attributes for flexibility
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
     def discover_apis(self, html: str) -> list[str]:
         """Extract unique API endpoint URLs from *html* source."""

@@ -37,20 +37,20 @@ class StrategyRegistry:
         from web_core.scraper.strategies.tls_spoof import TLSSpoofStrategy
 
         reg = cls()
-        reg.register(BasicHTTPStrategy())
-        reg.register(TLSSpoofStrategy())
-        reg.register(APIDirectStrategy())
+        reg.register(BasicHTTPStrategy(**kwargs))
+        reg.register(TLSSpoofStrategy(**kwargs))
+        reg.register(APIDirectStrategy(**kwargs))
 
         try:
             from web_core.scraper.strategies.headless import HeadlessStrategy
 
-            reg.register(HeadlessStrategy())
+            reg.register(HeadlessStrategy(**kwargs))
         except ImportError:
             pass
 
         if capsolver_api_key:
             from web_core.scraper.strategies.captcha import CaptchaStrategy
 
-            reg.register(CaptchaStrategy(capsolver_api_key=capsolver_api_key))
+            reg.register(CaptchaStrategy(capsolver_api_key=capsolver_api_key, **kwargs))
 
         return reg

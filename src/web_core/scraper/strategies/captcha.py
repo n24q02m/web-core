@@ -19,10 +19,14 @@ class CaptchaStrategy(BaseStrategy):
         capsolver_api_key: str = "",
         fallback_strategy: BaseStrategy | None = None,
         http_client: Any = None,
+        **kwargs: Any,
     ):
         self.capsolver_api_key = capsolver_api_key
         self.fallback_strategy = fallback_strategy
         self._http_client = http_client
+        # Store extra kwargs as attributes for flexibility
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
     async def solve_captcha(
         self,

@@ -118,3 +118,25 @@ class TestStrategyRegistry:
         for name in reg.list_strategies():
             strategy = reg.get(name)
             assert isinstance(strategy, BaseStrategy)
+
+    def test_create_default_passes_kwargs(self):
+        """create_default should pass extra kwargs to strategy constructors."""
+        reg = StrategyRegistry.create_default(timeout=45.5, impersonate="safari12")
+
+        # Check basic_http
+        basic = reg.get("basic_http")
+        assert getattr(basic, "timeout", None) == 45.5
+
+        # Check tls_spoof
+        tls = reg.get("tls_spoof")
+        assert getattr(tls, "timeout", None) == 45.5
+        assert getattr(tls, "impersonate", None) == "safari12"
+
+        # Check api_direct
+        api = reg.get("api_direct")
+        assert getattr(api, "timeout", None) == 45.5
+
+        # Check headless (if present)
+        headless = reg.get("headless")
+        if headless:
+            assert getattr(headless, "timeout", None) == 45.5

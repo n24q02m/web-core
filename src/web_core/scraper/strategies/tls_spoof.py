@@ -17,10 +17,14 @@ class TLSSpoofStrategy(BaseStrategy):
         impersonate: str = "chrome131",
         timeout: float = 30.0,
         session_factory: Any = None,
+        **kwargs: Any,
     ):
         self.impersonate = impersonate
         self.timeout = timeout
         self._session_factory = session_factory
+        # Store extra kwargs as attributes for flexibility
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
     async def fetch(self, url: str, selectors: dict[str, str] | None = None) -> ScrapingResult:
         """Fetch *url* using a TLS-spoofed session via curl-cffi."""

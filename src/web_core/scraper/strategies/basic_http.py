@@ -29,10 +29,14 @@ class BasicHTTPStrategy(BaseStrategy):
         timeout: float = 30.0,
         headers: dict[str, str] | None = None,
         http_client: Any = None,
+        **kwargs: Any,
     ):
         self.timeout = timeout
         self.headers = headers or self.DEFAULT_HEADERS.copy()
         self._http_client = http_client
+        # Store extra kwargs as attributes for flexibility
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
     async def fetch(self, url: str, selectors: dict[str, str] | None = None) -> ScrapingResult:
         """Fetch *url* via plain HTTP GET with browser-like headers."""

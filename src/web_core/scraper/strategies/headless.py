@@ -17,10 +17,14 @@ class HeadlessStrategy(BaseStrategy):
         timeout: float = 60.0,
         wait_for: str | None = None,
         crawler_factory: Any = None,
+        **kwargs: Any,
     ):
         self.timeout = timeout
         self.wait_for = wait_for
         self._crawler_factory = crawler_factory
+        # Store extra kwargs as attributes for flexibility
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
     async def fetch(self, url: str, selectors: dict[str, str] | None = None) -> ScrapingResult:
         """Fetch *url* via Crawl4AI headless browser rendering."""
