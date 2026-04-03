@@ -55,6 +55,7 @@ def _reset_module_state():
     mod._last_restart_time = 0.0
     mod._is_owner = False
     mod._startup_lock = None
+    mod._settings_path = None
 
 
 @pytest.fixture(autouse=True)
@@ -445,9 +446,10 @@ class TestGetSettingsPath:
         assert "{port}" not in content
 
     def test_per_process_filename(self, tmp_config_dir):
-        """Settings file is named with current PID."""
+        """Settings file has the correct prefix and suffix."""
         path = _get_settings_path(18888)
-        assert f"searxng_settings_{os.getpid()}.yml" in path.name
+        assert path.name.startswith("searxng_settings_")
+        assert path.name.endswith(".yml")
 
     def test_http2_disabled_on_windows(self, tmp_config_dir):
         """HTTP/2 is disabled on Windows to avoid deadlocks."""
@@ -629,7 +631,21 @@ class TestCleanupProcess:
         assert mod._searxng_process is None
 
     def test_cleanup_removes_settings_file(self, tmp_config_dir):
-        """Cleanup removes the per-process settings file."""
+        """Cleanup removes the per-process settings file via _settings_path."""
+        import web_core.search.runner as mod
+
+        settings_file = tmp_config_dir / "searxng_settings_random.yml"
+        settings_file.write_text("test")
+        mod._settings_path = settings_file
+        assert settings_file.exists()
+
+        _cleanup_process()
+
+        assert not settings_file.exists()
+        assert mod._settings_path is None
+
+    def test_cleanup_removes_legacy_settings_file(self, tmp_config_dir):
+        """Cleanup also removes legacy per-process settings file."""
         settings_file = tmp_config_dir / f"searxng_settings_{os.getpid()}.yml"
         settings_file.write_text("test")
         assert settings_file.exists()
@@ -637,6 +653,43 @@ class TestCleanupProcess:
         _cleanup_process()
 
         assert not settings_file.exists()
+
+    def test_get_settings_path_secure_permissions(self, tmp_config_dir):
+        """_get_settings_path creates file with secure permissions (0o600)."""
+        if sys.platform == "win32":
+            pytest.skip("File permissions (chmod) behave differently on Windows")
+
+        path = _get_settings_path(18888)
+        try:
+            mode = os.stat(path).st_mode
+            # 0o100600: 0o100000 (S_IFREG) | 0o600 (user read/write only)
+            assert (mode & 0o777) == 0o600
+        finally:
+            if path.exists():
+                path.unlink()
+
+    def test_get_settings_path_config_dir_permissions(self, tmp_path, monkeypatch):
+        """_get_settings_path ensures _CONFIG_DIR has secure permissions (0o700)."""
+        if sys.platform == "win32":
+            pytest.skip("Directory permissions (chmod) behave differently on Windows")
+
+        config_dir = tmp_path / "new-config-dir"
+        # Ensure it does NOT exist first
+        monkeypatch.setattr("web_core.search.runner._CONFIG_DIR", config_dir)
+
+        path = _get_settings_path(18888)
+        try:
+            assert config_dir.exists()
+            mode = os.stat(config_dir).st_mode
+            # 0o40700: 0o40000 (S_IFDIR) | 0o700 (user rwx only)
+            assert (mode & 0o777) == 0o700
+        finally:
+            if path.exists():
+                path.unlink()
+            if config_dir.exists():
+                import shutil
+
+                shutil.rmtree(config_dir)
 
 
 # ===========================================================================

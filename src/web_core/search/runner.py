@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import atexit
+import contextlib
 import json as _json
 import logging
 import os
@@ -30,6 +31,7 @@ import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -112,6 +114,7 @@ _last_restart_time: float = 0.0
 # Shared instance tracking.
 _is_owner: bool = False  # True if this instance started the SearXNG process
 _startup_lock: asyncio.Lock | None = None  # Lazy-init to avoid event loop issues
+_settings_path: Path | None = None  # Path to secure per-process settings file
 
 
 def _get_startup_lock() -> asyncio.Lock:
@@ -437,10 +440,22 @@ def _get_settings_path(port: int) -> Path:
     server instances run simultaneously.  Generates settings inline
     from the bundled template.
     """
-    _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    global _settings_path
 
-    # Per-process settings file (avoids race condition between instances).
-    settings_file = _CONFIG_DIR / f"searxng_settings_{os.getpid()}.yml"
+    # Ensure config directory exists with restricted permissions.
+    if not _CONFIG_DIR.exists():
+        _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        with contextlib.suppress(OSError):
+            _CONFIG_DIR.chmod(0o700)
+
+    # Create a secure temporary file in the config directory.
+    fd, path_str = tempfile.mkstemp(
+        suffix=".yml",
+        prefix="searxng_settings_",
+        dir=str(_CONFIG_DIR),
+    )
+    settings_file = Path(path_str)
+    _settings_path = settings_file
 
     secret = secrets.token_hex(32)
     enable_http2 = "false" if sys.platform == "win32" else "true"
@@ -451,7 +466,10 @@ def _get_settings_path(port: int) -> Path:
         enable_http2=enable_http2,
     )
 
-    settings_file.write_text(content)
+    # Securely write the content using the file descriptor.
+    with os.fdopen(fd, "w") as f:
+        f.write(content)
+
     logger.debug("SearXNG settings written to: %s", settings_file)
 
     return settings_file
@@ -614,7 +632,7 @@ def _cleanup_process() -> None:  # pragma: no cover
     Only kills SearXNG if this instance owns it (started it).
     Non-owner instances just clear their local references.
     """
-    global _searxng_process, _searxng_port, _is_owner
+    global _searxng_process, _searxng_port, _is_owner, _settings_path
     if _searxng_process is not None:
         if _is_owner:
             try:
@@ -632,6 +650,11 @@ def _cleanup_process() -> None:  # pragma: no cover
 
     # Cleanup per-process settings file.
     try:
+        if _settings_path and _settings_path.exists():
+            _settings_path.unlink()
+            _settings_path = None
+
+        # Legacy cleanup for old-style settings files (robustness).
         pid_settings = _CONFIG_DIR / f"searxng_settings_{os.getpid()}.yml"
         if pid_settings.exists():
             pid_settings.unlink()
