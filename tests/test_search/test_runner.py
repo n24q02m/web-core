@@ -169,6 +169,16 @@ class TestDiscovery:
         """Does not raise when file doesn't exist."""
         _remove_discovery()  # Should not raise
 
+    def test_remove_discovery_error(self, tmp_discovery):
+        """Swallows exceptions during removal."""
+        _write_discovery(18888, 12345)
+        assert tmp_discovery.exists()
+
+        with patch.object(Path, "unlink", side_effect=OSError("Permission denied")):
+            _remove_discovery()  # Should swallow OSError
+
+        assert tmp_discovery.exists()
+
 
 # ===========================================================================
 # _quick_health_check
