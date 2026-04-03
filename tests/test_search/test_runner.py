@@ -125,6 +125,27 @@ class TestIsPidAlive:
         """An absurdly large PID should not be alive."""
         assert _is_pid_alive(999999999) is False
 
+    def test_windows_alive_process_mocked(self):
+        """Mocked Windows check for an alive process."""
+        with patch("sys.platform", "win32"):
+            mock_ctypes = MagicMock()
+            with patch.dict(sys.modules, {"ctypes": mock_ctypes}):
+                mock_kernel32 = mock_ctypes.windll.kernel32
+                mock_kernel32.OpenProcess.return_value = 1234
+                assert _is_pid_alive(12345) is True
+                mock_kernel32.OpenProcess.assert_called_with(0x1000, False, 12345)
+                mock_kernel32.CloseHandle.assert_called_with(1234)
+
+    def test_windows_dead_process_mocked(self):
+        """Mocked Windows check for a dead process."""
+        with patch("sys.platform", "win32"):
+            mock_ctypes = MagicMock()
+            with patch.dict(sys.modules, {"ctypes": mock_ctypes}):
+                mock_kernel32 = mock_ctypes.windll.kernel32
+                mock_kernel32.OpenProcess.return_value = 0
+                assert _is_pid_alive(12345) is False
+                mock_kernel32.OpenProcess.assert_called_with(0x1000, False, 12345)
+
 
 # ===========================================================================
 # Discovery file management
