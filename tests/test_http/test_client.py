@@ -159,6 +159,27 @@ class TestIsSafeUrl:
         ):
             assert is_safe_url("http://dns-error.example.com") is False
 
+    def test_blocks_malformed_url_value_error(self):
+        """Trigger a real ValueError in urlparse."""
+        assert is_safe_url("http://[") is False
+
+    def test_blocks_url_with_none(self):
+        """None is not a valid URL (some urlparse versions might handle it, some might raise)."""
+        assert is_safe_url(None) is False  # type: ignore[arg-type]
+
+    def test_blocks_url_with_int(self):
+        """Integers are not valid URLs and trigger AttributeError in urlparse."""
+        assert is_safe_url(123) is False  # type: ignore[arg-type]
+
+    def test_blocks_unparseable_ip_from_dns(self):
+        """If DNS returns an unparseable IP string, it must be blocked."""
+        with patch(
+            "web_core.http.client._original_getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("not-an-ip", 0))],
+        ):
+            assert is_safe_url("http://bad-dns.example.com") is False
+            assert is_safe_url("http://dns-error.example.com") is False
+
 
 # ---------------------------------------------------------------------------
 # _pinned_getaddrinfo
@@ -230,6 +251,18 @@ class TestPinnedGetaddrinfo:
             result = _pinned_getaddrinfo(hostname, 80)
             assert result == fresh_results
             mock_gai.assert_called_once_with(hostname, 80)
+
+    def test_pinned_getaddrinfo_propagates_gaierror(self):
+        """When original resolution fails, gaierror should propagate."""
+        hostname = "pinned-fail-test.example.com"
+        with _dns_cache_lock:
+            _dns_cache.pop(hostname, None)
+
+        with patch(
+            "web_core.http.client._original_getaddrinfo",
+            side_effect=socket.gaierror("Name resolution failed"),
+        ), pytest.raises(socket.gaierror):
+            _pinned_getaddrinfo(hostname, 80)
 
 
 # ---------------------------------------------------------------------------
