@@ -1,0 +1,191 @@
+   460	# ---------------------------------------------------------------------------
+   461	# Process management
+   462	# ---------------------------------------------------------------------------
+   463
+   464
+   465	def _sigterm_then_kill_sync(pid: int, label: str = "") -> bool:  # pragma: no cover
+   466
+   467	async def _sigterm_then_kill(pid: int, label: str = "") -> bool:  # pragma: no cover
+   468	    """Send SIGTERM to a PID, wait briefly, then SIGKILL if needed (async).
+   469
+   470	    Returns ``True`` if the process was successfully terminated.
+   471	    """
+   472	    tag = f" ({label})" if label else ""
+   473	    try:
+   474	        os.kill(pid, signal.SIGTERM)
+   475	    except (ProcessLookupError, PermissionError):
+   476	        return True  # Already dead or inaccessible
+   477
+   478	    # Wait up to 3 seconds for graceful exit.
+   479	    for _ in range(30):
+   480	        try:
+   481	            os.kill(pid, 0)  # Check if alive
+   482	        except ProcessLookupError:
+   483	            logger.debug("Process PID=%d%s terminated gracefully", pid, tag)
+   484	            return True
+   485	        except PermissionError:
+   486	            return True
+   487	        await asyncio.sleep(0.1)
+   488
+   489	    # Force kill.
+   490	    try:
+   491	        os.kill(pid, signal.SIGKILL)
+   492	        logger.debug("Process PID=%d%s force-killed", pid, tag)
+   493	        return True
+   494	    except (ProcessLookupError, PermissionError):
+   495	        return True
+   496
+   497
+   498	async def _force_kill_process(proc: subprocess.Popen) -> None:  # pragma: no cover
+   499	    """Force-kill a subprocess and all its children (async).
+   500
+   501	    Tries graceful SIGTERM first, then SIGKILL after a short timeout.
+   502	    On Unix, kills the entire process group to avoid orphaned children.
+   503	    """
+   504	    if proc.poll() is not None:
+   505	        return  # Already dead
+   506
+   507	    pid = proc.pid
+   508	    logger.debug("Force-killing SearXNG process (PID=%d)...", pid)
+   509
+   510	    try:
+   511	        if sys.platform != "win32":
+   512	            # Kill the entire process group on Unix.
+   513	            try:
+   514	                os.killpg(os.getpgid(pid), signal.SIGTERM)
+   515	            except (ProcessLookupError, PermissionError):
+   516	                proc.terminate()
+   517
+   518	            try:
+   519	                await asyncio.to_thread(proc.wait, timeout=3)
+   520	                logger.debug("SearXNG process (PID=%d) terminated gracefully", pid)
+   521	                return
+   522	            except (subprocess.TimeoutExpired, asyncio.TimeoutError):
+   523	                pass
+   524
+   525	            try:
+   526	                os.killpg(os.getpgid(pid), signal.SIGKILL)
+   527	            except (ProcessLookupError, PermissionError):
+   528	                proc.kill()
+   529
+   530	            try:
+   531	                await asyncio.to_thread(proc.wait, timeout=3)
+   532	            except (subprocess.TimeoutExpired, asyncio.TimeoutError):
+   533	                logger.warning("SearXNG process (PID=%d) could not be killed", pid)
+   534	        else:
+   535	            await _sigterm_then_kill(pid, "SearXNG")
+   536	            try:
+   537	                await asyncio.to_thread(proc.wait, timeout=3)
+   538	            except (subprocess.TimeoutExpired, asyncio.TimeoutError):
+   539	                proc.kill()
+   540	    except Exception as e:
+   541	        logger.debug("Error killing SearXNG process: %s", e)
+   542	    """Send SIGTERM to a PID, wait briefly, then SIGKILL if needed.
+   543
+   544	    Returns ``True`` if the process was successfully terminated.
+   545	    """
+   546	    tag = f" ({label})" if label else ""
+   547	    try:
+   548	        os.kill(pid, signal.SIGTERM)
+   549	    except (ProcessLookupError, PermissionError):
+   550	        return True  # Already dead or inaccessible
+   551
+   552	    # Wait up to 3 seconds for graceful exit.
+   553	    for _ in range(30):
+   554	        try:
+   555	            os.kill(pid, 0)  # Check if alive
+   556	        except ProcessLookupError:
+   557	            logger.debug("Process PID=%d%s terminated gracefully", pid, tag)
+   558	            return True
+   559	        except PermissionError:
+   560	            return True
+   561	        time.sleep(0.1)
+   562
+   563	    # Force kill.
+   564	    try:
+   565	        os.kill(pid, signal.SIGKILL)
+   566	        logger.debug("Process PID=%d%s force-killed", pid, tag)
+   567	        return True
+   568	    except (ProcessLookupError, PermissionError):
+   569	        return True
+   570
+   571
+   572	def _force_kill_process_sync(proc: subprocess.Popen) -> None:  # pragma: no cover
+   573	    """Force-kill a subprocess and all its children.
+   574
+   575	    Tries graceful SIGTERM first, then SIGKILL after a short timeout.
+   576	    On Unix, kills the entire process group to avoid orphaned children.
+   577	    """
+   578	    if proc.poll() is not None:
+   579	        return  # Already dead
+   580
+   581	    pid = proc.pid
+   582	    logger.debug("Force-killing SearXNG process (PID=%d)...", pid)
+   583
+   584	    try:
+   585	        if sys.platform != "win32":
+   586	            # Kill the entire process group on Unix.
+   587	            try:
+   588	                os.killpg(os.getpgid(pid), signal.SIGTERM)
+   589	            except (ProcessLookupError, PermissionError):
+   590	                proc.terminate()
+   591
+   592	            try:
+   593	                proc.wait(timeout=3)
+   594	                logger.debug("SearXNG process (PID=%d) terminated gracefully", pid)
+   595	                return
+   596	            except subprocess.TimeoutExpired:
+   597	                pass
+   598
+   599	            try:
+   600	                os.killpg(os.getpgid(pid), signal.SIGKILL)
+   601	            except (ProcessLookupError, PermissionError):
+   602	                proc.kill()
+   603
+   604	            try:
+   605	                proc.wait(timeout=3)
+   606	            except subprocess.TimeoutExpired:
+   607	                logger.warning("SearXNG process (PID=%d) could not be killed", pid)
+   608	        else:
+   609	            _sigterm_then_kill_sync(pid, "SearXNG")
+   610	            try:
+   611	                proc.wait(timeout=3)
+   612	            except subprocess.TimeoutExpired:
+   613	                proc.kill()
+   614	    except Exception as e:
+   615	        logger.debug("Error killing SearXNG process: %s", e)
+   616
+   617
+   618	def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
+   619	    """Kill any process still holding the target port.
+   620
+   621	    This prevents 'address already in use' errors when restarting
+   622	    after a crash that left a zombie process behind.
+   623	    """
+   624	    if not isinstance(port, int) or not (1 <= port <= 65535):
+   625	        return
+   626
+   627	    if sys.platform == "win32":
+   628	        try:
+   629	            result = subprocess.run(
+   630	                ["netstat", "-ano"],
+   631	                stdin=subprocess.DEVNULL,
+   632	                capture_output=True,
+   633	                text=True,
+   634	                timeout=5,
+   635	            )
+   636	            for line in result.stdout.splitlines():
+   637	                if f"127.0.0.1:{port}" in line and "LISTENING" in line:
+   638	                    parts = line.split()
+   639	                    pid_str = parts[-1]
+   640	                    try:
+   641	                        pid = int(pid_str)
+   642	                        if pid > 0:
+   643	                            _sigterm_then_kill_sync(pid, f"stale port {port}")
+   644	                    except (ValueError, ProcessLookupError, PermissionError) as e:
+   645	                        logger.debug("Could not kill process %s on port %d: %s", pid_str, port, e)
+   646	        except Exception as e:
+   647	            logger.debug("Error finding processes on port %d using netstat: %s", port, e)
+   648	    else:
+   649	        try:
+   650	            result = subprocess.run(
