@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import signal
 import socket
 import subprocess
 import sys
@@ -35,6 +36,7 @@ from web_core.search.runner import (
     _quick_health_check,
     _read_discovery,
     _remove_discovery,
+    _sigterm_then_kill,
     _try_reuse_existing,
     _wait_for_service,
     _write_discovery,
@@ -863,3 +865,100 @@ class TestModuleExports:
 
         assert "ensure_searxng" in all_exports
         assert "shutdown_searxng" in all_exports
+
+
+# ===========================================================================
+# _sigterm_then_kill
+# ===========================================================================
+
+
+class TestSigtermThenKill:
+    def test_sigterm_success_immediate(self):
+        """SIGTERM works and process disappears immediately."""
+        with (
+            patch("os.kill") as mock_kill,
+            patch("time.sleep") as mock_sleep,
+        ):
+            # 1. SIGTERM
+            # 2. os.kill(pid, 0) -> ProcessLookupError (dead)
+            mock_kill.side_effect = [None, ProcessLookupError()]
+
+            assert _sigterm_then_kill(12345, "test") is True
+            assert mock_kill.call_count == 2
+            mock_kill.assert_any_call(12345, signal.SIGTERM)
+            mock_kill.assert_any_call(12345, 0)
+            mock_sleep.assert_not_called()
+
+    def test_sigterm_process_lookup_error(self):
+        """SIGTERM fails with ProcessLookupError (already dead)."""
+        with patch("os.kill", side_effect=ProcessLookupError()) as mock_kill:
+            assert _sigterm_then_kill(12345, "test") is True
+            mock_kill.assert_called_once_with(12345, signal.SIGTERM)
+
+    def test_sigterm_permission_error(self):
+        """SIGTERM fails with PermissionError (inaccessible)."""
+        with patch("os.kill", side_effect=PermissionError()) as mock_kill:
+            assert _sigterm_then_kill(12345, "test") is True
+            mock_kill.assert_called_once_with(12345, signal.SIGTERM)
+
+    def test_wait_loop_graceful_exit(self):
+        """Process exits gracefully after a few checks."""
+        with (
+            patch("os.kill") as mock_kill,
+            patch("time.sleep") as mock_sleep,
+        ):
+            # 1. SIGTERM
+            # 2. os.kill(pid, 0) -> None (alive)
+            # 3. os.kill(pid, 0) -> None (alive)
+            # 4. os.kill(pid, 0) -> ProcessLookupError (dead)
+            mock_kill.side_effect = [None, None, None, ProcessLookupError()]
+
+            assert _sigterm_then_kill(12345, "test") is True
+            assert mock_kill.call_count == 4
+            assert mock_sleep.call_count == 2
+
+    def test_wait_loop_permission_error(self):
+        """os.kill(pid, 0) raises PermissionError."""
+        with (
+            patch("os.kill") as mock_kill,
+            patch("time.sleep"),
+        ):
+            # 1. SIGTERM
+            # 2. os.kill(pid, 0) -> PermissionError
+            mock_kill.side_effect = [None, PermissionError()]
+
+            assert _sigterm_then_kill(12345, "test") is True
+            assert mock_kill.call_count == 2
+
+    def test_sigkill_after_timeout(self):
+        """SIGKILL is sent after 30 failed attempts to exit gracefully."""
+        with (
+            patch("os.kill") as mock_kill,
+            patch("time.sleep") as mock_sleep,
+        ):
+            # 1. SIGTERM
+            # 2-31. os.kill(pid, 0) -> None (30 times)
+            # 32. SIGKILL
+            side_effects = [None] + ([None] * 30) + [None]
+            mock_kill.side_effect = side_effects
+
+            assert _sigterm_then_kill(12345, "test") is True
+            assert mock_kill.call_count == 32
+            mock_kill.assert_any_call(12345, signal.SIGKILL)
+            assert mock_sleep.call_count == 30
+
+    def test_sigkill_lookup_error(self):
+        """SIGKILL fails with ProcessLookupError."""
+        with (
+            patch("os.kill") as mock_kill,
+            patch("time.sleep"),
+        ):
+            # 1. SIGTERM
+            # 2-31. os.kill(pid, 0) -> None (30 times)
+            # 32. SIGKILL -> ProcessLookupError
+            side_effects = [None] + ([None] * 30) + [ProcessLookupError()]
+            mock_kill.side_effect = side_effects
+
+            assert _sigterm_then_kill(12345, "test") is True
+            assert mock_kill.call_count == 32
+            mock_kill.assert_any_call(12345, signal.SIGKILL)
