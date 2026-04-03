@@ -35,6 +35,7 @@ from web_core.search.runner import (
     _quick_health_check,
     _read_discovery,
     _remove_discovery,
+    _sigterm_then_kill,
     _try_reuse_existing,
     _wait_for_service,
     _write_discovery,
@@ -555,6 +556,71 @@ class TestKillStalePortProcess:
         ):
             _kill_stale_port_process(18888)
             mock_kill.assert_called_once_with(99999, "stale port 18888")
+
+
+# ===========================================================================
+# _sigterm_then_kill
+# ===========================================================================
+
+
+class TestSigtermThenKill:
+    def test_sigterm_then_kill_already_dead(self):
+        """Returns True if process is already dead when SIGTERM is sent."""
+        with patch("os.kill", side_effect=ProcessLookupError):
+            assert _sigterm_then_kill(12345, "test") is True
+
+    def test_sigterm_then_kill_immediate_graceful(self):
+        """Returns True if process terminates immediately after SIGTERM."""
+        with (
+            patch("os.kill") as mock_kill,
+            patch("time.sleep") as mock_sleep,
+        ):
+            # First call is SIGTERM (None), second call is check (ProcessLookupError)
+            mock_kill.side_effect = [None, ProcessLookupError]
+            assert _sigterm_then_kill(12345, "test") is True
+            assert mock_kill.call_count == 2
+            mock_sleep.assert_not_called()
+
+    def test_sigterm_then_kill_delayed_graceful(self):
+        """Returns True if process terminates after several iterations."""
+        with (
+            patch("os.kill") as mock_kill,
+            patch("time.sleep") as mock_sleep,
+        ):
+            # SIGTERM, then 3 checks alive, then check dead
+            mock_kill.side_effect = [None, None, None, None, ProcessLookupError]
+            assert _sigterm_then_kill(12345, "test") is True
+            assert mock_kill.call_count == 5
+            assert mock_sleep.call_count == 3
+
+    def test_sigterm_then_kill_permission_error(self):
+        """Returns True if PermissionError is raised during check."""
+        with (
+            patch("os.kill") as mock_kill,
+            patch("time.sleep"),
+        ):
+            # SIGTERM, then check raises PermissionError
+            mock_kill.side_effect = [None, PermissionError]
+            assert _sigterm_then_kill(12345, "test") is True
+            assert mock_kill.call_count == 2
+
+    def test_sigterm_then_kill_force_kill(self):
+        """Calls SIGKILL if process doesn't terminate gracefully."""
+        with (
+            patch("os.kill") as mock_kill,
+            patch("time.sleep") as mock_sleep,
+            patch("signal.SIGKILL", 9),
+            patch("signal.SIGTERM", 15),
+        ):
+            # SIGTERM, then 30 checks alive, then SIGKILL
+            mock_kill.return_value = None
+            assert _sigterm_then_kill(12345, "test") is True
+
+            # 1 (SIGTERM) + 30 (Checks) + 1 (SIGKILL) = 32
+            assert mock_kill.call_count == 32
+            mock_kill.assert_any_call(12345, 9)  # SIGKILL
+            mock_kill.assert_any_call(12345, 15)  # SIGTERM
+            assert mock_sleep.call_count == 30
 
 
 # ===========================================================================
