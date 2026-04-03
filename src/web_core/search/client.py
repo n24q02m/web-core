@@ -11,12 +11,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from urllib.parse import urlparse
 
 import httpx
 
 from web_core.http.client import safe_httpx_client
-from web_core.http.url import is_valid_domain, normalize_url
+from web_core.http.url import get_url_info, is_valid_domain
 from web_core.search.models import SearchError, SearchResult
 
 logger = logging.getLogger(__name__)
@@ -30,15 +29,16 @@ _MAX_PER_DOMAIN = 3
 # ---------------------------------------------------------------------------
 
 
-def _apply_domain_cap(items: list[dict[str, str]]) -> list[dict[str, str]]:
+def _apply_domain_cap(items: list[dict[str, object]]) -> list[dict[str, object]]:
     """Limit results to at most ``_MAX_PER_DOMAIN`` per domain."""
     domain_counts: dict[str, int] = {}
-    result: list[dict[str, str]] = []
+    result: list[dict[str, object]] = []
     for item in items:
-        parsed = urlparse(item.get("url", ""))
-        domain = parsed.netloc
-        if domain.startswith("www."):
-            domain = domain[4:]
+        domain = str(item.get("_domain", ""))
+        if not domain:
+            # Fallback if _domain is missing (though it shouldn't be)
+            _, domain = get_url_info(str(item.get("url", "")))
+
         count = domain_counts.get(domain, 0)
         if count < _MAX_PER_DOMAIN:
             result.append(item)
@@ -159,28 +159,40 @@ async def search(
                 ]
 
                 # Deduplicate: merge sources, keep longest snippet
-                seen: dict[str, dict[str, str]] = {}
+                seen: dict[str, dict[str, object]] = {}
+                sources: dict[str, list[str]] = {}
+
                 for item in formatted:
-                    norm_url = normalize_url(item["url"])
+                    norm_url, domain = get_url_info(str(item["url"]))
+                    item["_domain"] = domain
+
                     if norm_url in seen:
                         existing = seen[norm_url]
-                        if item["source"] and item["source"] not in existing["source"]:
-                            existing["source"] += f", {item['source']}"
-                        if len(item.get("snippet", "")) > len(existing.get("snippet", "")):
+                        src = str(item["source"])
+                        if src and src not in sources[norm_url]:
+                            sources[norm_url].append(src)
+
+                        if len(str(item.get("snippet", ""))) > len(str(existing.get("snippet", ""))):
                             existing["snippet"] = item["snippet"]
                             existing["title"] = item["title"] or existing["title"]
                     else:
                         seen[norm_url] = item
+                        src = str(item["source"])
+                        sources[norm_url] = [src] if src else []
+
+                # Join sources back into strings
+                for norm_url, item in seen.items():
+                    item["source"] = ", ".join(sources[norm_url])
 
                 # Domain cap + final limit
                 capped = _apply_domain_cap(list(seen.values()))[:max_results]
 
                 return [
                     SearchResult(
-                        url=r["url"],
-                        title=r["title"],
-                        snippet=r["snippet"],
-                        source=r["source"],
+                        url=str(r["url"]),
+                        title=str(r["title"]),
+                        snippet=str(r["snippet"]),
+                        source=str(r["source"]),
                     )
                     for r in capped
                 ]
