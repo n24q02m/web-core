@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import socket
 import subprocess
@@ -168,6 +169,13 @@ class TestDiscovery:
     def test_remove_discovery_nonexistent(self, tmp_discovery):
         """Does not raise when file doesn't exist."""
         _remove_discovery()  # Should not raise
+
+    def test_write_discovery_error(self, tmp_discovery, caplog):
+        """Catches and logs exception when writing discovery file fails."""
+        caplog.set_level(logging.DEBUG)
+        with patch("web_core.search.runner.Path.mkdir", side_effect=OSError("Access denied")):
+            _write_discovery(18888, 12345)
+        assert "Failed to write discovery file: Access denied" in caplog.text
 
 
 # ===========================================================================
