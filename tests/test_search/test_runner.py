@@ -297,6 +297,28 @@ class TestFindAvailablePort:
         assert isinstance(port, int)
         assert port >= 18888
 
+    def test_retries_on_oserror(self):
+        """Verify that _find_available_port retries if bind raises OSError."""
+        with patch("socket.socket") as mock_socket_cls:
+            # Create two mock socket instances
+            mock_socket_fail = MagicMock()
+            mock_socket_fail.__enter__.return_value = mock_socket_fail
+            mock_socket_fail.bind.side_effect = OSError("Address already in use")
+
+            mock_socket_success = MagicMock()
+            mock_socket_success.__enter__.return_value = mock_socket_success
+
+            # Side effect for the socket class: first one fails, second one succeeds
+            mock_socket_cls.side_effect = [mock_socket_fail, mock_socket_success]
+
+            # We use max_tries=2 to ensure it hits the loop and then succeeds
+            port = _find_available_port(18888, max_tries=2)
+
+            assert 18888 <= port < 18888 + 2
+            assert mock_socket_cls.call_count == 2
+            assert mock_socket_fail.bind.called
+            assert mock_socket_success.bind.called
+
 
 # ===========================================================================
 # _wait_for_service
