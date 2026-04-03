@@ -13,7 +13,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -158,6 +158,22 @@ class TestDiscovery:
         tmp_discovery.write_text(json.dumps({"port": 8080}))  # Missing pid
         assert _read_discovery() is None
 
+    def test_read_discovery_io_error(self, tmp_discovery):
+        """Returns None when an IO error occurs during reading."""
+        tmp_discovery.parent.mkdir(parents=True, exist_ok=True)
+        tmp_discovery.write_text("{}")
+        with patch("pathlib.Path.read_text", side_effect=OSError("Read error")):
+            assert _read_discovery() is None
+
+    def test_write_discovery_error(self, tmp_discovery):
+        """Logs debug message when writing fails."""
+        with (
+            patch("pathlib.Path.write_text", side_effect=OSError("Write error")),
+            patch("web_core.search.runner.logger.debug") as mock_debug,
+        ):
+            _write_discovery(18888, 12345)
+            mock_debug.assert_called_with("Failed to write discovery file: %s", ANY)
+
     def test_remove_discovery(self, tmp_discovery):
         """Removes the discovery file if it exists."""
         _write_discovery(18888, 12345)
@@ -168,6 +184,12 @@ class TestDiscovery:
     def test_remove_discovery_nonexistent(self, tmp_discovery):
         """Does not raise when file doesn't exist."""
         _remove_discovery()  # Should not raise
+
+    def test_remove_discovery_error(self, tmp_discovery):
+        """Handles exception during discovery file removal."""
+        _write_discovery(18888, 12345)
+        with patch("pathlib.Path.unlink", side_effect=OSError("Unlink error")):
+            _remove_discovery()  # Should not raise
 
 
 # ===========================================================================
