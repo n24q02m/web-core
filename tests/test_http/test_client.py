@@ -258,10 +258,13 @@ class TestPinnedGetaddrinfo:
         with _dns_cache_lock:
             _dns_cache.pop(hostname, None)
 
-        with patch(
-            "web_core.http.client._original_getaddrinfo",
-            side_effect=socket.gaierror("Name resolution failed"),
-        ), pytest.raises(socket.gaierror):
+        with (
+            patch(
+                "web_core.http.client._original_getaddrinfo",
+                side_effect=socket.gaierror("Name resolution failed"),
+            ),
+            pytest.raises(socket.gaierror),
+        ):
             _pinned_getaddrinfo(hostname, 80)
 
 
