@@ -1,0 +1,4 @@
+## 2024-04-03 - [Insecure File Permissions for Secret Key Configuration]
+**Vulnerability:** The SearXNG settings file containing a sensitive `secret_key` and its parent `.web-core` directory were being created with default system umask permissions, allowing other local users to potentially read the secret.
+**Learning:** Default `Path.write_text()` and `Path.mkdir()` do not explicitly enforce strict file permissions, relying instead on the system umask. For sensitive files containing secrets like API keys or Flask secret keys, this poses a risk of unauthorized local access.
+**Prevention:** Always use explicit permission checking and setting (e.g., `os.chmod` for directories and `os.open` with `os.O_CREAT` flags + `0o600` for files) when creating files or directories that will contain sensitive information.
