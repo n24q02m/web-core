@@ -638,6 +638,31 @@ class TestCleanupProcess:
 
         assert not settings_file.exists()
 
+    def test_cleanup_settings_file_unlink_error(self, tmp_config_dir):
+        """Cleanup handles exception when unlinking settings file."""
+        settings_file = tmp_config_dir / f"searxng_settings_{os.getpid()}.yml"
+        settings_file.write_text("test")
+        assert settings_file.exists()
+
+        with patch("pathlib.Path.unlink", side_effect=OSError("Permission denied")):
+            _cleanup_process()  # Should not raise exception
+
+        assert settings_file.exists()
+
+    def test_cleanup_force_kill_error(self, tmp_discovery):
+        """Cleanup handles exception during force kill."""
+        import web_core.search.runner as mod
+
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = None
+        mod._searxng_process = mock_proc
+        mod._is_owner = True
+
+        with patch("web_core.search.runner._force_kill_process", side_effect=Exception("Kill failed")):
+            _cleanup_process()  # Should not raise exception
+
+        assert mod._searxng_process is None
+
 
 # ===========================================================================
 # ensure_searxng

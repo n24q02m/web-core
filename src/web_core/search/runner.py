@@ -608,7 +608,7 @@ def _get_process_kwargs() -> dict:  # pragma: no cover
     return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
 
 
-def _cleanup_process() -> None:  # pragma: no cover
+def _cleanup_process() -> None:
     """Cleanup SearXNG subprocess and per-process settings file on exit.
 
     Only kills SearXNG if this instance owns it (started it).
