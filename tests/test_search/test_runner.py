@@ -329,6 +329,50 @@ class TestWaitForService:
             result = await _wait_for_service("http://127.0.0.1:18888", timeout=0.5)
             assert result is False
 
+    async def test_wait_for_service_retries_on_non_200(self):
+        """Retries and eventually times out if status is not 200."""
+        mock_response = MagicMock()
+        mock_response.status_code = 503
+
+        with (
+            patch("web_core.search.runner.httpx.AsyncClient") as mock_client_cls,
+            patch("web_core.search.runner.time.time") as mock_time,
+            patch("web_core.search.runner.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        ):
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            # _wait_for_service calls time.time():
+            # 1. start_time = time.time()
+            # 2. while time.time() - start_time < timeout:
+            # 3. while time.time() - start_time < timeout: (second loop attempt)
+            mock_time.side_effect = [0.0, 0.5, 1.5]
+
+            result = await _wait_for_service("http://127.0.0.1:18888", timeout=1.0)
+            assert result is False
+            assert mock_sleep.call_count == 1
+
+    async def test_wait_for_service_retries_on_exception(self):
+        """Retries and eventually times out if an exception occurs during request."""
+        with (
+            patch("web_core.search.runner.httpx.AsyncClient") as mock_client_cls,
+            patch("web_core.search.runner.time.time") as mock_time,
+            patch("web_core.search.runner.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        ):
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(side_effect=Exception("network error"))
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            # Start at 0, check 0.5, check 1.5 (timeout)
+            mock_time.side_effect = [0.0, 0.5, 1.5]
+
+            result = await _wait_for_service("http://127.0.0.1:18888", timeout=1.0)
+            assert result is False
+            assert mock_sleep.call_count == 1
+
 
 # ===========================================================================
 # _is_searxng_installed / _install_searxng
