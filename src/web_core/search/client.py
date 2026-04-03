@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any
 from urllib.parse import urlparse
 
 import httpx
@@ -153,19 +154,19 @@ async def search(
                         "url": r.get("url", ""),
                         "title": r.get("title", ""),
                         "snippet": r.get("content", ""),
-                        "source": r.get("engine", ""),
+                        "sources": {r.get("engine")} if r.get("engine") else set(),
                     }
                     for r in results
                 ]
 
                 # Deduplicate: merge sources, keep longest snippet
-                seen: dict[str, dict[str, str]] = {}
+                seen: dict[str, dict[str, Any]] = {}
                 for item in formatted:
                     norm_url = normalize_url(item["url"])
                     if norm_url in seen:
                         existing = seen[norm_url]
-                        if item["source"] and item["source"] not in existing["source"]:
-                            existing["source"] += f", {item['source']}"
+                        if item["sources"]:
+                            existing["sources"].update(item["sources"])
                         if len(item.get("snippet", "")) > len(existing.get("snippet", "")):
                             existing["snippet"] = item["snippet"]
                             existing["title"] = item["title"] or existing["title"]
@@ -173,6 +174,10 @@ async def search(
                         seen[norm_url] = item
 
                 # Domain cap + final limit
+                # Join sources into a string
+                for item in seen.values():
+                    item["source"] = ", ".join(sorted(item["sources"]))
+
                 capped = _apply_domain_cap(list(seen.values()))[:max_results]
 
                 return [
