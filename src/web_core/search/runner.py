@@ -360,9 +360,9 @@ def _is_searxng_installed() -> bool:
     executing module-level code in ``searx.webapp`` which calls ``sys.exit(1)``
     when ``secret_key`` is unchanged (the default ``ultrasecretkey``).
     """
-    import importlib.util
-
     try:
+        import importlib.util
+
         return importlib.util.find_spec("searx.webapp") is not None
     except ModuleNotFoundError:
         return False
