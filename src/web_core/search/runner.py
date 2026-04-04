@@ -438,6 +438,7 @@ def _get_settings_path(port: int) -> Path:
     from the bundled template.
     """
     _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    _CONFIG_DIR.chmod(0o700)  # Restrict directory access
 
     # Per-process settings file (avoids race condition between instances).
     settings_file = _CONFIG_DIR / f"searxng_settings_{os.getpid()}.yml"
@@ -451,7 +452,12 @@ def _get_settings_path(port: int) -> Path:
         enable_http2=enable_http2,
     )
 
-    settings_file.write_text(content)
+    # Secure file creation: 0o600 permissions to protect secret_key
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+    fd = os.open(settings_file, flags, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(content)
+
     logger.debug("SearXNG settings written to: %s", settings_file)
 
     return settings_file
