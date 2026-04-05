@@ -146,6 +146,16 @@ class TestDiscovery:
         assert data["owner_pid"] == os.getpid()
         assert "started_at" in data
 
+    def test_write_discovery_error(self, tmp_discovery, caplog):
+        """Handles and logs exceptions during write."""
+        import logging
+
+        caplog.set_level(logging.DEBUG)
+        with patch.object(Path, "mkdir", side_effect=OSError("Disk full")):
+            _write_discovery(18888, 12345)
+
+        assert "Failed to write discovery file: Disk full" in caplog.text
+
     def test_read_discovery_invalid_json(self, tmp_discovery):
         """Returns None on malformed JSON."""
         tmp_discovery.parent.mkdir(parents=True, exist_ok=True)
