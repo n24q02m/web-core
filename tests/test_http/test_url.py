@@ -8,14 +8,33 @@ import pytest
 
 from web_core.http.url import (
     _TRACKING_PARAMS,
+    get_url_info,
     is_valid_domain,
     normalize_url,
     strip_tracking_params,
 )
 
 # ---------------------------------------------------------------------------
-# normalize_url
+# get_url_info / normalize_url
 # ---------------------------------------------------------------------------
+
+
+class TestGetUrlInfo:
+    def test_get_url_info_success(self):
+        norm_url, domain = get_url_info("https://www.EXAMPLE.com/page?utm_source=twitter&q=test#section")
+        assert norm_url == "https://example.com/page?q=test"
+        assert domain == "example.com"
+
+    def test_get_url_info_empty(self):
+        norm_url, domain = get_url_info("")
+        assert norm_url == ""
+        assert domain == ""
+
+    def test_get_url_info_invalid(self):
+        with patch("web_core.http.url.urlparse", side_effect=Exception("Parsing error")):
+            norm_url, domain = get_url_info("https://example.com")
+            assert norm_url == "https://example.com"
+            assert domain == ""
 
 
 class TestNormalizeUrl:

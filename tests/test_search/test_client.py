@@ -120,16 +120,16 @@ class TestApplyDomainCap:
     """Test per-domain result limiting."""
 
     def test_caps_at_max_per_domain(self):
-        items = [{"url": f"https://example.com/page{i}"} for i in range(10)]
+        items = [{"url": f"https://example.com/page{i}", "_domain": "example.com"} for i in range(10)]
         result = _apply_domain_cap(items)
         assert len(result) == _MAX_PER_DOMAIN
 
     def test_different_domains_unaffected(self):
         items = [
-            {"url": "https://a.com/1"},
-            {"url": "https://b.com/1"},
-            {"url": "https://c.com/1"},
-            {"url": "https://d.com/1"},
+            {"url": "https://a.com/1", "_domain": "a.com"},
+            {"url": "https://b.com/1", "_domain": "b.com"},
+            {"url": "https://c.com/1", "_domain": "c.com"},
+            {"url": "https://d.com/1", "_domain": "d.com"},
         ]
         result = _apply_domain_cap(items)
         assert len(result) == 4
@@ -137,10 +137,10 @@ class TestApplyDomainCap:
     def test_www_prefix_stripped_for_counting(self):
         """www.example.com and example.com count as the same domain."""
         items = [
-            {"url": "https://www.example.com/1"},
-            {"url": "https://example.com/2"},
-            {"url": "https://www.example.com/3"},
-            {"url": "https://example.com/4"},
+            {"url": "https://www.example.com/1", "_domain": "example.com"},
+            {"url": "https://example.com/2", "_domain": "example.com"},
+            {"url": "https://www.example.com/3", "_domain": "example.com"},
+            {"url": "https://example.com/4", "_domain": "example.com"},
         ]
         result = _apply_domain_cap(items)
         assert len(result) == _MAX_PER_DOMAIN
@@ -150,9 +150,9 @@ class TestApplyDomainCap:
 
     def test_preserves_order(self):
         items = [
-            {"url": "https://a.com/1"},
-            {"url": "https://b.com/1"},
-            {"url": "https://a.com/2"},
+            {"url": "https://a.com/1", "_domain": "a.com"},
+            {"url": "https://b.com/1", "_domain": "b.com"},
+            {"url": "https://a.com/2", "_domain": "a.com"},
         ]
         result = _apply_domain_cap(items)
         assert [r["url"] for r in result] == [
@@ -163,11 +163,11 @@ class TestApplyDomainCap:
 
     def test_mixed_domains_with_cap(self):
         items = [
-            {"url": "https://a.com/1"},
-            {"url": "https://a.com/2"},
-            {"url": "https://a.com/3"},
-            {"url": "https://a.com/4"},  # capped
-            {"url": "https://b.com/1"},
+            {"url": "https://a.com/1", "_domain": "a.com"},
+            {"url": "https://a.com/2", "_domain": "a.com"},
+            {"url": "https://a.com/3", "_domain": "a.com"},
+            {"url": "https://a.com/4", "_domain": "a.com"},  # capped
+            {"url": "https://b.com/1", "_domain": "b.com"},
         ]
         result = _apply_domain_cap(items)
         assert len(result) == 4

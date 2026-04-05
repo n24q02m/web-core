@@ -11,12 +11,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from urllib.parse import urlparse
 
 import httpx
 
 from web_core.http.client import safe_httpx_client
-from web_core.http.url import is_valid_domain, normalize_url
+from web_core.http.url import get_url_info, is_valid_domain
 from web_core.search.models import SearchError, SearchResult
 
 logger = logging.getLogger(__name__)
@@ -35,10 +34,7 @@ def _apply_domain_cap(items: list[dict[str, str]]) -> list[dict[str, str]]:
     domain_counts: dict[str, int] = {}
     result: list[dict[str, str]] = []
     for item in items:
-        parsed = urlparse(item.get("url", ""))
-        domain = parsed.netloc
-        if domain.startswith("www."):
-            domain = domain[4:]
+        domain = item.get("_domain", "")
         count = domain_counts.get(domain, 0)
         if count < _MAX_PER_DOMAIN:
             result.append(item)
@@ -161,7 +157,8 @@ async def search(
                 # Deduplicate: merge sources, keep longest snippet
                 seen: dict[str, dict[str, str]] = {}
                 for item in formatted:
-                    norm_url = normalize_url(item["url"])
+                    norm_url, domain = get_url_info(item["url"])
+                    item["_domain"] = domain
                     if norm_url in seen:
                         existing = seen[norm_url]
                         if item["source"] and item["source"] not in existing["source"]:

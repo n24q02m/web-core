@@ -1,0 +1,3 @@
+## 2025-04-05 - URL Optimization via parse_qsl and unified info extraction
+**Learning:** `parse_qs` creates intermediate dictionaries and arrays which are expensive during the critical URL deduplication path. Switching to `parse_qsl` significantly avoids memory overhead. Furthermore, `_apply_domain_cap` previously recalculated the domain using `urlparse` redundantly.
+**Action:** Unifying URL normalization and domain extraction into `get_url_info(url)` allows `_apply_domain_cap` to reuse the cached `_domain` from deduplication, dropping the extra parsing loop entirely. Remember to preserve domain transformations like `www.` stripping when caching domain variables.

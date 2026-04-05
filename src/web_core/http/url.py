@@ -7,7 +7,7 @@ comparison, and for validating domain names to prevent injection attacks.
 from __future__ import annotations
 
 import re
-from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 # ---------------------------------------------------------------------------
 # Tracking parameters to strip
@@ -48,8 +48,8 @@ _DOMAIN_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*\.[a-zA-Z]{2,}$")
 # ---------------------------------------------------------------------------
 
 
-def normalize_url(url: str) -> str:
-    """Normalize a URL for deduplication.
+def get_url_info(url: str) -> tuple[str, str]:
+    """Normalize a URL and extract its domain for deduplication.
 
     Transformations applied:
     - Lowercase scheme and netloc
@@ -58,16 +58,17 @@ def normalize_url(url: str) -> str:
     - Remove tracking query parameters (UTM, click IDs, etc.)
     - Remove fragment (``#section``)
 
-    Returns the original string unchanged if parsing fails.
-    Returns empty string for empty input.
+    Returns a tuple of (normalized_url, domain).
+    If parsing fails, returns (original_url, "").
+    If empty input, returns ("", "").
     """
     if not url:
-        return ""
+        return "", ""
 
     try:
         parsed = urlparse(url)
     except Exception:
-        return url
+        return url, ""
 
     scheme = (parsed.scheme or "").lower()
     netloc = (parsed.netloc or "").lower()
@@ -78,14 +79,24 @@ def normalize_url(url: str) -> str:
     path = parsed.path.rstrip("/") or ""
 
     if parsed.query:
-        params = parse_qs(parsed.query, keep_blank_values=True)
-        cleaned = {k: v for k, v in params.items() if k not in _TRACKING_PARAMS}
-        query = urlencode(cleaned, doseq=True)
+        # Use parse_qsl to avoid expensive dictionary allocations (performance optimization)
+        params = parse_qsl(parsed.query, keep_blank_values=True)
+        cleaned = [(k, v) for k, v in params if k not in _TRACKING_PARAMS]
+        query = urlencode(cleaned)
     else:
         query = ""
 
     # Fragment is always stripped (empty string)
-    return urlunparse((scheme, netloc, path, parsed.params, query, ""))
+    norm_url = urlunparse((scheme, netloc, path, parsed.params, query, ""))
+    return norm_url, netloc
+
+
+def normalize_url(url: str) -> str:
+    """Normalize a URL for deduplication.
+
+    See :func:`get_url_info` for details.
+    """
+    return get_url_info(url)[0]
 
 
 def strip_tracking_params(url: str) -> str:
