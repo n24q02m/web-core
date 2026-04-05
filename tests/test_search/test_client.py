@@ -521,3 +521,21 @@ class TestSearch:
             await search(SEARXNG_URL, "test")
 
         mock_factory.assert_called_once_with(timeout=15.0)
+
+    async def test_dedup_with_overlapping_engine_names(self, mock_httpx_client):
+        """Engine names that are substrings of each other should be correctly merged."""
+        # Order matters for the bug: if the longer name is already present,
+        # the shorter name won't be added because of the 'in' check.
+        raw_results = [
+            _raw_result("https://example.com/page", "T1", "Snippet 1", "google_news"),
+            _raw_result("https://example.com/page", "T1", "Snippet 1", "google"),
+        ]
+        mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response(raw_results))
+
+        with patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client):
+            results = await search(SEARXNG_URL, "test")
+
+        assert len(results) == 1
+        sources = [s.strip() for s in results[0].source.split(",")]
+        assert "google" in sources
+        assert "google_news" in sources
