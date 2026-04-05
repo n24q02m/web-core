@@ -638,6 +638,20 @@ class TestCleanupProcess:
 
         assert not settings_file.exists()
 
+    def test_cleanup_handles_unlink_exception(self, tmp_config_dir):
+        """Cleanup handles exceptions when unlinking the settings file."""
+        import web_core.search.runner as mod
+        settings_file = tmp_config_dir / f"searxng_settings_{os.getpid()}.yml"
+        settings_file.write_text("test")
+        assert settings_file.exists()
+
+        with patch("web_core.search.runner.Path.unlink", side_effect=OSError("Permission denied")):
+            # Should not raise exception
+            mod._cleanup_process()
+
+        assert settings_file.exists()
+
+
 
 # ===========================================================================
 # ensure_searxng
