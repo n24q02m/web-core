@@ -1,0 +1,11 @@
+<<<<<<< SEARCH
+        with patch("os.kill", side_effect=side_effects) as mock_kill:
+            with patch("time.sleep"):  # Don't actually sleep
+                assert _sigterm_then_kill(12345, "test") is True
+=======
+        with (
+            patch("os.kill", side_effect=side_effects) as mock_kill,
+            patch("time.sleep"),  # Don't actually sleep
+        ):
+            assert _sigterm_then_kill(12345, "test") is True
+>>>>>>> REPLACE

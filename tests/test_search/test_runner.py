@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import signal
 import socket
 import subprocess
 import sys
@@ -35,6 +36,7 @@ from web_core.search.runner import (
     _quick_health_check,
     _read_discovery,
     _remove_discovery,
+    _sigterm_then_kill,
     _try_reuse_existing,
     _wait_for_service,
     _write_discovery,
@@ -800,6 +802,70 @@ class TestEnsureSearxng:
 # ===========================================================================
 # _get_startup_lock
 # ===========================================================================
+
+
+# ===========================================================================
+# _sigterm_then_kill
+# ===========================================================================
+
+
+class TestSigtermThenKill:
+    def test_sigterm_already_dead(self):
+        """Returns True if process is already dead on SIGTERM."""
+        with patch("os.kill", side_effect=ProcessLookupError):
+            assert _sigterm_then_kill(12345) is True
+
+    def test_sigterm_permission_error(self):
+        """Returns True if process is inaccessible on SIGTERM."""
+        with patch("os.kill", side_effect=PermissionError):
+            assert _sigterm_then_kill(12345) is True
+
+    def test_graceful_termination(self):
+        """Returns True if process terminates during wait loop."""
+        # First call (SIGTERM) succeeds (None)
+        # Second call (check alive) raises ProcessLookupError
+        with patch("os.kill", side_effect=[None, ProcessLookupError]):
+            assert _sigterm_then_kill(12345) is True
+
+    def test_wait_loop_permission_error(self):
+        """Returns True if process becomes inaccessible during wait loop."""
+        with patch("os.kill", side_effect=[None, PermissionError]):
+            assert _sigterm_then_kill(12345) is True
+
+    def test_force_kill(self):
+        """Sends SIGKILL if process doesn't terminate gracefully."""
+        # 1: SIGTERM (None)
+        # 2-31: Check alive (None) -> 30 times
+        # 32: SIGKILL (None)
+        side_effects = [None] * 32
+
+        with (
+            patch("os.kill", side_effect=side_effects) as mock_kill,
+            patch("time.sleep"),  # Don't actually sleep
+        ):
+            assert _sigterm_then_kill(12345, "test") is True
+
+        # Check SIGTERM call
+        mock_kill.assert_any_call(12345, signal.SIGTERM)
+        # Check SIGKILL call
+        mock_kill.assert_any_call(12345, signal.SIGKILL)
+        # Check alive checks
+        mock_kill.assert_any_call(12345, 0)
+
+    def test_sigkill_already_dead(self):
+        """Returns True if process dies just before SIGKILL."""
+        # 1: SIGTERM (None)
+        # 2-31: Check alive (None)
+        # 32: SIGKILL (ProcessLookupError)
+        side_effects = [None] * 31 + [ProcessLookupError]
+        with patch("os.kill", side_effect=side_effects), patch("time.sleep"):
+            assert _sigterm_then_kill(12345) is True
+
+    def test_sigkill_permission_error(self):
+        """Returns True if process becomes inaccessible on SIGKILL."""
+        side_effects = [None] * 31 + [PermissionError]
+        with patch("os.kill", side_effect=side_effects), patch("time.sleep"):
+            assert _sigterm_then_kill(12345) is True
 
 
 class TestGetStartupLock:

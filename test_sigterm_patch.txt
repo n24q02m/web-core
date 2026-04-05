@@ -1,0 +1,10 @@
+<<<<<<< SEARCH
+    _wait_for_service,
+    _write_discovery,
+)
+=======
+    _sigterm_then_kill,
+    _wait_for_service,
+    _write_discovery,
+)
+>>>>>>> REPLACE
