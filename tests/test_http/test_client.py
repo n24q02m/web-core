@@ -142,6 +142,11 @@ class TestIsSafeUrl:
             cached_results, _cached_at = _dns_cache[hostname]
             assert cached_results == mock_results
 
+    def test_blocks_malformed_url_value_error(self):
+        """URLs that cause urlparse to raise ValueError must be blocked."""
+        # In Python 3.11+, urlparse("http://[") raises ValueError
+        assert is_safe_url("http://[") is False
+
     def test_blocks_unparseable_url(self):
         """Completely invalid URLs must be blocked."""
         assert is_safe_url("not-a-url") is False
@@ -150,6 +155,14 @@ class TestIsSafeUrl:
         """If urlparse raises a generic Exception, is_safe_url returns False."""
         with patch("web_core.http.client.urlparse", side_effect=Exception("parse error")):
             assert is_safe_url("http://example.com") is False
+
+    def test_blocks_unparseable_ip_from_dns(self):
+        """If DNS returns something that ipaddress cannot parse, it must be blocked."""
+        with patch(
+            "web_core.http.client._original_getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("not-an-ip", 0))],
+        ):
+            assert is_safe_url("http://bad-dns.example.com") is False
 
     def test_blocks_generic_dns_exception(self):
         """Generic exceptions during DNS resolution must be blocked (not just gaierror)."""
