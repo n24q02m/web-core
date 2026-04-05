@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any
 from urllib.parse import urlparse
 
 import httpx
@@ -30,15 +31,18 @@ _MAX_PER_DOMAIN = 3
 # ---------------------------------------------------------------------------
 
 
-def _apply_domain_cap(items: list[dict[str, str]]) -> list[dict[str, str]]:
+def _apply_domain_cap(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Limit results to at most ``_MAX_PER_DOMAIN`` per domain."""
     domain_counts: dict[str, int] = {}
-    result: list[dict[str, str]] = []
+    result: list[dict[str, Any]] = []
     for item in items:
-        parsed = urlparse(item.get("url", ""))
-        domain = parsed.netloc
-        if domain.startswith("www."):
-            domain = domain[4:]
+        domain = item.get("_domain")
+        if not domain:
+            parsed = urlparse(item.get("url", ""))
+            domain = parsed.netloc.lower()
+            if domain.startswith("www."):
+                domain = domain[4:]
+
         count = domain_counts.get(domain, 0)
         if count < _MAX_PER_DOMAIN:
             result.append(item)
@@ -70,6 +74,88 @@ def _build_filtered_query(
             if is_valid_domain(domain):
                 parts.append(f"-site:{domain}")
     return " ".join(parts)
+
+
+def _prepare_search_params(
+    query: str,
+    categories: str,
+    time_range: str | None,
+    language: str | None,
+    include_domains: list[str] | None,
+    exclude_domains: list[str] | None,
+) -> dict[str, str]:
+    """Prepare query parameters for SearXNG API."""
+    effective_query = _build_filtered_query(query, include_domains, exclude_domains)
+    params: dict[str, str] = {
+        "q": effective_query,
+        "format": "json",
+        "categories": categories,
+    }
+    if time_range and time_range in ("day", "week", "month", "year"):
+        params["time_range"] = time_range
+    if language:
+        params["language"] = language
+    return params
+
+
+def _process_search_response(data: dict[str, Any], max_results: int) -> list[SearchResult]:
+    """Format, deduplicate, and domain-cap SearXNG results."""
+    raw_results = data.get("results", [])[: max_results * 2]
+
+    # Deduplicate: merge sources, keep longest snippet
+    seen: dict[str, dict[str, Any]] = {}
+    for r in raw_results:
+        url = r.get("url", "")
+        if not url:
+            continue
+
+        norm_url = normalize_url(url)
+
+        # Optimization: extract domain once during normalization phase
+        parsed = urlparse(url)
+        domain = parsed.netloc.lower()
+        if domain.startswith("www."):
+            domain = domain[4:]
+
+        source = r.get("engine", "")
+        snippet = r.get("content", "")
+        title = r.get("title", "")
+
+        if norm_url in seen:
+            existing = seen[norm_url]
+            if source:
+                existing["_sources_set"].add(source)
+            if len(snippet) > len(existing.get("snippet", "")):
+                existing["snippet"] = snippet
+                existing["title"] = title or existing["title"]
+        else:
+            seen[norm_url] = {
+                "url": url,
+                "title": title,
+                "snippet": snippet,
+                "_domain": domain,
+                "_sources_set": {source} if source else set(),
+            }
+
+    # Finalize sources string (comma separated, sorted)
+    processed_items = []
+    for item in seen.values():
+        sources_set = item.pop("_sources_set")
+        item["source"] = ", ".join(sorted(sources_set))
+        processed_items.append(item)
+
+    # Domain cap + final limit
+    capped = _apply_domain_cap(processed_items)[:max_results]
+
+    return [
+        SearchResult(
+            url=r["url"],
+            title=r["title"],
+            snippet=r["snippet"],
+            source=r["source"],
+        )
+        for r in capped
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -122,16 +208,7 @@ async def search(
     SearchError
         On 4xx (non-retryable) or after all retries are exhausted.
     """
-    effective_query = _build_filtered_query(query, include_domains, exclude_domains)
-    params: dict[str, str] = {
-        "q": effective_query,
-        "format": "json",
-        "categories": categories,
-    }
-    if time_range and time_range in ("day", "week", "month", "year"):
-        params["time_range"] = time_range
-    if language:
-        params["language"] = language
+    params = _prepare_search_params(query, categories, time_range, language, include_domains, exclude_domains)
 
     last_error: str | None = None
 
@@ -144,46 +221,7 @@ async def search(
                     headers={"X-Real-IP": "127.0.0.1", "X-Forwarded-For": "127.0.0.1"},
                 )
                 response.raise_for_status()
-                data = response.json()
-                results = data.get("results", [])[: max_results * 2]
-
-                # Format raw results into dicts
-                formatted = [
-                    {
-                        "url": r.get("url", ""),
-                        "title": r.get("title", ""),
-                        "snippet": r.get("content", ""),
-                        "source": r.get("engine", ""),
-                    }
-                    for r in results
-                ]
-
-                # Deduplicate: merge sources, keep longest snippet
-                seen: dict[str, dict[str, str]] = {}
-                for item in formatted:
-                    norm_url = normalize_url(item["url"])
-                    if norm_url in seen:
-                        existing = seen[norm_url]
-                        if item["source"] and item["source"] not in existing["source"]:
-                            existing["source"] += f", {item['source']}"
-                        if len(item.get("snippet", "")) > len(existing.get("snippet", "")):
-                            existing["snippet"] = item["snippet"]
-                            existing["title"] = item["title"] or existing["title"]
-                    else:
-                        seen[norm_url] = item
-
-                # Domain cap + final limit
-                capped = _apply_domain_cap(list(seen.values()))[:max_results]
-
-                return [
-                    SearchResult(
-                        url=r["url"],
-                        title=r["title"],
-                        snippet=r["snippet"],
-                        source=r["source"],
-                    )
-                    for r in capped
-                ]
+                return _process_search_response(response.json(), max_results)
 
             except httpx.HTTPStatusError as e:
                 status = e.response.status_code
