@@ -740,6 +740,104 @@ class TestEnsureSearxng:
             url = await ensure_searxng()
             assert url == "http://127.0.0.1:18889"
 
+    async def test_restart_on_crash_stderr_exception(self, tmp_discovery, monkeypatch):
+        """Restarts SearXNG even if reading stderr of crashed process fails."""
+        import web_core.search.runner as mod
+
+        monkeypatch.delenv("SEARXNG_URL", raising=False)
+
+        # Simulate a crashed process with a broken stderr stream
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = 1
+        mock_proc.pid = 12345
+        mock_proc.stderr = MagicMock()
+        mock_proc.stderr.read.side_effect = Exception("Failed to read stderr")
+        mod._searxng_process = mock_proc
+        mod._searxng_port = 18888
+
+        with (
+            patch("web_core.search.runner._try_reuse_existing", new_callable=AsyncMock, return_value=None),
+            patch("web_core.search.runner._is_searxng_installed", return_value=True),
+            patch(
+                "web_core.search.runner._start_searxng_subprocess",
+                new_callable=AsyncMock,
+                return_value="http://127.0.0.1:18889",
+            ),
+        ):
+            url = await ensure_searxng()
+            assert url == "http://127.0.0.1:18889"
+            # mod._searxng_process is not updated because _start_searxng_subprocess is mocked to return URL directly
+
+    async def test_restart_on_crash_with_stderr(self, tmp_discovery, monkeypatch):
+        """Cover line 858: successful stderr reading during crash."""
+        import web_core.search.runner as mod
+
+        monkeypatch.delenv("SEARXNG_URL", raising=False)
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = 1
+        mock_proc.pid = 12345
+        mock_proc.stderr = MagicMock()
+        mock_proc.stderr.read.return_value = b"some error output"
+        mod._searxng_process = mock_proc
+        mod._searxng_port = 18888
+        with (
+            patch("web_core.search.runner._try_reuse_existing", new_callable=AsyncMock, return_value=None),
+            patch("web_core.search.runner._is_searxng_installed", return_value=True),
+            patch(
+                "web_core.search.runner._start_searxng_subprocess",
+                new_callable=AsyncMock,
+                return_value="http://127.0.0.1:18889",
+            ),
+        ):
+            await ensure_searxng()
+
+    async def test_restart_with_cooldown(self, tmp_discovery, monkeypatch):
+        """Cover lines 881-883: cooldown logic."""
+        import web_core.search.runner as mod
+
+        monkeypatch.delenv("SEARXNG_URL", raising=False)
+        mod._restart_count = 1
+        mod._last_restart_time = time.time()
+        with (
+            patch("web_core.search.runner._try_reuse_existing", new_callable=AsyncMock, return_value=None),
+            patch("web_core.search.runner._is_searxng_installed", return_value=True),
+            patch(
+                "web_core.search.runner._start_searxng_subprocess",
+                new_callable=AsyncMock,
+                return_value="http://127.0.0.1:18889",
+            ),
+            patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        ):
+            await ensure_searxng()
+            mock_sleep.assert_called_once()
+
+    async def test_restart_alive_but_unhealthy(self, tmp_discovery, monkeypatch):
+        """Cover lines 819-826: process alive but unhealthy."""
+        import web_core.search.runner as mod
+
+        monkeypatch.delenv("SEARXNG_URL", raising=False)
+        mock_proc = MagicMock()
+        mock_proc.pid = 12345
+        mod._searxng_process = mock_proc
+        mod._searxng_port = 18888
+        with (
+            patch("web_core.search.runner._is_process_alive", return_value=True),
+            patch("web_core.search.runner._quick_health_check", new_callable=AsyncMock, return_value=False),
+            patch("web_core.search.runner._try_reuse_existing", new_callable=AsyncMock, return_value=None),
+            patch("web_core.search.runner._is_searxng_installed", return_value=True),
+            patch(
+                "web_core.search.runner._start_searxng_subprocess",
+                new_callable=AsyncMock,
+                return_value="http://127.0.0.1:18889",
+            ),
+            patch("web_core.search.runner._force_kill_process") as mock_kill,
+        ):
+            await ensure_searxng()
+            mock_kill.assert_called_once_with(mock_proc)
+            assert (
+                mod._searxng_port is None or mod._searxng_port != 18888
+            )  # It should have been cleared then maybe set again by start
+
     async def test_installs_and_starts(self, tmp_discovery, monkeypatch):
         """Installs SearXNG and starts when not installed."""
         monkeypatch.delenv("SEARXNG_URL", raising=False)
