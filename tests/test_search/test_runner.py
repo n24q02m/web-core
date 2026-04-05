@@ -169,6 +169,14 @@ class TestDiscovery:
         """Does not raise when file doesn't exist."""
         _remove_discovery()  # Should not raise
 
+    def test_remove_discovery_error(self, tmp_discovery):
+        """Does not raise when unlink fails."""
+        _write_discovery(18888, 12345)
+        assert tmp_discovery.exists()
+        with patch.object(Path, "unlink", side_effect=OSError("Disk error")):
+            _remove_discovery()  # Should catch and pass
+        assert tmp_discovery.exists()
+
 
 # ===========================================================================
 # _quick_health_check
