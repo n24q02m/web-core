@@ -125,6 +125,22 @@ class TestIsPidAlive:
         """An absurdly large PID should not be alive."""
         assert _is_pid_alive(999999999) is False
 
+    def test_os_kill_errors_return_false(self):
+        """Errors in os.kill should return False."""
+        # Mock os.kill to raise different exceptions
+        with patch("os.kill") as mock_kill:
+            # Test ProcessLookupError
+            mock_kill.side_effect = ProcessLookupError()
+            assert _is_pid_alive(12345) is False
+
+            # Test PermissionError
+            mock_kill.side_effect = PermissionError()
+            assert _is_pid_alive(12345) is False
+
+            # Test generic OSError
+            mock_kill.side_effect = OSError()
+            assert _is_pid_alive(12345) is False
+
 
 # ===========================================================================
 # Discovery file management
