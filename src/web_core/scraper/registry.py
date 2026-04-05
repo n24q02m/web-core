@@ -48,6 +48,13 @@ class StrategyRegistry:
         except ImportError:
             pass
 
+        try:
+            from web_core.scraper.strategies.patchright_browser import PatchrightStrategy
+
+            reg.register(PatchrightStrategy())
+        except ImportError:
+            pass
+
         if capsolver_api_key:
             from web_core.scraper.strategies.captcha import CaptchaStrategy
 
