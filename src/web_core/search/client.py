@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any
 from urllib.parse import urlparse
 
 import httpx
@@ -30,10 +31,10 @@ _MAX_PER_DOMAIN = 3
 # ---------------------------------------------------------------------------
 
 
-def _apply_domain_cap(items: list[dict[str, str]]) -> list[dict[str, str]]:
+def _apply_domain_cap(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Limit results to at most ``_MAX_PER_DOMAIN`` per domain."""
     domain_counts: dict[str, int] = {}
-    result: list[dict[str, str]] = []
+    result: list[dict[str, Any]] = []
     for item in items:
         parsed = urlparse(item.get("url", ""))
         domain = parsed.netloc
@@ -153,19 +154,19 @@ async def search(
                         "url": r.get("url", ""),
                         "title": r.get("title", ""),
                         "snippet": r.get("content", ""),
-                        "source": r.get("engine", ""),
+                        "sources": {r.get("engine", "")} if r.get("engine") else set(),
                     }
                     for r in results
                 ]
 
                 # Deduplicate: merge sources, keep longest snippet
-                seen: dict[str, dict[str, str]] = {}
+                seen: dict[str, dict[str, Any]] = {}
                 for item in formatted:
                     norm_url = normalize_url(item["url"])
                     if norm_url in seen:
                         existing = seen[norm_url]
-                        if item["source"] and item["source"] not in existing["source"]:
-                            existing["source"] += f", {item['source']}"
+                        if item["sources"]:
+                            existing["sources"].update(item["sources"])
                         if len(item.get("snippet", "")) > len(existing.get("snippet", "")):
                             existing["snippet"] = item["snippet"]
                             existing["title"] = item["title"] or existing["title"]
@@ -180,7 +181,7 @@ async def search(
                         url=r["url"],
                         title=r["title"],
                         snippet=r["snippet"],
-                        source=r["source"],
+                        source=", ".join(sorted(r["sources"])),
                     )
                     for r in capped
                 ]

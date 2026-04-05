@@ -521,3 +521,18 @@ class TestSearch:
             await search(SEARXNG_URL, "test")
 
         mock_factory.assert_called_once_with(timeout=15.0)
+
+    async def test_dedup_handles_overlapping_sources(self, mock_httpx_client):
+        """Source 'google' should not be skipped if 'google_news' is already present."""
+        raw_results = [
+            _raw_result("https://example.com/p", "T", "S", "google_news"),
+            _raw_result("https://example.com/p", "T", "S", "google"),
+        ]
+        mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response(raw_results))
+
+        with patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client):
+            results = await search(SEARXNG_URL, "test")
+
+        # In current implementation, sources are kept in a set then joined
+        assert "google_news" in results[0].source
+        assert "google" in results[0].source.split(", ")
