@@ -232,9 +232,7 @@ class TestHeadlessStrategy:
         mock_crawler = AsyncMock()
         mock_crawler.arun = AsyncMock(return_value=mock_result)
 
-        strategy = HeadlessStrategy(
-            timeout=45.0, wait_for="css:#main", crawler_factory=lambda: mock_crawler
-        )
+        strategy = HeadlessStrategy(timeout=45.0, wait_for="css:#main", crawler_factory=lambda: mock_crawler)
         await strategy.fetch("https://example.com")
 
         mock_crawler.arun.assert_called_once()
