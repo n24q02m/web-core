@@ -445,9 +445,10 @@ class TestGetSettingsPath:
         assert "{port}" not in content
 
     def test_per_process_filename(self, tmp_config_dir):
-        """Settings file is named with current PID."""
+        """Settings file is named with random suffix from mkstemp."""
         path = _get_settings_path(18888)
-        assert f"searxng_settings_{os.getpid()}.yml" in path.name
+        assert "searxng_settings_" in path.name
+        assert path.name.endswith(".yml")
 
     def test_http2_disabled_on_windows(self, tmp_config_dir):
         """HTTP/2 is disabled on Windows to avoid deadlocks."""
@@ -630,13 +631,17 @@ class TestCleanupProcess:
 
     def test_cleanup_removes_settings_file(self, tmp_config_dir):
         """Cleanup removes the per-process settings file."""
-        settings_file = tmp_config_dir / f"searxng_settings_{os.getpid()}.yml"
+        import web_core.search.runner as mod
+
+        settings_file = tmp_config_dir / "searxng_settings_random.yml"
         settings_file.write_text("test")
+        mod._current_settings_file = settings_file
         assert settings_file.exists()
 
         _cleanup_process()
 
         assert not settings_file.exists()
+        assert mod._current_settings_file is None
 
 
 # ===========================================================================
