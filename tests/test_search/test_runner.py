@@ -169,6 +169,22 @@ class TestDiscovery:
         """Does not raise when file doesn't exist."""
         _remove_discovery()  # Should not raise
 
+    def test_write_discovery_failure(self, tmp_discovery):
+        """Logs debug but does not raise on write failure."""
+        with (
+            patch("pathlib.Path.write_text", side_effect=OSError("Read-only")),
+            patch("web_core.search.runner.logger.debug") as mock_logger,
+        ):
+            _write_discovery(18888, 12345)
+            assert mock_logger.call_count == 1
+            assert "Failed to write discovery file" in mock_logger.call_args[0][0]
+
+    def test_remove_discovery_failure(self, tmp_discovery):
+        """Suppresses exceptions during unlink."""
+        _write_discovery(18888, 12345)
+        with patch("pathlib.Path.unlink", side_effect=OSError("Permission denied")):
+            _remove_discovery()  # Should not raise
+
 
 # ===========================================================================
 # _quick_health_check
@@ -297,6 +313,20 @@ class TestFindAvailablePort:
         assert isinstance(port, int)
         assert port >= 18888
 
+    def test_find_available_port_retries_on_conflict(self):
+        """Retries other ports if bind fails with OSError."""
+        with patch("socket.socket") as mock_socket_cls:
+            mock_socket = MagicMock()
+            mock_socket.__enter__ = MagicMock(return_value=mock_socket)
+            mock_socket.__exit__ = MagicMock(return_value=False)
+            # Fail once, then succeed
+            mock_socket.bind = MagicMock(side_effect=[OSError("Conflict"), None])
+            mock_socket_cls.return_value = mock_socket
+
+            port = _find_available_port(18888, max_tries=5)
+            assert 18888 <= port < 18888 + 5
+            assert mock_socket.bind.call_count == 2
+
 
 # ===========================================================================
 # _wait_for_service
@@ -317,6 +347,23 @@ class TestWaitForService:
 
             result = await _wait_for_service("http://127.0.0.1:18888", timeout=2.0)
             assert result is True
+
+    async def test_retries_on_error_codes(self):
+        """Retries when status_code is not 200."""
+        mock_error = MagicMock()
+        mock_error.status_code = 500
+        mock_ok = MagicMock()
+        mock_ok.status_code = 200
+
+        with patch("web_core.search.runner.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(side_effect=[mock_error, mock_ok])
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            result = await _wait_for_service("http://127.0.0.1:18888", timeout=2.0)
+            assert result is True
+            assert mock_client.get.call_count == 2
 
     async def test_returns_false_on_timeout(self):
         """Returns False when service never becomes healthy."""
