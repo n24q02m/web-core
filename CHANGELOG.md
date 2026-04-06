@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.1.0-beta.4 (2026-04-06)
+
+### Bug Fixes
+
+- Clean up google_drive adapter ruff issues
+  ([`058106e`](https://github.com/n24q02m/web-core/commit/058106e0ad223d3afc1e015decb5d7591c7690bc))
+
+
 ## v1.1.0-beta.3 (2026-04-06)
 
 ### Features
