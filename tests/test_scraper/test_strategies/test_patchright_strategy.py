@@ -177,3 +177,46 @@ class TestPatchrightStrategy:
 
         call_kwargs = page.goto.call_args
         assert call_kwargs[1]["wait_until"] == "networkidle"
+
+    async def test_fetch_creates_default_provider(self):
+        """If provider is not injected, it should create one."""
+        strategy = PatchrightStrategy()
+
+        # Mock the internal provider creation and its launch method
+        from unittest.mock import patch
+        with patch("web_core.browsers.patchright.PatchrightProvider", new_callable=MagicMock) as MockProvider:
+            mock_provider_instance = MockProvider.return_value
+            mock_provider_instance.close = AsyncMock()
+            mock_browser = AsyncMock()
+            mock_page = AsyncMock()
+            mock_page.content = AsyncMock(return_value=NORMAL_HTML)
+            mock_page.url = "https://example.com"
+            mock_browser.new_page = AsyncMock(return_value=mock_page)
+            mock_provider_instance.launch = AsyncMock(return_value=mock_browser)
+
+            result = await strategy.fetch("https://example.com")
+
+            assert result.content == NORMAL_HTML
+            MockProvider.assert_called_once()
+            mock_provider_instance.launch.assert_called_once()
+            mock_provider_instance.close.assert_called_once()
+
+    async def test_managed_challenge_timeout_catch(self):
+        """Managed challenge polling handles wait_for_load_state Exception."""
+        from unittest.mock import patch
+        provider, page = _make_mock_provider(CF_MANAGED_HTML)
+
+        # Content stays managed
+        page.content = AsyncMock(return_value=CF_MANAGED_HTML)
+        # Force wait_for_load_state to raise an exception
+        page.wait_for_load_state = AsyncMock(side_effect=Exception("Wait timeout"))
+
+        strategy = PatchrightStrategy(provider=provider, cf_wait=0.01)
+        # Using a small internal patch to speed up test execution of _CF_POLL_MAX_CHECKS
+        with patch("web_core.scraper.strategies.patchright_browser._CF_POLL_INTERVAL", 0.001):
+            with patch("web_core.scraper.strategies.patchright_browser._CF_POLL_MAX_CHECKS", 2):
+                result = await strategy.fetch("https://managed.com")
+
+        # It should suppress the exception and return the current content
+        assert result.content == CF_MANAGED_HTML
+        assert result.metadata["cf_challenge"] == "managed"

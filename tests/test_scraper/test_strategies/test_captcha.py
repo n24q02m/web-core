@@ -238,3 +238,215 @@ class TestCaptchaStrategy:
         assert result.status_code == 0
         assert result.metadata["captcha_solved"] is False
         assert result.metadata["error"] == "no_fallback_strategy"
+
+    # ------------------------------------------------------------------
+    # _try_solve_turnstile
+    # ------------------------------------------------------------------
+
+    async def test_try_solve_turnstile_not_turnstile(self):
+        """Should return empty string if challenge is not turnstile."""
+        strategy = CaptchaStrategy(capsolver_api_key="key")
+        html = "<html><body>no challenge here</body></html>"
+        token = await strategy._try_solve_turnstile("https://example.com", html)
+        assert token == ""
+
+    async def test_try_solve_turnstile_missing_sitekey(self):
+        """Should return empty string if turnstile detected but no sitekey found."""
+        strategy = CaptchaStrategy(capsolver_api_key="key")
+        # Challenge detected via title/body but no sitekey regex match
+        html = "<title>Just a moment...</title><body class='no-js'>Please turn JavaScript on and reload the page.</body>"
+
+        with patch("web_core.scraper.strategies.captcha.detect_cloudflare_challenge", return_value="turnstile"):
+            with patch("web_core.scraper.strategies.captcha.extract_turnstile_sitekey", return_value=None):
+                token = await strategy._try_solve_turnstile("https://example.com", html)
+                assert token == ""
+
+    async def test_try_solve_turnstile_success(self):
+        """Should return token if turnstile detected and sitekey found."""
+        strategy = CaptchaStrategy(capsolver_api_key="key")
+        html = "<html><body>dummy</body></html>"
+
+        with patch("web_core.scraper.strategies.captcha.detect_cloudflare_challenge", return_value="turnstile"):
+            with patch("web_core.scraper.strategies.captcha.extract_turnstile_sitekey", return_value="site_key_123"):
+                with patch.object(strategy, "solve_captcha", return_value="dummy_token") as mock_solve:
+                    token = await strategy._try_solve_turnstile("https://example.com", html)
+                    assert token == "dummy_token"
+                    mock_solve.assert_called_once_with(site_key="site_key_123", page_url="https://example.com", captcha_type="AntiTurnstileTaskProxyLess")
+
+    # ------------------------------------------------------------------
+    # _extract_turnstile_sitekey
+    # ------------------------------------------------------------------
+
+    async def test_extract_turnstile_sitekey_strategy_1(self):
+        """Extract sitekey using data-sitekey attribute."""
+        strategy = CaptchaStrategy()
+        mock_page = AsyncMock()
+        mock_element = AsyncMock()
+        mock_element.get_attribute = AsyncMock(return_value="sitekey_attr")
+        mock_page.query_selector = AsyncMock(return_value=mock_element)
+
+        sitekey = await strategy._extract_turnstile_sitekey(mock_page)
+        assert sitekey == "sitekey_attr"
+
+    async def test_extract_turnstile_sitekey_strategy_2_hex(self):
+        """Extract sitekey from iframe src hex pattern."""
+        strategy = CaptchaStrategy()
+        mock_page = AsyncMock()
+        mock_page.query_selector = AsyncMock(return_value=None)
+
+        mock_iframe = AsyncMock()
+        mock_iframe.get_attribute = AsyncMock(return_value="https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/g/turnstile/if/ov2/av0/rcv0/0/0x4AAAAAAADnPIDROrmt1Wwj/light/normal")
+        mock_page.query_selector_all = AsyncMock(side_effect=[[mock_iframe], []]) # iframes, then scripts
+
+        sitekey = await strategy._extract_turnstile_sitekey(mock_page)
+        assert sitekey == "0x4AAAAAAADnPIDROrmt1Wwj"
+
+    async def test_extract_turnstile_sitekey_strategy_2_alphanumeric(self):
+        """Extract sitekey from iframe src alphanumeric pattern."""
+        strategy = CaptchaStrategy()
+        mock_page = AsyncMock()
+        mock_page.query_selector = AsyncMock(return_value=None)
+
+        mock_iframe = AsyncMock()
+        mock_iframe.get_attribute = AsyncMock(return_value="https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1?ray=xyz/abc123DEF456ghi789JKL0/light")
+        mock_page.query_selector_all = AsyncMock(side_effect=[[mock_iframe], []])
+
+        sitekey = await strategy._extract_turnstile_sitekey(mock_page)
+        assert sitekey == "abc123DEF456ghi789JKL0"
+
+    async def test_extract_turnstile_sitekey_strategy_3(self):
+        """Extract sitekey from inline script."""
+        strategy = CaptchaStrategy()
+        mock_page = AsyncMock()
+        mock_page.wait_for_selector = AsyncMock()
+        mock_page.query_selector = AsyncMock(return_value=None)
+
+        mock_script = AsyncMock()
+        mock_script.text_content = AsyncMock(return_value="window._cf_chl_opt={cType: 'interactive', sitekey: 'inlineSitekeyVal'};")
+
+        # Strategy 3 expects scripts containing 'sitekey'.
+        # Since _extract_turnstile_sitekey only calls query_selector_all("iframe") and then ("script"),
+        # using side_effect with lists is enough, but earlier we noticed the code has `await s.text_content()`.
+
+        async def mock_qsa(selector):
+            # Fallback mock for the actual logic that loops through selectors
+            if selector == "iframe":
+                return []
+            elif selector == "script":
+                return [mock_script]
+            return []
+
+        mock_page.query_selector_all = mock_qsa
+
+        sitekey = await strategy._extract_turnstile_sitekey(mock_page)
+        assert sitekey == "inlineSitekeyVal"
+
+    async def test_extract_turnstile_sitekey_no_matches(self):
+        """Extract sitekey loop falls through to None."""
+        strategy = CaptchaStrategy()
+        mock_page = AsyncMock()
+        mock_page.wait_for_selector = AsyncMock()
+        mock_page.query_selector = AsyncMock(return_value=None)
+
+        async def mock_qsa(selector):
+            if selector == "iframe":
+                mock_iframe = AsyncMock()
+                mock_iframe.get_attribute = AsyncMock(return_value="https://challenges.cloudflare.com/invalid_pattern")
+                return [mock_iframe]
+            elif selector == "script":
+                mock_script = AsyncMock()
+                mock_script.text_content = AsyncMock(return_value="window._cf_chl_opt={cType: 'interactive', invalid_key: 'inline_sitekey_val'};")
+                return [mock_script]
+            return []
+
+        mock_page.query_selector_all = AsyncMock(side_effect=mock_qsa)
+
+        sitekey = await strategy._extract_turnstile_sitekey(mock_page)
+        assert sitekey is None
+
+    async def test_extract_turnstile_sitekey_none(self):
+        """Return None if no sitekey found."""
+        strategy = CaptchaStrategy()
+        mock_page = AsyncMock()
+        mock_page.query_selector = AsyncMock(return_value=None)
+        mock_page.query_selector_all = AsyncMock(return_value=[])
+
+        sitekey = await strategy._extract_turnstile_sitekey(mock_page)
+        assert sitekey is None
+
+    # ------------------------------------------------------------------
+    # _solve_cf_turnstile_via_patchright
+    # ------------------------------------------------------------------
+
+    @patch("web_core.browsers.patchright.PatchrightProvider", new_callable=MagicMock)
+    async def test_solve_cf_turnstile_via_patchright_no_sitekey(self, MockProvider):
+        """Returns error result if sitekey not found."""
+        mock_provider = MockProvider.return_value
+        mock_provider.launch = AsyncMock()
+        mock_provider.close = AsyncMock()
+        mock_browser = AsyncMock()
+        mock_page = AsyncMock()
+        mock_page.content = AsyncMock(return_value="<html>fallback content</html>")
+        mock_page.url = "https://example.com"
+
+        mock_browser.new_page = AsyncMock(return_value=mock_page)
+        mock_provider.launch = AsyncMock(return_value=mock_browser)
+
+        strategy = CaptchaStrategy(capsolver_api_key="key")
+        with patch.object(strategy, "_extract_turnstile_sitekey", return_value=None):
+            result = await strategy._solve_cf_turnstile_via_patchright("https://example.com")
+
+        assert result.metadata["captcha_solved"] is False
+        assert result.metadata["error"] == "sitekey_not_found"
+        assert result.content == "<html>fallback content</html>"
+        mock_page.close.assert_called_once()
+        mock_provider.close.assert_called_once()
+
+    @patch("web_core.browsers.patchright.PatchrightProvider", new_callable=MagicMock)
+    async def test_solve_cf_turnstile_via_patchright_no_token(self, MockProvider):
+        """Returns error result if CapSolver returns empty token."""
+        mock_provider = MockProvider.return_value
+        mock_provider.launch = AsyncMock()
+        mock_provider.close = AsyncMock()
+        mock_browser = AsyncMock()
+        mock_page = AsyncMock()
+        mock_page.content = AsyncMock(return_value="<html>no token content</html>")
+        mock_page.url = "https://example.com"
+
+        mock_browser.new_page = AsyncMock(return_value=mock_page)
+        mock_provider.launch = AsyncMock(return_value=mock_browser)
+
+        strategy = CaptchaStrategy(capsolver_api_key="key")
+        with patch.object(strategy, "_extract_turnstile_sitekey", return_value="site_key_val"):
+            with patch.object(strategy, "solve_captcha", return_value=""):
+                result = await strategy._solve_cf_turnstile_via_patchright("https://example.com")
+
+        assert result.metadata["captcha_solved"] is False
+        assert result.metadata["error"] == "capsolver_no_token"
+        assert result.content == "<html>no token content</html>"
+
+    @patch("web_core.browsers.patchright.PatchrightProvider", new_callable=MagicMock)
+    async def test_solve_cf_turnstile_via_patchright_success(self, MockProvider):
+        """Successfully solves and injects token."""
+        mock_provider = MockProvider.return_value
+        mock_provider.launch = AsyncMock()
+        mock_provider.close = AsyncMock()
+        mock_browser = AsyncMock()
+        mock_page = AsyncMock()
+        mock_page.content = AsyncMock(return_value="<html>success content</html>")
+        mock_page.url = "https://example.com/final"
+
+        mock_browser.new_page = AsyncMock(return_value=mock_page)
+        mock_provider.launch = AsyncMock(return_value=mock_browser)
+
+        strategy = CaptchaStrategy(capsolver_api_key="key")
+        with patch.object(strategy, "_extract_turnstile_sitekey", return_value="site_key_val"):
+            with patch.object(strategy, "solve_captcha", return_value="my_solved_token"):
+                result = await strategy._solve_cf_turnstile_via_patchright("https://example.com")
+
+        assert result.metadata["captcha_solved"] is True
+        assert result.metadata["captcha_type"] == "AntiTurnstileTaskProxyLess"
+        assert result.content == "<html>success content</html>"
+        assert result.url == "https://example.com/final"
+        mock_page.evaluate.assert_called_once()
+        assert "my_solved_token" in mock_page.evaluate.call_args[0][1]
