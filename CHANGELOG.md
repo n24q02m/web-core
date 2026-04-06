@@ -2,6 +2,26 @@
 
 <!-- version list -->
 
+## v1.1.0 (2026-04-06)
+
+### Bug Fixes
+
+- Add brand section to SearXNG settings template
+  ([`68c9881`](https://github.com/n24q02m/web-core/commit/68c98810e4dffd157f99959331b2f6d2c2bc0ed2))
+
+- Apply ruff format to google_drive.py
+  ([`9f4c16b`](https://github.com/n24q02m/web-core/commit/9f4c16bc41ccc4775bc9e74f08045ed7fe03bbec))
+
+- Exclude google_drive adapter from coverage (requires real OAuth)
+  ([`3d65ce4`](https://github.com/n24q02m/web-core/commit/3d65ce458acc507b0d2483f6b68056c347094afe))
+
+- Resolve pre-existing ruff lint issues in patchright tests
+  ([`66aa901`](https://github.com/n24q02m/web-core/commit/66aa9010df96f08ffe9b31b55b6bed35b4d4a196))
+
+- Sync uv.lock after brand section fix
+  ([`2229bb2`](https://github.com/n24q02m/web-core/commit/2229bb2387ff3e9927548435b7d970901d89370b))
+
+
 ## v1.1.0-beta.5 (2026-04-06)
 
 ### Bug Fixes
