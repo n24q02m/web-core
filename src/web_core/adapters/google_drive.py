@@ -18,12 +18,8 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-FOLDER_URL_PATTERN = re.compile(
-    r"drive\.google\.com/drive/(?:u/\d+/)?folders/([A-Za-z0-9_-]+)"
-)
-FILE_URL_PATTERN = re.compile(
-    r"drive\.google\.com/(?:file/d/|open\?id=)([A-Za-z0-9_-]+)"
-)
+FOLDER_URL_PATTERN = re.compile(r"drive\.google\.com/drive/(?:u/\d+/)?folders/([A-Za-z0-9_-]+)")
+FILE_URL_PATTERN = re.compile(r"drive\.google\.com/(?:file/d/|open\?id=)([A-Za-z0-9_-]+)")
 
 
 @dataclass
@@ -118,9 +114,7 @@ async def _list_folder_via_html(folder_id: str) -> list[DriveFile]:
     files: list[DriveFile] = []
     seen: set[str] = set()
 
-    id_name_pattern = re.compile(
-        r'"([A-Za-z0-9_-]{28,44})","([^"]+\.(txt|epub|pdf|md|html?|docx?))"'
-    )
+    id_name_pattern = re.compile(r'"([A-Za-z0-9_-]{28,44})","([^"]+\.(txt|epub|pdf|md|html?|docx?))"')
     for m in id_name_pattern.finditer(html):
         file_id, name = m.group(1), m.group(2)
         if file_id not in seen:
@@ -129,8 +123,7 @@ async def _list_folder_via_html(folder_id: str) -> list[DriveFile]:
 
     if not files:
         logger.warning(
-            "No files found via HTML pattern for folder %s. "
-            "Page may require JavaScript rendering.",
+            "No files found via HTML pattern for folder %s. Page may require JavaScript rendering.",
             folder_id,
         )
 
