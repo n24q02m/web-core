@@ -274,6 +274,12 @@ class TestCheckIpSafe:
     def test_unparseable_ip_blocked(self):
         assert _check_ip_safe("not-an-ip", "unknown") is False
 
+    def test_unspecified_ipv4_unsafe(self):
+        assert _check_ip_safe("0.0.0.0", "unspecified") is False
+
+    def test_unspecified_ipv6_unsafe(self):
+        assert _check_ip_safe("::", "unspecified") is False
+
 
 # ---------------------------------------------------------------------------
 # _ssrf_event_hook
