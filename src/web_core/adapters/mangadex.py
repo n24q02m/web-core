@@ -85,10 +85,13 @@ class MangaDexClient:
     BASE_URL = "https://api.mangadex.org"
     COVERS_CDN = "https://uploads.mangadex.org/covers"
     RATE_LIMIT_RPS = 4
+    # at-home/server endpoint has stricter limit: ~40 req/min = 0.67 RPS
+    AT_HOME_RATE_LIMIT_RPS = 0.5
 
     def __init__(self, user_agent: str = "KnowledgePrism/1.0") -> None:
         self._user_agent = user_agent
         self._last_request_time = 0.0
+        self._last_at_home_time = 0.0
 
     # -- internal helpers ---------------------------------------------------
 
@@ -214,6 +217,14 @@ class MangaDexClient:
 
     async def get_chapter_images(self, chapter_id: str) -> ChapterImages:
         """Get image delivery info for a chapter via the MangaDex@Home network."""
+        # at-home/server has stricter rate limit than main API
+        now = time.monotonic()
+        min_interval = 1.0 / self.AT_HOME_RATE_LIMIT_RPS
+        elapsed = now - self._last_at_home_time
+        if elapsed < min_interval:
+            await asyncio.sleep(min_interval - elapsed)
+        self._last_at_home_time = time.monotonic()
+
         data = await self._get(f"/at-home/server/{chapter_id}")
         ch = data.get("chapter", {})
         return ChapterImages(
