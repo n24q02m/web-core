@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.1.1-beta.1 (2026-04-06)
+
+### Bug Fixes
+
+- Add separate rate limit for at-home/server endpoint (0.5 RPS)
+  ([`3e5ad06`](https://github.com/n24q02m/web-core/commit/3e5ad0637f427b53ad6e7e83a7e65f4512352f3b))
+
+
 ## v1.1.0 (2026-04-06)
 
 ### Bug Fixes
