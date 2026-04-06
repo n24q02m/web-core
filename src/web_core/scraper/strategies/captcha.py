@@ -105,8 +105,48 @@ class CaptchaStrategy(BaseStrategy):
             captcha_type=TURNSTILE_PROXYLESS,
         )
 
+    async def _extract_turnstile_sitekey(self, page: Any) -> str | None:
+        """Extract Turnstile sitekey from Patchright page.
+
+        Uses Python-level query (not JS eval) to find the Turnstile iframe src
+        since CF challenge iframes may not be accessible via document.querySelectorAll.
+        """
+        import contextlib
+        import re
+
+        # Wait for the Turnstile iframe to appear
+        with contextlib.suppress(Exception):
+            await page.wait_for_selector("iframe[src*='challenges.cloudflare.com']", timeout=8000)
+
+        # Strategy 1: data-sitekey attribute (static Turnstile)
+        el = await page.query_selector("[data-sitekey]")
+        if el:
+            return await el.get_attribute("data-sitekey")
+
+        # Strategy 2: Extract 0x-prefix key from CF Turnstile iframe src
+        # e.g. /cdn-cgi/.../0x4AAAAAAADnPIDROrmt1Wwj/light/...
+        iframes = await page.query_selector_all("iframe")
+        for f in iframes:
+            src = await f.get_attribute("src") or ""
+            m = re.search(r"/(0x[A-Za-z0-9]+)[/&]", src)
+            if m:
+                return m.group(1)
+            m2 = re.search(r"/([A-Za-z0-9]{20,})/(?:light|dark|auto)", src)
+            if m2:
+                return m2.group(1)
+
+        # Strategy 3: Inline script sitekey
+        scripts = await page.query_selector_all("script")
+        for s in scripts:
+            text = await s.text_content() or ""
+            m = re.search(r"""sitekey['"\s:=]+['"]([A-Za-z0-9]{10,})['"]""", text, re.IGNORECASE)
+            if m:
+                return m.group(1)
+
+        return None
+
     async def _solve_cf_turnstile_via_patchright(self, url: str) -> ScrapingResult:
-        """Use Patchright to load page, extract Turnstile sitekey via JS,
+        """Use Patchright to load page, extract Turnstile sitekey via Python API,
         solve with CapSolver, inject token back, and return final content."""
 
         from web_core.browsers.patchright import PatchrightProvider
@@ -118,36 +158,7 @@ class CaptchaStrategy(BaseStrategy):
             try:
                 await page.goto(url, wait_until="networkidle", timeout=45000)
 
-                # Wait for CF Turnstile iframe to appear (render=explicit loads it async)
-                import contextlib as _ctxlib
-
-                with _ctxlib.suppress(Exception):
-                    await page.wait_for_selector("iframe[src*='challenges.cloudflare.com']", timeout=8000)
-
-                # Extract sitekey — try multiple sources
-                sitekey = await page.evaluate("""() => {
-                    // 1. Static data-sitekey attribute
-                    const el = document.querySelector('[data-sitekey]');
-                    if (el) return el.getAttribute('data-sitekey');
-                    // 2. Turnstile iframe src contains sitekey in path
-                    const iframes = Array.from(document.querySelectorAll('iframe'));
-                    for (const f of iframes) {
-                        const m = f.src.match(/\\/([0-9a-zA-Z]{20,})\\/(?:light|dark|auto)/);
-                        if (m) return m[1];
-                        // Also try 0x prefix format
-                        const m2 = f.src.match(/\\/(0x[A-Za-z0-9]+)[\\/&]/);
-                        if (m2) return m2[1];
-                    }
-                    // 3. Cloudflare's _cf_chl_opt global
-                    if (window._cf_chl_opt) return window._cf_chl_opt.cHCh || window._cf_chl_opt.cvId || null;
-                    // 4. Inline scripts
-                    const scripts = Array.from(document.scripts);
-                    for (const s of scripts) {
-                        const m = s.textContent.match(/sitekey['":\\s=]+['"](0x[A-Za-z0-9]+)['"]/i);
-                        if (m) return m[1];
-                    }
-                    return null;
-                }""")
+                sitekey = await self._extract_turnstile_sitekey(page)
 
                 if not sitekey:
                     # Fallback: read content as-is
