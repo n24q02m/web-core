@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.1.1-beta.2 (2026-04-06)
+
+### Bug Fixes
+
+- Pass cookies from selectors to BasicHTTPStrategy and TLSSpoofStrategy
+  ([`1286a10`](https://github.com/n24q02m/web-core/commit/1286a101d675fd7a47263ef26531eabe1f6da40d))
+
+
 ## v1.1.1-beta.1 (2026-04-06)
 
 ### Bug Fixes
