@@ -35,14 +35,21 @@ class BasicHTTPStrategy(BaseStrategy):
         self._http_client = http_client
 
     async def fetch(self, url: str, selectors: dict[str, str] | None = None) -> ScrapingResult:
-        """Fetch *url* via plain HTTP GET with browser-like headers."""
+        """Fetch *url* via plain HTTP GET with browser-like headers.
+
+        Supports optional cookies via selectors["cookies"] (dict[str, str]).
+        """
+        cookies: dict[str, str] = {}
+        if selectors and isinstance(selectors.get("cookies"), dict):
+            cookies = selectors["cookies"]
+
         if self._http_client is not None:
             response = await self._http_client.get(
-                url, headers=self.headers, timeout=self.timeout, follow_redirects=True
+                url, headers=self.headers, timeout=self.timeout, follow_redirects=True, cookies=cookies
             )
         else:
             async with safe_httpx_client(timeout=self.timeout) as client:
-                response = await client.get(url, headers=self.headers, follow_redirects=True)
+                response = await client.get(url, headers=self.headers, follow_redirects=True, cookies=cookies)
 
         return ScrapingResult(
             content=response.text,
