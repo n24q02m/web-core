@@ -89,14 +89,17 @@ def test_drive_chapter_fields():
 # list_folder_files & helpers
 # ---------------------------------------------------------------------------
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+
 
 @pytest.mark.asyncio
 async def test_list_folder_via_gdown_success():
     """Test successful folder listing via gdown."""
-    import web_core.adapters.google_drive
     import sys
+
+    import web_core.adapters.google_drive
 
     mock_item1 = MagicMock()
     mock_item1.id = "id1"
@@ -118,8 +121,9 @@ async def test_list_folder_via_gdown_success():
 @pytest.mark.asyncio
 async def test_list_folder_via_gdown_empty():
     """Test gdown returning empty list."""
-    import web_core.adapters.google_drive
     import sys
+
+    import web_core.adapters.google_drive
     mock_gdown = MagicMock()
     mock_gdown.download_folder.return_value = []
     with patch.dict(sys.modules, {"gdown": mock_gdown}):
@@ -129,8 +133,9 @@ async def test_list_folder_via_gdown_empty():
 @pytest.mark.asyncio
 async def test_list_folder_via_html_success():
     """Test successful folder listing via HTML regex parsing."""
-    import web_core.adapters.google_drive
     import sys
+
+    import web_core.adapters.google_drive
     html_content = 'some string "123456789012345678901234567890abc","document.txt" other string "223456789012345678901234567890def","story.epub"'
 
     mock_resp = MagicMock()
@@ -173,8 +178,9 @@ async def test_list_folder_fallback_flow():
 @pytest.mark.asyncio
 async def test_download_text_file_success(tmp_path):
     """Test successful file download via gdown."""
-    import web_core.adapters.google_drive
     import sys
+
+    import web_core.adapters.google_drive
     test_content = "This is a test file."
 
     def mock_gdown_download(url, dest, **kwargs):
@@ -192,8 +198,9 @@ async def test_download_text_file_success(tmp_path):
 @pytest.mark.asyncio
 async def test_download_text_file_failure():
     """Test file download failure via gdown."""
-    import web_core.adapters.google_drive
     import sys
+
+    import web_core.adapters.google_drive
 
     mock_gdown = MagicMock()
     mock_gdown.download.return_value = None
