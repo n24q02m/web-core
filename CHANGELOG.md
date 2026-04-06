@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.1.1-beta.4 (2026-04-06)
+
+### Bug Fixes
+
+- CaptchaStrategy uses Patchright+CapSolver for CF Turnstile bypass
+  ([`7aa79f0`](https://github.com/n24q02m/web-core/commit/7aa79f065945d21973823e95f663389848ab5fd5))
+
+
 ## v1.1.1-beta.3 (2026-04-06)
 
 ### Bug Fixes
