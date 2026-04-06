@@ -34,9 +34,7 @@ class TLSSpoofStrategy(BaseStrategy):
         req_cookies = cookies or None
         if self._session_factory is not None:
             session = self._session_factory()
-            response = await session.get(
-                url, impersonate=self.impersonate, timeout=self.timeout, cookies=req_cookies
-            )
+            response = await session.get(url, impersonate=self.impersonate, timeout=self.timeout, cookies=req_cookies)
         else:
             from curl_cffi.requests import AsyncSession
 
