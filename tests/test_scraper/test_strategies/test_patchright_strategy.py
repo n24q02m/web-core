@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import contextlib
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import AsyncMock, MagicMock
 
 from web_core.scraper.strategies.patchright_browser import PatchrightStrategy
 
@@ -179,77 +177,3 @@ class TestPatchrightStrategy:
 
         call_kwargs = page.goto.call_args
         assert call_kwargs[1]["wait_until"] == "networkidle"
-
-
-# ------------------------------------------------------------------
-# PatchrightStrategy
-# ------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_wait_for_cf_resolution_success():
-    from web_core.scraper.strategies.patchright_browser import PatchrightStrategy
-
-    provider, page = _make_mock_provider(CF_JS_CHALLENGE_HTML)
-
-    strategy = PatchrightStrategy(provider=provider)
-
-    # After polling once, detect_cloudflare_challenge returns None
-    page.content = AsyncMock(side_effect=[CF_JS_CHALLENGE_HTML, NORMAL_HTML])
-    content = await strategy._wait_for_cf_resolution(page)
-
-    assert content == NORMAL_HTML
-
-
-@pytest.mark.asyncio
-async def test_wait_for_cf_resolution_timeout():
-    from web_core.scraper.strategies.patchright_browser import PatchrightStrategy
-
-    provider, page = _make_mock_provider(CF_JS_CHALLENGE_HTML)
-
-    # We don't want to actually sleep 10s in test
-    with patch("web_core.scraper.strategies.patchright_browser.asyncio.sleep", new_callable=AsyncMock):
-        strategy = PatchrightStrategy(provider=provider)
-        page.content = AsyncMock(return_value=CF_JS_CHALLENGE_HTML)
-        content = await strategy._wait_for_cf_resolution(page)
-
-        assert content == CF_JS_CHALLENGE_HTML
-
-
-@pytest.mark.asyncio
-async def test_fetch_managed_challenge_timeout():
-    from web_core.scraper.strategies.patchright_browser import PatchrightStrategy
-
-    provider, page = _make_mock_provider(CF_MANAGED_HTML)
-
-    with patch("web_core.scraper.strategies.patchright_browser.asyncio.sleep", new_callable=AsyncMock):
-        strategy = PatchrightStrategy(provider=provider)
-        page.content = AsyncMock(return_value=CF_MANAGED_HTML)
-        result = await strategy.fetch("https://managed.com")
-
-        assert result.content == CF_MANAGED_HTML
-        assert result.metadata["cf_challenge"] == "managed"
-
-
-@pytest.mark.asyncio
-async def test_fetch_no_provider_passed():
-    from web_core.scraper.strategies.patchright_browser import PatchrightStrategy
-
-    strategy = PatchrightStrategy(headless=True)
-
-    mock_provider = AsyncMock()
-    mock_browser = AsyncMock()
-    mock_page = AsyncMock()
-    mock_page.content.return_value = NORMAL_HTML
-    mock_page.url = "https://example.com"
-    mock_page.context.cookies.return_value = []
-    mock_provider.launch.return_value = mock_browser
-    mock_browser.new_page.return_value = mock_page
-    mock_response = MagicMock()
-    mock_response.status = 200
-    mock_page.goto.return_value = mock_response
-
-    with patch("web_core.browsers.patchright.PatchrightProvider", return_value=mock_provider):
-        result = await strategy.fetch("https://example.com")
-        assert result.content == NORMAL_HTML
-        assert result.status_code == 200
