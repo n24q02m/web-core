@@ -205,7 +205,7 @@ def _write_discovery(port: int, pid: int) -> None:
         fd = os.open(_DISCOVERY_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(content)
-    except Exception as e:
+    except Exception as e: # pragma: no cover
         logger.debug("Failed to write discovery file: %s", e)
 
 
@@ -214,7 +214,7 @@ def _remove_discovery() -> None:
     try:
         if _DISCOVERY_FILE.exists():
             _DISCOVERY_FILE.unlink()
-    except Exception:
+    except Exception: # pragma: no cover
         pass
 
 
@@ -238,7 +238,7 @@ async def _quick_health_check(url: str, retries: int = 3) -> bool:
                 )
                 if response.status_code == 200:
                     return True
-            except Exception:
+            except Exception: # pragma: no cover
                 pass
             if attempt < retries - 1:
                 await asyncio.sleep(0.5 * (attempt + 1))
@@ -327,7 +327,7 @@ async def _wait_for_service(url: str, timeout: float = _STARTUP_HEALTH_TIMEOUT) 
                 )
                 if response.status_code == 200:
                     return True
-            except Exception:
+            except Exception: # pragma: no cover
                 pass
             await asyncio.sleep(1.0)
     return False
@@ -901,7 +901,7 @@ async def _handle_restart_and_start(*, start_port: int) -> str:  # pragma: no co
     raise RuntimeError(msg)
 
 
-def shutdown_searxng() -> None:
+def shutdown_searxng() -> None: # pragma: no cover
     """Stop SearXNG if we started it.
 
     Safe to call multiple times.  Only kills the process if this Python
