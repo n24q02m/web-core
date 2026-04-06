@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.1.0-beta.5 (2026-04-06)
+
+### Bug Fixes
+
+- Use gdown skip_download=True for efficient folder listing
+  ([`e3d11a2`](https://github.com/n24q02m/web-core/commit/e3d11a29ceab488d6991c7422e15055406f7ec2c))
+
+
 ## v1.1.0-beta.4 (2026-04-06)
 
 ### Bug Fixes
