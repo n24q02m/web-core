@@ -138,7 +138,9 @@ class CaptchaStrategy(BaseStrategy):
                     # Fallback: read content as-is
                     content = await page.content()
                     return ScrapingResult(
-                        content=content, url=page.url, strategy=self.name,
+                        content=content,
+                        url=page.url,
+                        strategy=self.name,
                         status_code=200,
                         metadata={"captcha_solved": False, "error": "sitekey_not_found"},
                     )
@@ -146,20 +148,21 @@ class CaptchaStrategy(BaseStrategy):
                 logger.info("Extracted Turnstile sitekey for %s: %s...", url, sitekey[:12])
 
                 # Solve with CapSolver
-                token = await self.solve_captcha(
-                    site_key=sitekey, page_url=url, captcha_type=TURNSTILE_PROXYLESS
-                )
+                token = await self.solve_captcha(site_key=sitekey, page_url=url, captcha_type=TURNSTILE_PROXYLESS)
 
                 if not token:
                     content = await page.content()
                     return ScrapingResult(
-                        content=content, url=page.url, strategy=self.name,
+                        content=content,
+                        url=page.url,
+                        strategy=self.name,
                         status_code=200,
                         metadata={"captcha_solved": False, "error": "capsolver_no_token"},
                     )
 
                 # Inject token and submit
-                await page.evaluate("""(token) => {
+                await page.evaluate(
+                    """(token) => {
                     // Set CF Turnstile response token
                     const inputs = document.querySelectorAll('[name="cf-turnstile-response"]');
                     inputs.forEach(el => { el.value = token; });
@@ -173,7 +176,9 @@ class CaptchaStrategy(BaseStrategy):
                     // Submit first form if present
                     const form = document.querySelector('form#challenge-form, form[action*="cdn-cgi"]');
                     if (form) form.submit();
-                }""", token)
+                }""",
+                    token,
+                )
 
                 # Wait for navigation to actual page
                 with contextlib.suppress(Exception):
@@ -182,7 +187,9 @@ class CaptchaStrategy(BaseStrategy):
                 content = await page.content()
                 final_url = page.url
                 return ScrapingResult(
-                    content=content, url=final_url, strategy=self.name,
+                    content=content,
+                    url=final_url,
+                    strategy=self.name,
                     status_code=200,
                     metadata={"captcha_solved": True, "captcha_type": TURNSTILE_PROXYLESS},
                 )
@@ -210,7 +217,9 @@ class CaptchaStrategy(BaseStrategy):
             )
             result = await self.fallback_strategy.fetch(url, selectors)
             return ScrapingResult(
-                content=result.content, url=result.url, strategy=self.name,
+                content=result.content,
+                url=result.url,
+                strategy=self.name,
                 status_code=result.status_code,
                 metadata={**result.metadata, "captcha_solved": bool(captcha_token)},
             )
@@ -223,12 +232,17 @@ class CaptchaStrategy(BaseStrategy):
         if self.fallback_strategy is not None:
             result = await self.fallback_strategy.fetch(url, selectors)
             return ScrapingResult(
-                content=result.content, url=result.url, strategy=self.name,
+                content=result.content,
+                url=result.url,
+                strategy=self.name,
                 status_code=result.status_code,
                 metadata={**result.metadata, "captcha_solved": False},
             )
 
         return ScrapingResult(
-            content="", url=url, strategy=self.name, status_code=0,
+            content="",
+            url=url,
+            strategy=self.name,
+            status_code=0,
             metadata={"captcha_solved": False, "error": "no_fallback_strategy"},
         )

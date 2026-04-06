@@ -175,8 +175,10 @@ class TestCaptchaStrategy:
         )
         # Mock _solve_cf_turnstile_via_patchright to avoid real browser
         mock_result = ScrapingResult(
-            content="<html>solved</html>", url="https://example.com",
-            strategy="captcha", status_code=200,
+            content="<html>solved</html>",
+            url="https://example.com",
+            strategy="captcha",
+            status_code=200,
             metadata={"captcha_solved": True},
         )
         with patch.object(strategy, "_solve_cf_turnstile_via_patchright", return_value=mock_result):
@@ -204,8 +206,10 @@ class TestCaptchaStrategy:
         """fetch without fallback but WITH site_key: explicit flow but no fallback -> patchright flow."""
         strategy = CaptchaStrategy(capsolver_api_key="key")
         mock_result = ScrapingResult(
-            content="", url="https://example.com",
-            strategy="captcha", status_code=0,
+            content="",
+            url="https://example.com",
+            strategy="captcha",
+            status_code=0,
             metadata={"captcha_solved": False, "error": "capsolver_no_token"},
         )
         with patch.object(strategy, "_solve_cf_turnstile_via_patchright", return_value=mock_result):
