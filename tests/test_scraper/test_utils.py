@@ -90,6 +90,16 @@ def test_detect_jschl_answer():
     assert detect_cloudflare_challenge(html) == "js_challenge"
 
 
+def test_detect_newtoki_security_verification():
+    """Newtoki-style CF managed challenge."""
+    html = """<html><body>
+    <p>This website uses a security service to protect against malicious bots.</p>
+    <p>This page is displayed while the website verifies you are not a bot.</p>
+    <h2>Performing security verification</h2>
+    </body></html>"""
+    assert detect_cloudflare_challenge(html) == "managed"
+
+
 # ---------------------------------------------------------------------------
 # extract_turnstile_sitekey
 # ---------------------------------------------------------------------------

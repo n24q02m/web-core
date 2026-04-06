@@ -22,6 +22,9 @@ _CF_JS_CHALLENGE_PATTERNS = [
 _CF_MANAGED_PATTERNS = [
     re.compile(r"managed_checking_msg", re.IGNORECASE),
     re.compile(r"cf-please-wait", re.IGNORECASE),
+    re.compile(r"Performing security verification", re.IGNORECASE),
+    re.compile(r"security service to protect", re.IGNORECASE),
+    re.compile(r"verifies you are not a bot", re.IGNORECASE),
 ]
 
 _CF_SITEKEY_PATTERNS = [

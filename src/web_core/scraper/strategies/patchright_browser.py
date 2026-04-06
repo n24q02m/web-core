@@ -112,10 +112,23 @@ class PatchrightStrategy(BaseStrategy):
                     logger.info("CF Turnstile detected for %s, cannot solve here", url)
                     # Return the challenge HTML — CaptchaStrategy will handle
                 elif cf_challenge_type == "managed":
-                    logger.info("CF managed challenge for %s, waiting briefly", url)
-                    await asyncio.sleep(self.cf_wait)
-                    content = await page.content()
-                    cf_challenge_type = detect_cloudflare_challenge(content)
+                    logger.info("CF managed challenge for %s, polling for resolution", url)
+                    # Poll until challenge resolves (redirect to real page)
+                    for _ in range(_CF_POLL_MAX_CHECKS):
+                        await asyncio.sleep(_CF_POLL_INTERVAL)
+                        content = await page.content()
+                        cf_challenge_type = detect_cloudflare_challenge(content)
+                        if cf_challenge_type is None:
+                            logger.debug("CF managed challenge resolved for %s", url)
+                            break
+                    # If still challenged after polls, wait for navigation
+                    if cf_challenge_type is not None:
+                        try:
+                            await page.wait_for_load_state("networkidle", timeout=15000)
+                            content = await page.content()
+                            cf_challenge_type = detect_cloudflare_challenge(content)
+                        except Exception:
+                            pass
 
                 status_code = response.status if response else 200
                 final_url = page.url
