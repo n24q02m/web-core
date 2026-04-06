@@ -78,6 +78,9 @@ def normalize_url(url: str) -> str:
     path = parsed.path.rstrip("/") or ""
 
     if parsed.query:
+        # Performance optimization (Bolt): Using parse_qsl instead of parse_qs avoids
+        # the overhead of allocating dictionary wrappers and lists for every parameter,
+        # yielding a faster and more memory-efficient flat list of tuples for filtering.
         params = parse_qsl(parsed.query, keep_blank_values=True)
         cleaned = [(k, v) for k, v in params if k not in _TRACKING_PARAMS]
         query = urlencode(cleaned)
