@@ -37,9 +37,10 @@ class StrategyCache:
     DEFAULT_ORDER: ClassVar[list[str]] = [
         "basic_http",
         "tls_spoof",
-        "api_direct",
         "headless",
+        "patchright",
         "captcha",
+        "api_direct",
     ]
 
     def __init__(
