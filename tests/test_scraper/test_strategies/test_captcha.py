@@ -165,21 +165,25 @@ class TestCaptchaStrategy:
         assert result.metadata["captcha_solved"] is True
         assert result.metadata["from_fallback"] is True
 
-    async def test_fetch_without_site_key_skips_solving(self):
-        """fetch without site_key in selectors should skip captcha solving."""
+    async def test_fetch_without_site_key_uses_patchright_flow(self):
+        """fetch with capsolver_api_key but no site_key uses Patchright+CapSolver flow."""
         mock_client = AsyncMock()
 
-        fallback = MockFallbackStrategy()
         strategy = CaptchaStrategy(
             capsolver_api_key="key",
-            fallback_strategy=fallback,
             http_client=mock_client,
         )
-        result = await strategy.fetch("https://example.com", selectors={"other": "value"})
+        # Mock _solve_cf_turnstile_via_patchright to avoid real browser
+        mock_result = ScrapingResult(
+            content="<html>solved</html>", url="https://example.com",
+            strategy="captcha", status_code=200,
+            metadata={"captcha_solved": True},
+        )
+        with patch.object(strategy, "_solve_cf_turnstile_via_patchright", return_value=mock_result):
+            result = await strategy.fetch("https://example.com", selectors={"other": "value"})
 
-        mock_client.post.assert_not_called()
-        assert result.metadata["captcha_solved"] is False
-        assert result.content == "<html>fallback</html>"
+        assert result.metadata["captcha_solved"] is True
+        assert result.content == "<html>solved</html>"
 
     async def test_fetch_with_none_selectors_skips_solving(self):
         """fetch with selectors=None should skip captcha solving."""
@@ -196,32 +200,25 @@ class TestCaptchaStrategy:
         mock_client.post.assert_not_called()
         assert result.metadata["captcha_solved"] is False
 
-    async def test_fetch_without_fallback_returns_empty(self):
-        """fetch without fallback_strategy should return empty result with error."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "solution": {"gRecaptchaResponse": "token"},
-        }
-
-        mock_client = AsyncMock()
-        mock_client.post = AsyncMock(return_value=mock_response)
-
-        strategy = CaptchaStrategy(capsolver_api_key="key", http_client=mock_client)
-        result = await strategy.fetch(
-            "https://example.com",
-            selectors={"site_key": "6Le-key"},
-        )
-
-        assert result.content == ""
-        assert result.url == "https://example.com"
-        assert result.strategy == "captcha"
-        assert result.status_code == 0
-        assert result.metadata["captcha_solved"] is True
-        assert result.metadata["error"] == "no_fallback_strategy"
-
-    async def test_fetch_without_fallback_no_site_key(self):
-        """fetch without fallback and without site_key should return empty, captcha_solved=False."""
+    async def test_fetch_without_fallback_with_site_key_skips_captcha(self):
+        """fetch without fallback but WITH site_key: explicit flow but no fallback -> patchright flow."""
         strategy = CaptchaStrategy(capsolver_api_key="key")
+        mock_result = ScrapingResult(
+            content="", url="https://example.com",
+            strategy="captcha", status_code=0,
+            metadata={"captcha_solved": False, "error": "capsolver_no_token"},
+        )
+        with patch.object(strategy, "_solve_cf_turnstile_via_patchright", return_value=mock_result):
+            result = await strategy.fetch(
+                "https://example.com",
+                selectors={"site_key": "6Le-key"},
+            )
+        # With site_key + fallback=None: goes to patchright flow (capsolver_api_key is set)
+        assert result.strategy == "captcha"
+
+    async def test_fetch_no_capsolver_no_fallback_returns_empty(self):
+        """fetch without capsolver_api_key AND without fallback returns empty."""
+        strategy = CaptchaStrategy()
         result = await strategy.fetch("https://example.com")
 
         assert result.content == ""

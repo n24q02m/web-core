@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import Any
 
@@ -104,53 +105,130 @@ class CaptchaStrategy(BaseStrategy):
             captcha_type=TURNSTILE_PROXYLESS,
         )
 
+    async def _solve_cf_turnstile_via_patchright(self, url: str) -> ScrapingResult:
+        """Use Patchright to load page, extract Turnstile sitekey via JS,
+        solve with CapSolver, inject token back, and return final content."""
+
+        from web_core.browsers.patchright import PatchrightProvider
+
+        provider = PatchrightProvider(headless=True)
+        try:
+            browser = await provider.launch()
+            page = await browser.new_page()
+            try:
+                await page.goto(url, wait_until="networkidle", timeout=45000)
+
+                # Extract sitekey via JS execution — handles render=explicit mode
+                sitekey = await page.evaluate("""() => {
+                    // Try static data-sitekey attribute
+                    const el = document.querySelector('[data-sitekey]');
+                    if (el) return el.getAttribute('data-sitekey');
+                    // Try Cloudflare's _cf_chl_opt
+                    if (window._cf_chl_opt) return window._cf_chl_opt.cHCh || window._cf_chl_opt.cvId || null;
+                    // Try challenge params
+                    const scripts = Array.from(document.scripts);
+                    for (const s of scripts) {
+                        const m = s.textContent.match(/sitekey['":\\s]+['"](0x[A-Za-z0-9]+)['"]/);
+                        if (m) return m[1];
+                    }
+                    return null;
+                }""")
+
+                if not sitekey:
+                    # Fallback: read content as-is
+                    content = await page.content()
+                    return ScrapingResult(
+                        content=content, url=page.url, strategy=self.name,
+                        status_code=200,
+                        metadata={"captcha_solved": False, "error": "sitekey_not_found"},
+                    )
+
+                logger.info("Extracted Turnstile sitekey for %s: %s...", url, sitekey[:12])
+
+                # Solve with CapSolver
+                token = await self.solve_captcha(
+                    site_key=sitekey, page_url=url, captcha_type=TURNSTILE_PROXYLESS
+                )
+
+                if not token:
+                    content = await page.content()
+                    return ScrapingResult(
+                        content=content, url=page.url, strategy=self.name,
+                        status_code=200,
+                        metadata={"captcha_solved": False, "error": "capsolver_no_token"},
+                    )
+
+                # Inject token and submit
+                await page.evaluate("""(token) => {
+                    // Set CF Turnstile response token
+                    const inputs = document.querySelectorAll('[name="cf-turnstile-response"]');
+                    inputs.forEach(el => { el.value = token; });
+                    // Try calling the turnstile callback if present
+                    if (window.turnstile && window.turnstile.getResponse) {
+                        const widgets = document.querySelectorAll('[id^="cf-turnstile"]');
+                        widgets.forEach(w => {
+                            try { window.turnstile.execute(w.id, { response: token }); } catch(e) {}
+                        });
+                    }
+                    // Submit first form if present
+                    const form = document.querySelector('form#challenge-form, form[action*="cdn-cgi"]');
+                    if (form) form.submit();
+                }""", token)
+
+                # Wait for navigation to actual page
+                with contextlib.suppress(Exception):
+                    await page.wait_for_load_state("networkidle", timeout=15000)
+
+                content = await page.content()
+                final_url = page.url
+                return ScrapingResult(
+                    content=content, url=final_url, strategy=self.name,
+                    status_code=200,
+                    metadata={"captcha_solved": True, "captcha_type": TURNSTILE_PROXYLESS},
+                )
+            finally:
+                await page.close()
+        finally:
+            await provider.close()
+
     async def fetch(self, url: str, selectors: dict[str, str] | None = None) -> ScrapingResult:
         """Solve captcha if needed, then delegate to fallback strategy.
 
         Flow:
-        1. If selectors has explicit site_key + captcha_type: solve directly
-        2. Run fallback strategy to get initial page
-        3. If fallback returns CF Turnstile HTML: auto-detect and solve
-        4. Return result with captcha metadata
+        1. If selectors has explicit site_key + captcha_type: solve with fallback strategy
+        2. If capsolver_api_key set: use Patchright + CapSolver for CF Turnstile
+        3. Fall back to fallback_strategy or return empty
         """
-        captcha_token = ""
         captcha_type = (selectors or {}).get("captcha_type", RECAPTCHA_V2_PROXYLESS)
 
-        # Explicit captcha solving (user-provided site_key)
-        if selectors and "site_key" in selectors:
+        # Explicit captcha solving (user-provided site_key) via fallback
+        if selectors and "site_key" in selectors and self.fallback_strategy is not None:
             captcha_token = await self.solve_captcha(
                 site_key=selectors["site_key"],
                 page_url=url,
                 captcha_type=captcha_type,
             )
+            result = await self.fallback_strategy.fetch(url, selectors)
+            return ScrapingResult(
+                content=result.content, url=result.url, strategy=self.name,
+                status_code=result.status_code,
+                metadata={**result.metadata, "captcha_solved": bool(captcha_token)},
+            )
 
-        # Delegate to fallback strategy
+        # CF Turnstile: use Patchright + CapSolver full browser flow
+        if self.capsolver_api_key:
+            return await self._solve_cf_turnstile_via_patchright(url)
+
+        # Delegate to fallback strategy (no captcha solving)
         if self.fallback_strategy is not None:
             result = await self.fallback_strategy.fetch(url, selectors)
-
-            # Auto-detect Turnstile if no explicit captcha and fallback got challenge HTML
-            if not captcha_token and self.capsolver_api_key:
-                captcha_token = await self._try_solve_turnstile(url, result.content)
-
             return ScrapingResult(
-                content=result.content,
-                url=result.url,
-                strategy=self.name,
+                content=result.content, url=result.url, strategy=self.name,
                 status_code=result.status_code,
-                metadata={
-                    **result.metadata,
-                    "captcha_solved": bool(captcha_token),
-                    "captcha_type": captcha_type if captcha_token else None,
-                },
+                metadata={**result.metadata, "captcha_solved": False},
             )
 
         return ScrapingResult(
-            content="",
-            url=url,
-            strategy=self.name,
-            status_code=0,
-            metadata={
-                "captcha_solved": bool(captcha_token),
-                "error": "no_fallback_strategy",
-            },
+            content="", url=url, strategy=self.name, status_code=0,
+            metadata={"captcha_solved": False, "error": "no_fallback_strategy"},
         )
