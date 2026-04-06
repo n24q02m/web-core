@@ -46,7 +46,7 @@ class TestStrategyCache:
 
     def test_default_order(self):
         cache = StrategyCache()
-        assert cache.default_order == ["basic_http", "tls_spoof", "api_direct", "headless", "captcha"]
+        assert cache.default_order == ["basic_http", "tls_spoof", "headless", "patchright", "captcha", "api_direct"]
 
     def test_custom_default_order(self):
         order = ["headless", "basic_http"]
@@ -152,7 +152,7 @@ class TestStrategyCache:
     async def test_recommend_no_history(self):
         cache = StrategyCache()
         order = await cache.recommend("https://example.com")
-        assert order == ["basic_http", "tls_spoof", "api_direct", "headless", "captcha"]
+        assert order == ["basic_http", "tls_spoof", "headless", "patchright", "captcha", "api_direct"]
 
     async def test_recommend_reorders_after_min_attempts(self):
         cache = StrategyCache(min_attempts=2)

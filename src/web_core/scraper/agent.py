@@ -8,6 +8,7 @@ from langgraph.graph import END, START, StateGraph
 
 from web_core.scraper.cache import StrategyCache
 from web_core.scraper.state import ScrapingError, ScrapingState
+from web_core.scraper.utils import is_cloudflare_challenge
 
 
 class ScrapingAgent:
@@ -144,11 +145,27 @@ class ScrapingAgent:
             }
 
     async def _validate_node(self, state: ScrapingState) -> ScrapingState:
-        """Validate that the response is usable."""
+        """Validate that the response is usable.
+
+        Rejects responses that:
+        - Have non-2xx/3xx status codes
+        - Are shorter than min_content_length
+        - Contain Cloudflare challenge HTML (JS challenge, Turnstile, managed)
+        """
         content = state.get("content", "")
         status_code = state.get("status_code", 0)
-        valid = 200 <= status_code < 400 and len(content) >= self.min_content_length
-        return {**state, "success": valid}
+        errors = list(state.get("errors", []))
+
+        status_ok = 200 <= status_code < 400
+        length_ok = len(content) >= self.min_content_length
+        cf_challenge = is_cloudflare_challenge(content) if content else False
+
+        if cf_challenge:
+            strategy = state.get("metadata", {}).get("last_strategy", "unknown")
+            errors.append(f"{strategy}: Cloudflare challenge detected in response")
+
+        valid = status_ok and length_ok and not cf_challenge
+        return {**state, "success": valid, "errors": errors}
 
     def _route_after_validate(self, state: ScrapingState) -> str:
         """Route to extract on success, escalate on failure."""
