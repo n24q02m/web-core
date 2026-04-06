@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.1.0-beta.3 (2026-04-06)
+
+### Features
+
+- Add Google Drive public folder adapter
+  ([`069fe25`](https://github.com/n24q02m/web-core/commit/069fe2501f71efc5cfa91ad62fdc6ece6844e30d))
+
+
 ## v1.1.0-beta.2 (2026-04-06)
 
 ### Bug Fixes
