@@ -1,0 +1,3 @@
+## 2025-04-06 - URL Tracking Parameter Parsing Optimization
+**Learning:** Using `urllib.parse.parse_qsl` is faster than `urllib.parse.parse_qs` because it creates a list of tuples instead of allocating list values in dictionaries. While an early regex fast-path can bypass parsing when tracking parameters are absent, doing so destroys canonicalization guarantees (e.g., `%20` becoming `+` universally) provided by `urlencode`, leading to regressions in deduplication logic relying on deterministic output.
+**Action:** Always favor `parse_qsl` for URL modifications, but avoid bypassing parsing/encoding steps (like `parse_qsl` + `urlencode`) with substring fast-paths if the surrounding logic relies on their canonicalization side-effects.
