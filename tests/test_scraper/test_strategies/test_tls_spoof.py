@@ -87,6 +87,7 @@ class TestTLSSpoofStrategy:
             "https://example.com",
             impersonate="firefox120",
             timeout=15.0,
+            cookies=None,
         )
 
     async def test_fetch_failure_propagates(self):

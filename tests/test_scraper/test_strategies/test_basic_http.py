@@ -97,6 +97,7 @@ class TestBasicHTTPStrategy:
             headers=custom_headers,
             timeout=15.0,
             follow_redirects=True,
+            cookies={},
         )
 
     async def test_fetch_failure_propagates(self, mock_httpx_client):
