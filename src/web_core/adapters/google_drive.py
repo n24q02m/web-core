@@ -58,12 +58,43 @@ def extract_file_id(url: str) -> str | None:
 
 
 async def list_folder_files(folder_id: str) -> list[DriveFile]:
-    """List all text files in a public Google Drive folder.
+    """List all text/document files in a public Google Drive folder.
 
-    Su dung httpx de fetch folder HTML va extract file metadata.
-    Chi lay file text (txt, epub, pdf, md, docx).
+    Su dung gdown skip_download=True de list files ma khong download,
+    fallback sang HTML parsing neu gdown that bai.
     """
-    return await _list_folder_via_html(folder_id)
+    try:
+        return await _list_folder_via_gdown(folder_id)
+    except Exception:
+        return await _list_folder_via_html(folder_id)
+
+
+async def _list_folder_via_gdown(folder_id: str) -> list[DriveFile]:
+    """Use gdown skip_download=True to list folder files without downloading."""
+    try:
+        import gdown as gdown_mod
+    except ImportError as e:
+        raise RuntimeError("gdown not installed.") from e
+
+    url = f"https://drive.google.com/drive/folders/{folder_id}"
+    loop = asyncio.get_running_loop()
+
+    _SUPPORTED_EXTS = {".txt", ".epub", ".pdf", ".md", ".html", ".htm", ".docx"}
+
+    def _list_sync() -> list[DriveFile]:
+        items = gdown_mod.download_folder(url, skip_download=True, quiet=True, use_cookies=False)
+        if not items:
+            return []
+        files = []
+        for item in items:
+            # GoogleDriveFileToDownload has .id and .path attributes
+            name = item.path.split("/")[-1] if hasattr(item, "path") and item.path else ""
+            ext = "." + name.rsplit(".", 1)[-1].lower() if "." in name else ""
+            if ext in _SUPPORTED_EXTS:
+                files.append(DriveFile(file_id=item.id, name=name))
+        return files
+
+    return await loop.run_in_executor(None, _list_sync)
 
 
 async def _list_folder_via_html(folder_id: str) -> list[DriveFile]:
