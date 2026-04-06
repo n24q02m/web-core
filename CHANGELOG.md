@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.1.1-beta.3 (2026-04-06)
+
+### Bug Fixes
+
+- Restore gdown>=5.2.0 dependency lost during conflict resolution
+  ([`d4c3240`](https://github.com/n24q02m/web-core/commit/d4c32402cb17dccaabaa39c66b0a5df1211f5dde))
+
+
 ## v1.1.1-beta.2 (2026-04-06)
 
 ### Bug Fixes
