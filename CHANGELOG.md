@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.1.1-beta.7 (2026-04-06)
+
+### Bug Fixes
+
+- Use Python page.query_selector_all for Turnstile sitekey extraction
+  ([`d330cf2`](https://github.com/n24q02m/web-core/commit/d330cf2553ae93a403939068da7485877cb584b1))
+
+
 ## v1.1.1-beta.6 (2026-04-06)
 
 ### Bug Fixes
