@@ -197,7 +197,16 @@ class TestCaptchaStrategy:
             fallback_strategy=fallback,
             http_client=mock_client,
         )
-        result = await strategy.fetch("https://example.com")
+        # Mock _solve_cf_turnstile_via_patchright to avoid real browser
+        mock_result = ScrapingResult(
+            content="",
+            url="https://example.com",
+            strategy="captcha",
+            status_code=0,
+            metadata={"captcha_solved": False},
+        )
+        with patch.object(strategy, "_solve_cf_turnstile_via_patchright", return_value=mock_result):
+            result = await strategy.fetch("https://example.com")
 
         mock_client.post.assert_not_called()
         assert result.metadata["captcha_solved"] is False
