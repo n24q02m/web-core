@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import pytest
-
 from web_core.adapters.google_drive import (
     DriveChapter,
     DriveFile,
+    _natural_sort_key,
     extract_file_id,
     extract_folder_id,
-    _natural_sort_key,
 )
-
 
 # ---------------------------------------------------------------------------
 # extract_folder_id

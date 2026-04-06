@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
+import contextlib
+from unittest.mock import AsyncMock, MagicMock
 
 from web_core.scraper.strategies.patchright_browser import PatchrightStrategy
 
 # Sample HTML fixtures
 NORMAL_HTML = "<html><head><title>Normal Page</title></head><body><h1>Content</h1></body></html>"
 CF_JS_CHALLENGE_HTML = "<html><head><title>Just a moment...</title></head><body>Checking your browser</body></html>"
-CF_TURNSTILE_HTML = '<html><head></head><body><script src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script><div data-sitekey="0x4AAAA_test_key"></div></body></html>'
+CF_TURNSTILE_HTML = (
+    "<html><head></head><body>"
+    '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script>'
+    '<div data-sitekey="0x4AAAA_test_key"></div>'
+    "</body></html>"
+)
 CF_MANAGED_HTML = "<html><body><div id='cf-please-wait'>managed_checking_msg</div></body></html>"
 
 
@@ -38,7 +44,7 @@ def _make_mock_provider(page_content: str, status_code: int = 200, url: str = "h
 
 class TestPatchrightStrategy:
     async def test_fetch_normal_page(self):
-        provider, page = _make_mock_provider(NORMAL_HTML)
+        provider, _page = _make_mock_provider(NORMAL_HTML)
         strategy = PatchrightStrategy(provider=provider)
 
         result = await strategy.fetch("https://example.com")
@@ -49,7 +55,7 @@ class TestPatchrightStrategy:
         assert result.metadata["cf_challenge"] is None
 
     async def test_fetch_detects_turnstile(self):
-        provider, page = _make_mock_provider(CF_TURNSTILE_HTML)
+        provider, _page = _make_mock_provider(CF_TURNSTILE_HTML)
         strategy = PatchrightStrategy(provider=provider)
 
         result = await strategy.fetch("https://protected.com")
@@ -124,7 +130,7 @@ class TestPatchrightStrategy:
         assert result.metadata["cf_challenge"] is None
 
     async def test_metadata_includes_content_length(self):
-        provider, page = _make_mock_provider(NORMAL_HTML)
+        provider, _page = _make_mock_provider(NORMAL_HTML)
         strategy = PatchrightStrategy(provider=provider)
 
         result = await strategy.fetch("https://example.com")
@@ -147,10 +153,8 @@ class TestPatchrightStrategy:
         page.goto = AsyncMock(side_effect=TimeoutError("Navigation timeout"))
         strategy = PatchrightStrategy(provider=provider)
 
-        try:
+        with contextlib.suppress(TimeoutError):
             await strategy.fetch("https://timeout.com")
-        except TimeoutError:
-            pass
 
         page.close.assert_awaited_once()
         provider.close.assert_awaited_once()
