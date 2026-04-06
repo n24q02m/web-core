@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.1.1-beta.6 (2026-04-06)
+
+### Bug Fixes
+
+- Extract Turnstile sitekey from CF iframe src (render=explicit)
+  ([`f78ac59`](https://github.com/n24q02m/web-core/commit/f78ac59d51072074f56f85b1d08f15356d1c6cf3))
+
+
 ## v1.1.1-beta.5 (2026-04-06)
 
 ### Bug Fixes
