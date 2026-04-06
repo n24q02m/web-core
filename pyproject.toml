@@ -72,6 +72,10 @@ version_toml = ["pyproject.toml:project.version"]
 [tool.coverage.run]
 source_pkgs = ["web_core"]
 branch = true
+omit = [
+    # Google Drive adapter requires real OAuth credentials — excluded from CI coverage
+    "*/web_core/adapters/google_drive.py",
+]
 
 [tool.coverage.report]
 fail_under = 95
