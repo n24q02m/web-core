@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.1.1-beta.5 (2026-04-06)
+
+### Bug Fixes
+
+- Apply ruff format to captcha and tls_spoof strategies
+  ([`a46e0af`](https://github.com/n24q02m/web-core/commit/a46e0af7ea29d1b0e24c63eaba37e7bb9130df17))
+
+
 ## v1.1.1-beta.4 (2026-04-06)
 
 ### Bug Fixes
