@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v1.1.0-beta.2 (2026-04-06)
+
+### Bug Fixes
+
+- Add Newtoki-style CF managed challenge patterns and improve polling
+  ([`630fd22`](https://github.com/n24q02m/web-core/commit/630fd22e7871826f16463917187f4b2faced11a0))
+
+- Apply ruff format to test_headless.py
+  ([`5564944`](https://github.com/n24q02m/web-core/commit/5564944427a30ceaec763ed593ca02bea8d96394))
+
+### Features
+
+- Cloudflare challenge detection, Turnstile solving, and improved escalation
+  ([`4a2c1c8`](https://github.com/n24q02m/web-core/commit/4a2c1c8988ddb9a23f16ce250692547c8c4b0099))
+
+
 ## v1.1.0-beta.1 (2026-04-05)
 
 ### Features
