@@ -67,6 +67,8 @@ general:
   debug: false
   instance_name: "web-core SearXNG"
 
+brand: {{}}
+
 server:
   port: {port}
   bind_address: "127.0.0.1"
