@@ -118,17 +118,32 @@ class CaptchaStrategy(BaseStrategy):
             try:
                 await page.goto(url, wait_until="networkidle", timeout=45000)
 
-                # Extract sitekey via JS execution — handles render=explicit mode
+                # Wait for CF Turnstile iframe to appear (render=explicit loads it async)
+                import contextlib as _ctxlib
+
+                with _ctxlib.suppress(Exception):
+                    await page.wait_for_selector("iframe[src*='challenges.cloudflare.com']", timeout=8000)
+
+                # Extract sitekey — try multiple sources
                 sitekey = await page.evaluate("""() => {
-                    // Try static data-sitekey attribute
+                    // 1. Static data-sitekey attribute
                     const el = document.querySelector('[data-sitekey]');
                     if (el) return el.getAttribute('data-sitekey');
-                    // Try Cloudflare's _cf_chl_opt
+                    // 2. Turnstile iframe src contains sitekey in path
+                    const iframes = Array.from(document.querySelectorAll('iframe'));
+                    for (const f of iframes) {
+                        const m = f.src.match(/\\/([0-9a-zA-Z]{20,})\\/(?:light|dark|auto)/);
+                        if (m) return m[1];
+                        // Also try 0x prefix format
+                        const m2 = f.src.match(/\\/(0x[A-Za-z0-9]+)[\\/&]/);
+                        if (m2) return m2[1];
+                    }
+                    // 3. Cloudflare's _cf_chl_opt global
                     if (window._cf_chl_opt) return window._cf_chl_opt.cHCh || window._cf_chl_opt.cvId || null;
-                    // Try challenge params
+                    // 4. Inline scripts
                     const scripts = Array.from(document.scripts);
                     for (const s of scripts) {
-                        const m = s.textContent.match(/sitekey['":\\s]+['"](0x[A-Za-z0-9]+)['"]/);
+                        const m = s.textContent.match(/sitekey['":\\s=]+['"](0x[A-Za-z0-9]+)['"]/i);
                         if (m) return m[1];
                     }
                     return null;
