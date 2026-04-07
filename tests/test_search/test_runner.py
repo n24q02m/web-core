@@ -157,6 +157,13 @@ class TestDiscovery:
         tmp_discovery.parent.mkdir(parents=True, exist_ok=True)
         tmp_discovery.write_text(json.dumps({"port": 8080}))  # Missing pid
         assert _read_discovery() is None
+    def test_read_discovery_exception(self, tmp_discovery):
+        """Returns None when an exception occurs during reading."""
+        with patch("web_core.search.runner._DISCOVERY_FILE") as mock_file:
+            mock_file.exists.return_value = True
+            mock_file.read_text.side_effect = OSError("Read error")
+            assert _read_discovery() is None
+
 
     def test_remove_discovery(self, tmp_discovery):
         """Removes the discovery file if it exists."""
