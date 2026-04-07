@@ -115,6 +115,28 @@ class TestIsPidAlive:
             mock_kill.return_value = None  # os.kill succeeds (PID in table)
             assert _is_pid_alive(pid) is False
 
+    def test_proc_status_oserror_handling(self):
+        """Test that OSError during /proc/{pid}/status read is handled and returns True."""
+        pid = 99999
+        with (
+            patch("web_core.search.runner.sys.platform", "linux"),
+            patch("os.kill", return_value=None),
+            patch("web_core.search.runner.Path.exists", return_value=True),
+            patch("web_core.search.runner.Path.read_text", side_effect=OSError("Mocked error")),
+        ):
+            assert _is_pid_alive(pid) is True
+
+    @pytest.mark.parametrize("exception", [ProcessLookupError, PermissionError, OSError])
+    def test_os_kill_error_handling(self, exception):
+        """Test that os.kill errors are handled and return False."""
+        pid = 99999
+        with (
+            patch("web_core.search.runner.sys.platform", "linux"),
+            patch("web_core.search.runner.Path.exists", return_value=False),
+            patch("os.kill", side_effect=exception("Mocked error")),
+        ):
+            assert _is_pid_alive(pid) is False
+
     @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only ctypes check")
     def test_windows_dead_process(self):
         """A non-existent PID on Windows should return False."""
