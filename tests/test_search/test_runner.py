@@ -132,6 +132,23 @@ class TestIsPidAlive:
 
 
 class TestDiscovery:
+    def test_write_discovery_error(self, tmp_discovery):
+        """Handles exceptions during discovery file writing."""
+        with patch.object(Path, "mkdir", side_effect=OSError("Permission denied")):
+            # Should not raise
+            _write_discovery(18888, 12345)
+
+    def test_remove_discovery_error(self, tmp_discovery):
+        """Handles exceptions during discovery file removal."""
+        _write_discovery(18888, 12345)
+        assert tmp_discovery.exists()
+
+        with patch.object(Path, "unlink", side_effect=OSError("Permission denied")):
+            # Should not raise
+            _remove_discovery()
+
+        assert tmp_discovery.exists()
+
     def test_read_discovery_no_file(self, tmp_discovery):
         """Returns None when discovery file doesn't exist."""
         assert _read_discovery() is None
