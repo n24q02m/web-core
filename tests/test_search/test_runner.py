@@ -23,6 +23,7 @@ from web_core.search.runner import (
     _SETTINGS_TEMPLATE,
     _cleanup_process,
     _find_available_port,
+    _force_kill_process,
     _get_pip_command,
     _get_process_kwargs,
     _get_settings_path,
@@ -800,6 +801,125 @@ class TestEnsureSearxng:
 # ===========================================================================
 # _get_startup_lock
 # ===========================================================================
+
+
+# ===========================================================================
+# _force_kill_process
+# ===========================================================================
+
+
+class TestForceKillProcess:
+    def test_already_dead(self):
+        """Returns early if process is already dead."""
+        proc = MagicMock()
+        proc.poll.return_value = 0
+        _force_kill_process(proc)
+        proc.pid.assert_not_called if hasattr(proc.pid, "assert_not_called") else None
+
+    def test_unix_graceful(self):
+        """Kills via SIGTERM on Unix and waits."""
+        proc = MagicMock()
+        proc.poll.return_value = None
+        proc.pid = 12345
+        import signal
+
+        with (
+            patch("sys.platform", "linux"),
+            patch("os.getpgid", return_value=12345),
+            patch("os.killpg") as mock_killpg,
+        ):
+            _force_kill_process(proc)
+            mock_killpg.assert_any_call(12345, signal.SIGTERM)
+            proc.wait.assert_called_with(timeout=3)
+
+    def test_unix_forced(self):
+        """Kills via SIGKILL if SIGTERM times out on Unix."""
+        proc = MagicMock()
+        proc.poll.return_value = None
+        proc.pid = 12345
+        import signal
+
+        # First wait times out, second succeeds
+        proc.wait.side_effect = [subprocess.TimeoutExpired(["cmd"], 3), None]
+        with (
+            patch("sys.platform", "linux"),
+            patch("os.getpgid", return_value=12345),
+            patch("os.killpg") as mock_killpg,
+        ):
+            _force_kill_process(proc)
+            mock_killpg.assert_any_call(12345, signal.SIGTERM)
+            mock_killpg.assert_any_call(12345, signal.SIGKILL)
+
+    def test_windows_graceful(self):
+        """Calls _sigterm_then_kill on Windows."""
+        proc = MagicMock()
+        proc.poll.return_value = None
+        proc.pid = 12345
+        with (
+            patch("sys.platform", "win32"),
+            patch("web_core.search.runner._sigterm_then_kill") as mock_sigterm,
+        ):
+            _force_kill_process(proc)
+            mock_sigterm.assert_called_with(12345, "SearXNG")
+            proc.wait.assert_called_with(timeout=3)
+
+    def test_windows_timeout(self):
+        """Force kills on Windows if wait times out."""
+        proc = MagicMock()
+        proc.poll.return_value = None
+        proc.pid = 12345
+        proc.wait.side_effect = subprocess.TimeoutExpired(["cmd"], 3)
+        with (
+            patch("sys.platform", "win32"),
+            patch("web_core.search.runner._sigterm_then_kill"),
+        ):
+            _force_kill_process(proc)
+            proc.kill.assert_called_once()
+
+    def test_exception_handling(self, caplog):
+        """Logs debug message on unexpected exception."""
+        import logging
+
+        caplog.set_level(logging.DEBUG)
+        proc = MagicMock()
+        proc.poll.return_value = None
+        proc.pid = 12345
+        with (
+            patch("sys.platform", "linux"),
+            patch("os.getpgid", side_effect=RuntimeError("unexpected")),
+        ):
+            _force_kill_process(proc)
+        assert "Error killing SearXNG process: unexpected" in caplog.text
+
+    def test_unix_killpg_error(self):
+        """Falls back to proc.terminate/kill if killpg fails."""
+        proc = MagicMock()
+        proc.poll.return_value = None
+        proc.pid = 12345
+        # First wait times out to trigger SIGKILL path
+        proc.wait.side_effect = [subprocess.TimeoutExpired(["cmd"], 3), None]
+        with (
+            patch("sys.platform", "linux"),
+            patch("os.getpgid", return_value=12345),
+            patch("os.killpg", side_effect=ProcessLookupError()),
+        ):
+            _force_kill_process(proc)
+            proc.terminate.assert_called_once()
+            proc.kill.assert_called_once()
+
+    def test_unix_unkillable(self, caplog):
+        """Logs warning if process remains alive after SIGKILL."""
+        proc = MagicMock()
+        proc.poll.return_value = None
+        proc.pid = 12345
+        proc.wait.side_effect = subprocess.TimeoutExpired(["cmd"], 3)
+        with (
+            patch("sys.platform", "linux"),
+            patch("os.getpgid", return_value=12345),
+            patch("os.killpg"),
+        ):
+            _force_kill_process(proc)
+        assert "SearXNG process (PID=12345) could not be killed" in caplog.text
 
 
 class TestGetStartupLock:

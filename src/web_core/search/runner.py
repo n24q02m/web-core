@@ -495,7 +495,7 @@ def _sigterm_then_kill(pid: int, label: str = "") -> bool:  # pragma: no cover
         return True
 
 
-def _force_kill_process(proc: subprocess.Popen) -> None:  # pragma: no cover
+def _force_kill_process(proc: subprocess.Popen) -> None:
     """Force-kill a subprocess and all its children.
 
     Tries graceful SIGTERM first, then SIGKILL after a short timeout.
