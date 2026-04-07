@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import socket
 import subprocess
@@ -23,6 +24,7 @@ from web_core.search.runner import (
     _SETTINGS_TEMPLATE,
     _cleanup_process,
     _find_available_port,
+    _force_kill_process,
     _get_pip_command,
     _get_process_kwargs,
     _get_settings_path,
@@ -863,3 +865,91 @@ class TestModuleExports:
 
         assert "ensure_searxng" in all_exports
         assert "shutdown_searxng" in all_exports
+
+
+# ---------------------------------------------------------------------------
+# Force Kill Tests
+# ---------------------------------------------------------------------------
+
+
+def test_force_kill_process_unix_success():
+    """_force_kill_process sends SIGTERM then SIGKILL on Unix."""
+    mock_proc = MagicMock(spec=subprocess.Popen)
+    mock_proc.poll.return_value = None  # Still running
+    mock_proc.pid = 1234
+
+    # First wait(timeout=3) raises TimeoutExpired, second succeeds
+    mock_proc.wait.side_effect = [subprocess.TimeoutExpired(cmd="", timeout=3), None]
+
+    with (
+        patch("sys.platform", "linux"),
+        patch("os.killpg") as mock_killpg,
+        patch("os.getpgid", return_value=5678),
+        patch("signal.SIGTERM", 15),
+        patch("signal.SIGKILL", 9),
+    ):
+        _force_kill_process(mock_proc)
+
+        # Should call killpg with SIGTERM first
+        mock_killpg.assert_any_call(5678, 15)
+        # Then call killpg with SIGKILL after timeout
+        mock_killpg.assert_any_call(5678, 9)
+        assert mock_proc.wait.call_count == 2
+
+
+def test_force_kill_process_windows_success():
+    """_force_kill_process on Windows uses _sigterm_then_kill."""
+    mock_proc = MagicMock(spec=subprocess.Popen)
+    mock_proc.poll.return_value = None  # Still running
+    mock_proc.pid = 1234
+
+    # wait(timeout=3) raises TimeoutExpired, so it calls proc.kill()
+    mock_proc.wait.side_effect = subprocess.TimeoutExpired(cmd="", timeout=3)
+
+    with patch("sys.platform", "win32"), patch("web_core.search.runner._sigterm_then_kill") as mock_sigterm_kill:
+        _force_kill_process(mock_proc)
+
+        mock_sigterm_kill.assert_called_once_with(1234, "SearXNG")
+        mock_proc.wait.assert_called_once_with(timeout=3)
+        mock_proc.kill.assert_called_once()
+
+
+def test_force_kill_process_exception(caplog):
+    """_force_kill_process handles unexpected exceptions gracefully."""
+    mock_proc = MagicMock(spec=subprocess.Popen)
+    mock_proc.poll.return_value = None  # Still running
+    mock_proc.pid = 1234
+
+    # Force an unexpected exception in os.getpgid
+    with patch("sys.platform", "linux"), patch("os.getpgid", side_effect=RuntimeError("Unexpected error")):
+        caplog.set_level(logging.DEBUG)
+        _force_kill_process(mock_proc)
+
+        assert "Error killing SearXNG process: Unexpected error" in caplog.text
+
+
+def test_force_kill_process_already_dead():
+    """_force_kill_process returns early if process is already dead."""
+    mock_proc = MagicMock(spec=subprocess.Popen)
+    mock_proc.poll.return_value = 0  # Already dead
+
+    _force_kill_process(mock_proc)
+
+    pass  # Should not even access pid
+    assert mock_proc.wait.call_count == 0
+
+
+def test_force_kill_process_unix_lookup_error():
+    """_force_kill_process uses proc.terminate() if killpg fails with ProcessLookupError."""
+    mock_proc = MagicMock(spec=subprocess.Popen)
+    mock_proc.poll.return_value = None  # Still running
+    mock_proc.pid = 1234
+
+    with (
+        patch("sys.platform", "linux"),
+        patch("os.killpg", side_effect=ProcessLookupError()),
+        patch("os.getpgid", return_value=5678),
+    ):
+        _force_kill_process(mock_proc)
+
+        mock_proc.terminate.assert_called_once()
