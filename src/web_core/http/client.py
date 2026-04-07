@@ -128,6 +128,8 @@ def is_safe_url(url: str) -> bool:
             _dns_cache[hostname] = (results, time.monotonic())
     except socket.gaierror:
         return False
+    except ValueError:
+        return False
     except Exception:
         return False
 

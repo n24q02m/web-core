@@ -159,10 +159,25 @@ class TestIsSafeUrl:
         ):
             assert is_safe_url("http://dns-error.example.com") is False
 
+    # ---------------------------------------------------------------------------
+    # _pinned_getaddrinfo
+    # ---------------------------------------------------------------------------
 
-# ---------------------------------------------------------------------------
-# _pinned_getaddrinfo
-# ---------------------------------------------------------------------------
+    def test_is_safe_url_blocks_unparseable_ip(self):
+        """If getaddrinfo returns an unparseable IP, is_safe_url must block it."""
+        with patch(
+            "web_core.http.client._original_getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("not-an-ip", 0))],
+        ):
+            assert is_safe_url("http://bad-ip.example.com") is False
+
+    def test_is_safe_url_blocks_dns_value_error(self):
+        """If getaddrinfo raises a ValueError, is_safe_url must block it."""
+        with patch(
+            "web_core.http.client._original_getaddrinfo",
+            side_effect=ValueError("Invalid host"),
+        ):
+            assert is_safe_url("http://invalid-host.example.com") is False
 
 
 class TestPinnedGetaddrinfo:
