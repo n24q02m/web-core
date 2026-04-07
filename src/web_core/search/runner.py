@@ -129,7 +129,7 @@ def _get_startup_lock() -> asyncio.Lock:
 # ---------------------------------------------------------------------------
 
 
-def _is_pid_alive(pid: int) -> bool:  # pragma: no cover
+def _is_pid_alive(pid: int) -> bool:
     """Check if a process with the given PID is alive (not zombie).
 
     On Windows, uses ctypes ``OpenProcess`` since ``os.kill(pid, 0)`` does

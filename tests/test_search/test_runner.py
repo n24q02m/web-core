@@ -125,6 +125,28 @@ class TestIsPidAlive:
         """An absurdly large PID should not be alive."""
         assert _is_pid_alive(999999999) is False
 
+    def test_windows_process_alive_mock(self):
+        """On Windows, _is_pid_alive should return True if OpenProcess succeeds (mocked)."""
+        mock_ctypes = MagicMock()
+        mock_ctypes.windll.kernel32.OpenProcess.return_value = 0x1234  # Non-zero handle
+
+        with patch("web_core.search.runner.sys.platform", "win32"), patch.dict("sys.modules", {"ctypes": mock_ctypes}):
+            # Invalidate any cached import of ctypes in the module if it exists
+            # but since it is a local import inside the function, this should work.
+            assert _is_pid_alive(1234) is True
+            mock_ctypes.windll.kernel32.OpenProcess.assert_called_once_with(0x1000, False, 1234)
+            mock_ctypes.windll.kernel32.CloseHandle.assert_called_once_with(0x1234)
+
+    def test_windows_process_dead_mock(self):
+        """On Windows, _is_pid_alive should return False if OpenProcess returns 0 (mocked)."""
+        mock_ctypes = MagicMock()
+        mock_ctypes.windll.kernel32.OpenProcess.return_value = 0  # Zero/NULL handle
+
+        with patch("web_core.search.runner.sys.platform", "win32"), patch.dict("sys.modules", {"ctypes": mock_ctypes}):
+            assert _is_pid_alive(1234) is False
+            mock_ctypes.windll.kernel32.OpenProcess.assert_called_once_with(0x1000, False, 1234)
+            mock_ctypes.windll.kernel32.CloseHandle.assert_not_called()
+
 
 # ===========================================================================
 # Discovery file management
