@@ -319,15 +319,47 @@ class TestWaitForService:
             assert result is True
 
     async def test_returns_false_on_timeout(self):
-        """Returns False when service never becomes healthy."""
-        with patch("web_core.search.runner.httpx.AsyncClient") as mock_client_cls:
+        """Returns False when service never becomes healthy (e.g. connection error)."""
+        with (
+            patch("web_core.search.runner.httpx.AsyncClient") as mock_client_cls,
+            patch("web_core.search.runner.time.time") as mock_time,
+            patch("web_core.search.runner.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        ):
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(side_effect=httpx.ConnectError("refused"))
             mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
 
-            result = await _wait_for_service("http://127.0.0.1:18888", timeout=0.5)
+            # Mock time: start=0, loop1=0 (True), loop2=2.1 (False)
+            mock_time.side_effect = [0.0, 0.0, 2.1]
+
+            result = await _wait_for_service("http://127.0.0.1:18888", timeout=2.0)
             assert result is False
+            assert mock_client.get.call_count == 1
+            assert mock_sleep.call_count == 1
+
+    async def test_returns_false_on_unhealthy_status(self):
+        """Returns False when service returns non-200 status."""
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+
+        with (
+            patch("web_core.search.runner.httpx.AsyncClient") as mock_client_cls,
+            patch("web_core.search.runner.time.time") as mock_time,
+            patch("web_core.search.runner.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        ):
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            # Mock time: start=0, loop1=0 (True), loop2=1.0 (True), loop3=2.1 (False)
+            mock_time.side_effect = [0.0, 0.0, 1.0, 2.1]
+
+            result = await _wait_for_service("http://127.0.0.1:18888", timeout=2.0)
+            assert result is False
+            assert mock_client.get.call_count == 2
+            assert mock_sleep.call_count == 2
 
 
 # ===========================================================================
