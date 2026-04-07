@@ -320,19 +320,42 @@ class TestWaitForService:
 
     async def test_returns_false_on_timeout(self):
         """Returns False when service never becomes healthy."""
-        with patch("web_core.search.runner.httpx.AsyncClient") as mock_client_cls:
+        with (
+            patch("web_core.search.runner.httpx.AsyncClient") as mock_client_cls,
+            patch("web_core.search.runner.time.time") as mock_time,
+            patch("web_core.search.runner.asyncio.sleep", AsyncMock()),
+        ):
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(side_effect=httpx.ConnectError("refused"))
             mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
 
-            result = await _wait_for_service("http://127.0.0.1:18888", timeout=0.5)
+            # mock_time.side_effect:
+            # 1. start_time = time.time() -> 0.0
+            # 2. while time.time() - start_time < timeout: -> 1.0 - 0.0 < 10.0 (True)
+            # 3. while time.time() - start_time < timeout: -> 11.0 - 0.0 < 10.0 (False)
+            mock_time.side_effect = [0.0, 1.0, 11.0]
+            result = await _wait_for_service("http://127.0.0.1:18888", timeout=10.0)
             assert result is False
 
+    async def test_wait_for_service_timeout_with_non_200(self):
+        """Returns False when service returns non-200 status code and times out."""
+        mock_response = MagicMock()
+        mock_response.status_code = 500
 
-# ===========================================================================
-# _is_searxng_installed / _install_searxng
-# ===========================================================================
+        with (
+            patch("web_core.search.runner.httpx.AsyncClient") as mock_client_cls,
+            patch("web_core.search.runner.time.time") as mock_time,
+            patch("web_core.search.runner.asyncio.sleep", AsyncMock()),
+        ):
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            mock_time.side_effect = [0.0, 1.0, 11.0]
+            result = await _wait_for_service("http://127.0.0.1:18888", timeout=10.0)
+            assert result is False
 
 
 class TestSearxngInstallation:
