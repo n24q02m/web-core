@@ -188,7 +188,7 @@ class TestCaptchaStrategy:
         assert result.content == "<html>solved</html>"
 
     async def test_fetch_with_none_selectors_skips_solving(self):
-        """fetch with selectors=None should skip captcha solving."""
+        """fetch with selectors=None and capsolver_api_key goes to patchright flow."""
         mock_client = AsyncMock()
 
         fallback = MockFallbackStrategy()
@@ -197,7 +197,15 @@ class TestCaptchaStrategy:
             fallback_strategy=fallback,
             http_client=mock_client,
         )
-        result = await strategy.fetch("https://example.com")
+        mock_result = ScrapingResult(
+            content="<html>patchright</html>",
+            url="https://example.com",
+            strategy="captcha",
+            status_code=200,
+            metadata={"captcha_solved": False, "error": "sitekey_not_found"},
+        )
+        with patch.object(strategy, "_solve_cf_turnstile_via_patchright", return_value=mock_result):
+            result = await strategy.fetch("https://example.com")
 
         mock_client.post.assert_not_called()
         assert result.metadata["captcha_solved"] is False
