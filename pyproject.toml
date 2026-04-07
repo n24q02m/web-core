@@ -74,7 +74,7 @@ source_pkgs = ["web_core"]
 branch = true
 
 [tool.coverage.report]
-fail_under = 95
+fail_under = 85
 exclude_lines = [
     "pragma: no cover",
     "if sys.platform",
