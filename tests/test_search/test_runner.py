@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import signal
 import socket
 import subprocess
 import sys
@@ -35,6 +36,7 @@ from web_core.search.runner import (
     _quick_health_check,
     _read_discovery,
     _remove_discovery,
+    _sigterm_then_kill,
     _try_reuse_existing,
     _wait_for_service,
     _write_discovery,
@@ -637,6 +639,89 @@ class TestCleanupProcess:
         _cleanup_process()
 
         assert not settings_file.exists()
+
+
+# ===========================================================================
+
+# ===========================================================================
+# _sigterm_then_kill
+# ===========================================================================
+
+
+class TestSigtermThenKill:
+    def test_sigterm_then_kill_already_dead(self):
+        """SIGTERM returns True if process already dead."""
+        with patch("os.kill", side_effect=ProcessLookupError):
+            assert _sigterm_then_kill(12345) is True
+
+    def test_sigterm_then_kill_graceful_exit(self):
+        """Returns True if process terminates gracefully during loop."""
+        # Mock os.kill(pid, 0) to return success twice, then ProcessLookupError
+        with (
+            patch("os.kill") as mock_kill,
+            patch("time.sleep") as mock_sleep,
+        ):
+            # Using a list for side_effect to track calls
+            # 1. SIGTERM
+            # 2. Check alive (0) -> Success
+            # 3. Check alive (0) -> Success
+            # 4. Check alive (0) -> ProcessLookupError
+            mock_kill.side_effect = [None, None, None, ProcessLookupError()]
+
+            assert _sigterm_then_kill(12345, "test") is True
+            assert mock_kill.call_count == 4
+            assert mock_sleep.call_count == 2
+
+            # Verify call arguments
+            mock_kill.assert_any_call(12345, signal.SIGTERM)
+            mock_kill.assert_any_call(12345, 0)
+
+    def test_sigterm_then_kill_force_kill(self):
+        """Sends SIGKILL if process doesn't terminate within timeout."""
+        with (
+            patch("os.kill") as mock_kill,
+            patch("time.sleep") as mock_sleep,
+        ):
+            # Never raises ProcessLookupError, should trigger SIGKILL
+            mock_kill.return_value = None
+
+            assert _sigterm_then_kill(12345) is True
+            # SIGTERM (1) + 30 checks + SIGKILL (1) = 32 calls
+            assert mock_kill.call_count == 32
+            assert mock_sleep.call_count == 30
+
+            # Check last call was SIGKILL
+            mock_kill.assert_any_call(12345, signal.SIGKILL)
+
+    def test_sigterm_then_kill_force_kill_error(self):
+        """SIGKILL returns True even if it fails (e.g. already dead or permission error)."""
+        with (
+            patch("os.kill") as mock_kill,
+            patch("time.sleep"),
+        ):
+            # 1. SIGTERM -> Success
+            # 2-31. Check alive -> Success (30 times)
+            # 32. SIGKILL -> ProcessLookupError
+            side_effects = [None] + [None] * 30 + [ProcessLookupError()]
+            mock_kill.side_effect = side_effects
+
+            assert _sigterm_then_kill(12345) is True
+            assert mock_kill.call_count == 32
+
+    def test_sigterm_then_kill_permission_error(self):
+        """Handles PermissionError at SIGTERM and in check loop."""
+        # 1. PermissionError on SIGTERM
+        with patch("os.kill", side_effect=PermissionError):
+            assert _sigterm_then_kill(12345) is True
+
+        # 2. PermissionError during check loop
+        with (
+            patch("os.kill") as mock_kill,
+            patch("time.sleep"),
+        ):
+            mock_kill.side_effect = [None, PermissionError()]
+            assert _sigterm_then_kill(12345) is True
+            assert mock_kill.call_count == 2
 
 
 # ===========================================================================

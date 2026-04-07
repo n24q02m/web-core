@@ -464,7 +464,7 @@ def _get_settings_path(port: int) -> Path:
 # ---------------------------------------------------------------------------
 
 
-def _sigterm_then_kill(pid: int, label: str = "") -> bool:  # pragma: no cover
+def _sigterm_then_kill(pid: int, label: str = "") -> bool:
     """Send SIGTERM to a PID, wait briefly, then SIGKILL if needed.
 
     Returns ``True`` if the process was successfully terminated.
