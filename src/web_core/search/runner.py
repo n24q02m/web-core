@@ -30,6 +30,7 @@ import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -109,6 +110,7 @@ engines:
 _searxng_process: subprocess.Popen | None = None
 _searxng_port: int | None = None
 _restart_count: int = 0
+_current_settings_file: Path | None = None
 _last_restart_time: float = 0.0
 
 # Shared instance tracking.
@@ -439,10 +441,9 @@ def _get_settings_path(port: int) -> Path:
     server instances run simultaneously.  Generates settings inline
     from the bundled template.
     """
+    global _current_settings_file
     _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Per-process settings file (avoids race condition between instances).
-    settings_file = _CONFIG_DIR / f"searxng_settings_{os.getpid()}.yml"
+    _CONFIG_DIR.chmod(0o700)
 
     secret = secrets.token_hex(32)
     enable_http2 = "false" if sys.platform == "win32" else "true"
@@ -453,7 +454,24 @@ def _get_settings_path(port: int) -> Path:
         enable_http2=enable_http2,
     )
 
-    settings_file.write_text(content)
+    # Securely create per-process settings file (0600 permissions).
+    fd, path_str = tempfile.mkstemp(
+        dir=_CONFIG_DIR,
+        prefix="searxng_settings_",
+        suffix=".yml",
+        text=True,
+    )
+    settings_file = Path(path_str)
+    _current_settings_file = settings_file
+
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(content)
+    except Exception:
+        settings_file.unlink(missing_ok=True)
+        _current_settings_file = None
+        raise
+
     logger.debug("SearXNG settings written to: %s", settings_file)
 
     return settings_file
@@ -633,12 +651,15 @@ def _cleanup_process() -> None:  # pragma: no cover
         _is_owner = False
 
     # Cleanup per-process settings file.
-    try:
-        pid_settings = _CONFIG_DIR / f"searxng_settings_{os.getpid()}.yml"
-        if pid_settings.exists():
-            pid_settings.unlink()
-    except Exception:
-        pass
+    global _current_settings_file
+    if _current_settings_file is not None:
+        try:
+            if _current_settings_file.exists():
+                _current_settings_file.unlink()
+        except Exception:
+            pass
+        finally:
+            _current_settings_file = None
 
 
 def _is_process_alive() -> bool:

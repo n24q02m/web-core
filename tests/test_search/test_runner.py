@@ -445,9 +445,12 @@ class TestGetSettingsPath:
         assert "{port}" not in content
 
     def test_per_process_filename(self, tmp_config_dir):
-        """Settings file is named with current PID."""
+        """Settings file has secure random filename."""
         path = _get_settings_path(18888)
-        assert f"searxng_settings_{os.getpid()}.yml" in path.name
+        assert path.name.startswith("searxng_settings_")
+        assert path.name.endswith(".yml")
+        # Ensure it's not just the PID-based name
+        assert f"_{os.getpid()}" not in path.name
 
     def test_http2_disabled_on_windows(self, tmp_config_dir):
         """HTTP/2 is disabled on Windows to avoid deadlocks."""
@@ -630,13 +633,19 @@ class TestCleanupProcess:
 
     def test_cleanup_removes_settings_file(self, tmp_config_dir):
         """Cleanup removes the per-process settings file."""
-        settings_file = tmp_config_dir / f"searxng_settings_{os.getpid()}.yml"
+        import web_core.search.runner as mod
+
+        settings_file = tmp_config_dir / "searxng_settings_test.yml"
         settings_file.write_text("test")
         assert settings_file.exists()
+
+        # Set the global variable so cleanup knows which file to remove
+        mod._current_settings_file = settings_file
 
         _cleanup_process()
 
         assert not settings_file.exists()
+        assert mod._current_settings_file is None
 
 
 # ===========================================================================
@@ -863,3 +872,55 @@ class TestModuleExports:
 
         assert "ensure_searxng" in all_exports
         assert "shutdown_searxng" in all_exports
+
+
+class TestRunnerCoverage:
+    def test_get_settings_path_write_failure(self, tmp_config_dir):
+        """_get_settings_path cleans up and reraises on write failure."""
+        from unittest.mock import patch
+
+        import pytest
+
+        import web_core.search.runner as mod
+
+        with (
+            patch("os.fdopen", side_effect=OSError("Mocked write failure")),
+            pytest.raises(OSError, match="Mocked write failure"),
+        ):
+            mod._get_settings_path(18888)
+
+        assert mod._current_settings_file is None
+        # Check that no settings files were left behind
+        files = list(tmp_config_dir.glob("searxng_settings_*.yml"))
+        assert len(files) == 0
+
+    @pytest.mark.asyncio
+    async def test_ensure_searxng_alive_but_unhealthy(self, monkeypatch):
+        """Restarts SearXNG when the process is alive but not healthy."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        import web_core.search.runner as mod
+
+        monkeypatch.delenv("SEARXNG_URL", raising=False)
+
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = None  # alive
+        mock_proc.pid = 12345
+        mod._searxng_process = mock_proc
+        mod._searxng_port = 18888
+
+        with (
+            patch("web_core.search.runner._quick_health_check", new_callable=AsyncMock, return_value=False),
+            patch("web_core.search.runner._try_reuse_existing", new_callable=AsyncMock, return_value=None),
+            patch("web_core.search.runner._is_searxng_installed", return_value=True),
+            patch("web_core.search.runner._force_kill_process") as mock_kill,
+            patch(
+                "web_core.search.runner._handle_restart_and_start",
+                new_callable=AsyncMock,
+                return_value="http://127.0.0.1:18889",
+            ),
+        ):
+            url = await mod.ensure_searxng()
+            assert url == "http://127.0.0.1:18889"
+            mock_kill.assert_called_once_with(mock_proc)
+            assert mod._searxng_process is None
