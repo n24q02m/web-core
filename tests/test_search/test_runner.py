@@ -796,6 +796,66 @@ class TestEnsureSearxng:
         ):
             await ensure_searxng()
 
+    async def test_handle_restart_and_start_stderr_read_success(self, monkeypatch):
+        """Covers successful stderr reading from a crashed process."""
+        import web_core.search.runner as mod
+
+        monkeypatch.delenv("SEARXNG_URL", raising=False)
+
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = 1
+        mock_proc.pid = 12345
+        mock_proc.stderr = MagicMock()
+        mock_proc.stderr.read.return_value = b"some error logs"
+
+        mod._searxng_process = mock_proc
+        mod._searxng_port = 18888
+        mod._last_restart_time = time.time()
+
+        with (
+            patch("web_core.search.runner._try_reuse_existing", new_callable=AsyncMock, return_value=None),
+            patch("web_core.search.runner._is_searxng_installed", return_value=True),
+            patch(
+                "web_core.search.runner._start_searxng_subprocess",
+                new_callable=AsyncMock,
+                return_value="http://127.0.0.1:18889",
+            ),
+        ):
+            url = await ensure_searxng()
+            assert url == "http://127.0.0.1:18889"
+            assert mod._searxng_process is None
+
+    async def test_handle_restart_and_start_stderr_read_exception(self, monkeypatch):
+        """Handles exception when reading stderr from a crashed process."""
+        import web_core.search.runner as mod
+
+        monkeypatch.delenv("SEARXNG_URL", raising=False)
+
+        # Simulate a crashed process with stderr that raises an exception on read
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = 1  # exited
+        mock_proc.pid = 12345
+        mock_proc.stderr = MagicMock()
+        mock_proc.stderr.read.side_effect = Exception("Read error")
+
+        mod._searxng_process = mock_proc
+        mod._searxng_port = 18888
+        mod._last_restart_time = time.time()
+
+        with (
+            patch("web_core.search.runner._try_reuse_existing", new_callable=AsyncMock, return_value=None),
+            patch("web_core.search.runner._is_searxng_installed", return_value=True),
+            patch(
+                "web_core.search.runner._start_searxng_subprocess",
+                new_callable=AsyncMock,
+                return_value="http://127.0.0.1:18889",
+            ),
+        ):
+            url = await ensure_searxng()
+            assert url == "http://127.0.0.1:18889"
+            # Verify the crashed process was cleared despite the read exception
+            assert mod._searxng_process is None
+
 
 # ===========================================================================
 # _get_startup_lock
