@@ -638,6 +638,35 @@ class TestCleanupProcess:
 
         assert not settings_file.exists()
 
+    def test_cleanup_unlink_exception(self, tmp_config_dir):
+        """_cleanup_process handles exceptions when unlinking pid_settings."""
+        settings_file = tmp_config_dir / f"searxng_settings_{os.getpid()}.yml"
+        settings_file.write_text("test")
+        assert settings_file.exists()
+
+        with patch.object(Path, "unlink", side_effect=OSError("Permission denied")):
+            _cleanup_process()  # Should not raise
+
+        assert settings_file.exists()
+
+    def test_cleanup_stop_exception(self, tmp_config_dir, caplog):
+        """_cleanup_process handles exceptions when stopping the process."""
+        import logging
+        from unittest.mock import MagicMock, patch
+
+        import web_core.search.runner as mod
+
+        caplog.set_level(logging.DEBUG)
+        mock_proc = MagicMock()
+        mod._searxng_process = mock_proc
+        mod._is_owner = True
+
+        with patch("web_core.search.runner._force_kill_process", side_effect=RuntimeError("Kill failed")):
+            mod._cleanup_process()  # Should not raise
+
+        assert "Error stopping SearXNG: Kill failed" in caplog.text
+        assert mod._searxng_process is None
+
 
 # ===========================================================================
 # ensure_searxng
