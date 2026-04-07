@@ -110,7 +110,7 @@ class TestIsPidAlive:
         with (
             patch("os.kill") as mock_kill,
             patch.object(Path, "exists", return_value=True),
-            patch.object(Path, "read_text", return_value="State:\tZ (zombie)\n"),
+            patch.object(Path, "read_text", return_value="State:\tZ (zombie)"),
         ):
             mock_kill.return_value = None  # os.kill succeeds (PID in table)
             assert _is_pid_alive(pid) is False
@@ -125,12 +125,28 @@ class TestIsPidAlive:
         """An absurdly large PID should not be alive."""
         assert _is_pid_alive(999999999) is False
 
+    def test_windows_process_alive_mock(self):
+        """Test _is_pid_alive on Windows when process is alive (mocked)."""
+        mock_ctypes = MagicMock()
+        mock_handle = MagicMock()
+        mock_ctypes.windll.kernel32.OpenProcess.return_value = mock_handle
+        with patch("web_core.search.runner.sys.platform", "win32"), patch.dict("sys.modules", {"ctypes": mock_ctypes}):
+            assert _is_pid_alive(1234) is True
+            mock_ctypes.windll.kernel32.OpenProcess.assert_called_once_with(0x1000, False, 1234)
+            mock_ctypes.windll.kernel32.CloseHandle.assert_called_once_with(mock_handle)
+
+    def test_windows_process_dead_mock(self):
+        """Test _is_pid_alive on Windows when process is dead (mocked)."""
+        mock_ctypes = MagicMock()
+        mock_ctypes.windll.kernel32.OpenProcess.return_value = None
+        with patch("web_core.search.runner.sys.platform", "win32"), patch.dict("sys.modules", {"ctypes": mock_ctypes}):
+            assert _is_pid_alive(1234) is False
+            mock_ctypes.windll.kernel32.OpenProcess.assert_called_once_with(0x1000, False, 1234)
+
 
 # ===========================================================================
 # Discovery file management
 # ===========================================================================
-
-
 class TestDiscovery:
     def test_read_discovery_no_file(self, tmp_discovery):
         """Returns None when discovery file doesn't exist."""
@@ -533,7 +549,7 @@ class TestKillStalePortProcess:
     def test_windows_netstat(self):
         """On Windows, uses netstat to find stale PIDs."""
         mock_result = MagicMock()
-        mock_result.stdout = "  TCP    127.0.0.1:18888    0.0.0.0:0    LISTENING    99999\n"
+        mock_result.stdout = "  TCP    127.0.0.1:18888    0.0.0.0:0    LISTENING    99999"
 
         with (
             patch("subprocess.run", return_value=mock_result),
@@ -547,7 +563,7 @@ class TestKillStalePortProcess:
         """On Unix, uses lsof to find stale PIDs."""
         mock_result = MagicMock()
         mock_result.returncode = 0
-        mock_result.stdout = "99999\n"
+        mock_result.stdout = "99999"
 
         with (
             patch("subprocess.run", return_value=mock_result),
