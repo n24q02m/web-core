@@ -464,8 +464,39 @@ def _get_settings_path(port: int) -> Path:
 # ---------------------------------------------------------------------------
 
 
-def _sigterm_then_kill(pid: int, label: str = "") -> bool:  # pragma: no cover
-    """Send SIGTERM to a PID, wait briefly, then SIGKILL if needed.
+async def _sigterm_then_kill(pid: int, label: str = "") -> bool:  # pragma: no cover
+    """Send SIGTERM to a PID, wait briefly, then SIGKILL if needed (async).
+
+    Returns ``True`` if the process was successfully terminated.
+    """
+    tag = f" ({label})" if label else ""
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except (ProcessLookupError, PermissionError):
+        return True  # Already dead or inaccessible
+
+    # Wait up to 3 seconds for graceful exit.
+    for _ in range(30):
+        try:
+            os.kill(pid, 0)  # Check if alive
+        except ProcessLookupError:
+            logger.debug("Process PID=%d%s terminated gracefully", pid, tag)
+            return True
+        except PermissionError:
+            return True
+        await asyncio.sleep(0.1)
+
+    # Force kill.
+    try:
+        os.kill(pid, signal.SIGKILL)
+        logger.debug("Process PID=%d%s force-killed", pid, tag)
+        return True
+    except (ProcessLookupError, PermissionError):
+        return True
+
+
+def _sigterm_then_kill_sync(pid: int, label: str = "") -> bool:  # pragma: no cover
+    """Send SIGTERM to a PID, wait briefly, then SIGKILL if needed (sync).
 
     Returns ``True`` if the process was successfully terminated.
     """
@@ -495,8 +526,54 @@ def _sigterm_then_kill(pid: int, label: str = "") -> bool:  # pragma: no cover
         return True
 
 
-def _force_kill_process(proc: subprocess.Popen) -> None:  # pragma: no cover
-    """Force-kill a subprocess and all its children.
+async def _force_kill_process(proc: subprocess.Popen) -> None:  # pragma: no cover
+    """Force-kill a subprocess and all its children (async).
+
+    Tries graceful SIGTERM first, then SIGKILL after a short timeout.
+    On Unix, kills the entire process group to avoid orphaned children.
+    """
+    if proc.poll() is not None:
+        return  # Already dead
+
+    pid = proc.pid
+    logger.debug("Force-killing SearXNG process (PID=%d)...", pid)
+
+    try:
+        if sys.platform != "win32":
+            # Kill the entire process group on Unix.
+            try:
+                os.killpg(os.getpgid(pid), signal.SIGTERM)
+            except (ProcessLookupError, PermissionError):
+                proc.terminate()
+
+            try:
+                await asyncio.to_thread(proc.wait, timeout=3)
+                logger.debug("SearXNG process (PID=%d) terminated gracefully", pid)
+                return
+            except subprocess.TimeoutExpired:
+                pass
+
+            try:
+                os.killpg(os.getpgid(pid), signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                proc.kill()
+
+            try:
+                await asyncio.to_thread(proc.wait, timeout=3)
+            except subprocess.TimeoutExpired:
+                logger.warning("SearXNG process (PID=%d) could not be killed", pid)
+        else:
+            await _sigterm_then_kill(pid, "SearXNG")
+            try:
+                await asyncio.to_thread(proc.wait, timeout=3)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+    except Exception as e:
+        logger.debug("Error killing SearXNG process: %s", e)
+
+
+def _force_kill_process_sync(proc: subprocess.Popen) -> None:  # pragma: no cover
+    """Force-kill a subprocess and all its children (sync).
 
     Tries graceful SIGTERM first, then SIGKILL after a short timeout.
     On Unix, kills the entire process group to avoid orphaned children.
@@ -532,7 +609,7 @@ def _force_kill_process(proc: subprocess.Popen) -> None:  # pragma: no cover
             except subprocess.TimeoutExpired:
                 logger.warning("SearXNG process (PID=%d) could not be killed", pid)
         else:
-            _sigterm_then_kill(pid, "SearXNG")
+            _sigterm_then_kill_sync(pid, "SearXNG")
             try:
                 proc.wait(timeout=3)
             except subprocess.TimeoutExpired:
@@ -541,8 +618,8 @@ def _force_kill_process(proc: subprocess.Popen) -> None:  # pragma: no cover
         logger.debug("Error killing SearXNG process: %s", e)
 
 
-def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
-    """Kill any process still holding the target port.
+async def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
+    """Kill any process still holding the target port (async).
 
     This prevents 'address already in use' errors when restarting
     after a crash that left a zombie process behind.
@@ -552,7 +629,8 @@ def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
 
     if sys.platform == "win32":
         try:
-            result = subprocess.run(
+            result = await asyncio.to_thread(
+                subprocess.run,
                 ["netstat", "-ano"],
                 stdin=subprocess.DEVNULL,
                 capture_output=True,
@@ -566,14 +644,15 @@ def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
                     try:
                         pid = int(pid_str)
                         if pid > 0:
-                            _sigterm_then_kill(pid, f"stale port {port}")
+                            await _sigterm_then_kill(pid, f"stale port {port}")
                     except (ValueError, ProcessLookupError, PermissionError) as e:
                         logger.debug("Could not kill process %s on port %d: %s", pid_str, port, e)
         except Exception as e:
             logger.debug("Error finding processes on port %d using netstat: %s", port, e)
     else:
         try:
-            result = subprocess.run(
+            result = await asyncio.to_thread(
+                subprocess.run,
                 ["lsof", "-ti", f":{port}"],
                 stdin=subprocess.DEVNULL,
                 capture_output=True,
@@ -585,13 +664,14 @@ def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
                     try:
                         pid = int(pid_str.strip())
                         if pid > 0 and pid != os.getpid():
-                            _sigterm_then_kill(pid, f"stale port {port}")
+                            await _sigterm_then_kill(pid, f"stale port {port}")
                     except (ValueError, ProcessLookupError, PermissionError) as e:
                         logger.debug("Could not kill process %s on port %d: %s", pid_str, port, e)
         except FileNotFoundError:
             # lsof not available, try fuser.
             try:
-                subprocess.run(
+                await asyncio.to_thread(
+                    subprocess.run,
                     ["fuser", "-k", f"{port}/tcp"],
                     stdin=subprocess.DEVNULL,
                     capture_output=True,
@@ -621,7 +701,7 @@ def _cleanup_process() -> None:  # pragma: no cover
         if _is_owner:
             try:
                 logger.debug("Stopping owned SearXNG subprocess...")
-                _force_kill_process(_searxng_process)
+                _force_kill_process_sync(_searxng_process)
                 logger.debug("SearXNG subprocess stopped")
             except Exception as e:
                 logger.debug("Error stopping SearXNG: %s", e)
@@ -662,7 +742,7 @@ async def _start_searxng_subprocess(start_port: int) -> str | None:  # pragma: n
 
     # Kill any existing process first.
     if _searxng_process is not None:
-        _force_kill_process(_searxng_process)
+        await _force_kill_process(_searxng_process)
         _searxng_process = None
         _searxng_port = None
 
@@ -673,7 +753,7 @@ async def _start_searxng_subprocess(start_port: int) -> str | None:  # pragma: n
             logger.info("Port %d in use, using %d", start_port, port)
 
         # Kill any stale process on the target port.
-        await asyncio.to_thread(_kill_stale_port_process, port)
+        await _kill_stale_port_process(port)
         await asyncio.sleep(0.5)
 
         _searxng_port = port
@@ -744,7 +824,7 @@ async def _start_searxng_subprocess(start_port: int) -> str | None:  # pragma: n
                 "SearXNG process (PID=%d) alive but not serving, killing stuck process",
                 _searxng_process.pid,
             )
-            _force_kill_process(_searxng_process)
+            await _force_kill_process(_searxng_process)
         _searxng_process = None
         _searxng_port = None
         return None
@@ -752,7 +832,7 @@ async def _start_searxng_subprocess(start_port: int) -> str | None:  # pragma: n
     except Exception as e:
         logger.error("Failed to start SearXNG subprocess: %s", e)
         if _searxng_process is not None:
-            _force_kill_process(_searxng_process)
+            await _force_kill_process(_searxng_process)
             _searxng_process = None
             _searxng_port = None
         return None
@@ -823,7 +903,7 @@ async def _ensure_searxng_locked(*, auto_start: bool, start_port: int) -> str:
             _searxng_process.pid,
             url,
         )
-        _force_kill_process(_searxng_process)
+        await _force_kill_process(_searxng_process)
         _searxng_process = None
         _searxng_port = None
 

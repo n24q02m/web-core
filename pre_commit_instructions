@@ -1,0 +1,6 @@
+# Pre-commit checks
+1. Run linting: uv run ruff check
+2. Run formatting: uv run ruff format
+3. Run tests: uv run --all-extras pytest tests/test_search/test_runner.py
+4. Verify all async functions use asyncio.sleep and not time.sleep
+5. Verify sync functions (like atexit handlers) use time.sleep or appropriate sync calls
