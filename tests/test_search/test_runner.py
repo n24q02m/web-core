@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import socket
 import subprocess
@@ -158,6 +159,22 @@ class TestDiscovery:
         tmp_discovery.write_text(json.dumps({"port": 8080}))  # Missing pid
         assert _read_discovery() is None
 
+    def test_write_discovery_failure(self, tmp_discovery, caplog):
+        """Gracefully handles write errors to the discovery file."""
+        with patch.object(Path, "write_text", side_effect=OSError("Disk full")):
+            # This should not raise
+            with caplog.at_level(logging.DEBUG):
+                _write_discovery(18888, 12345)
+            assert "Failed to write discovery file" in caplog.text
+
+    def test_remove_discovery_failure(self, tmp_discovery):
+        """Gracefully handles errors when removing discovery file."""
+        tmp_discovery.parent.mkdir(parents=True, exist_ok=True)
+        tmp_discovery.write_text("{}")
+        with patch.object(Path, "unlink", side_effect=OSError("Permission denied")):
+            # This should not raise
+            _remove_discovery()
+
     def test_remove_discovery(self, tmp_discovery):
         """Removes the discovery file if it exists."""
         _write_discovery(18888, 12345)
@@ -297,6 +314,20 @@ class TestFindAvailablePort:
         assert isinstance(port, int)
         assert port >= 18888
 
+    def test_find_port_after_retries(self):
+        """Finds a port after some attempts fail with OSError."""
+        with patch("socket.socket") as mock_socket_cls:
+            mock_socket = MagicMock()
+            mock_socket.__enter__ = MagicMock(return_value=mock_socket)
+            mock_socket.__exit__ = MagicMock(return_value=False)
+            # Fail twice, then succeed
+            mock_socket.bind = MagicMock(side_effect=[OSError("In use"), OSError("In use"), None])
+            mock_socket_cls.return_value = mock_socket
+
+            port = _find_available_port(18888, max_tries=5)
+            assert 18888 <= port < 18888 + 5
+            assert mock_socket.bind.call_count == 3
+
 
 # ===========================================================================
 # _wait_for_service
@@ -328,6 +359,25 @@ class TestWaitForService:
 
             result = await _wait_for_service("http://127.0.0.1:18888", timeout=0.5)
             assert result is False
+
+    async def test_wait_for_service_non_200(self):
+        """Retries when receiving non-200 status code."""
+        mock_resp_500 = MagicMock()
+        mock_resp_500.status_code = 500
+        mock_resp_200 = MagicMock()
+        mock_resp_200.status_code = 200
+
+        with patch("web_core.search.runner.httpx.AsyncClient") as mock_client_cls, patch("asyncio.sleep") as mock_sleep:
+            mock_client = AsyncMock()
+            # Return 500 then 200
+            mock_client.get = AsyncMock(side_effect=[mock_resp_500, mock_resp_200])
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            result = await _wait_for_service("http://127.0.0.1:18888", timeout=5.0)
+            assert result is True
+            assert mock_client.get.call_count == 2
+            assert mock_sleep.call_count == 1
 
 
 # ===========================================================================
@@ -669,6 +719,17 @@ class TestEnsureSearxng:
         url = await ensure_searxng()
         assert url == "http://external:8080"
 
+    async def test_try_reuse_existing_missing_fields(self, tmp_discovery, monkeypatch):
+        """_try_reuse_existing returns None if discovery data is incomplete."""
+        from web_core.search.runner import _try_reuse_existing
+
+        monkeypatch.delenv("SEARXNG_URL", raising=False)
+
+        # Mock _read_discovery to return data missing pid
+        with patch("web_core.search.runner._read_discovery", return_value={"port": 18888}):
+            result = await _try_reuse_existing()
+            assert result is None
+
     async def test_returns_url_from_discovery(self, tmp_discovery, monkeypatch):
         """Returns URL from discovery file if valid instance is running."""
         monkeypatch.delenv("SEARXNG_URL", raising=False)
@@ -677,6 +738,35 @@ class TestEnsureSearxng:
         with patch("web_core.search.runner._quick_health_check", new_callable=AsyncMock, return_value=True):
             url = await ensure_searxng()
             assert url == "http://127.0.0.1:18888"
+
+    async def test_ensure_searxng_restarts_unhealthy(self, monkeypatch):
+        """Kills and restarts SearXNG if process is alive but unhealthy."""
+        import web_core.search.runner as mod
+
+        monkeypatch.delenv("SEARXNG_URL", raising=False)
+
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = None  # alive
+        mock_proc.pid = 12345
+
+        monkeypatch.setattr(mod, "_searxng_process", mock_proc)
+        monkeypatch.setattr(mod, "_searxng_port", 18888)
+
+        with (
+            patch("web_core.search.runner._quick_health_check", new_callable=AsyncMock, return_value=False),
+            patch("web_core.search.runner._force_kill_process") as mock_kill,
+            patch("web_core.search.runner._try_reuse_existing", new_callable=AsyncMock, return_value=None),
+            patch("web_core.search.runner._is_searxng_installed", return_value=True),
+            patch(
+                "web_core.search.runner._start_searxng_subprocess",
+                new_callable=AsyncMock,
+                return_value="http://127.0.0.1:18889",
+            ),
+        ):
+            url = await ensure_searxng()
+            assert url == "http://127.0.0.1:18889"
+            mock_kill.assert_called_once_with(mock_proc)
+            assert mod._searxng_process is not mock_proc
 
     async def test_auto_start_disabled_raises(self, tmp_discovery, monkeypatch):
         """Raises RuntimeError when no instance found and auto_start=False."""
