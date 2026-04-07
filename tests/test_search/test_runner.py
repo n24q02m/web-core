@@ -170,6 +170,22 @@ class TestDiscovery:
         _remove_discovery()  # Should not raise
 
 
+
+    def test_write_discovery_error(self, tmp_discovery, caplog):
+        """Gracefully handles exceptions during write and logs debug message."""
+        with patch.object(Path, "write_text", side_effect=OSError("Disk full")):
+            import logging
+            with caplog.at_level(logging.DEBUG):
+                _write_discovery(18888, 12345)
+                assert "Failed to write discovery file" in caplog.text
+
+    def test_remove_discovery_error(self, tmp_discovery):
+        """Gracefully handles exceptions during removal (e.g. permission error)."""
+        with (
+            patch.object(Path, "exists", return_value=True),
+            patch.object(Path, "unlink", side_effect=OSError("Permission denied")),
+        ):
+            _remove_discovery()  # Should not raise
 # ===========================================================================
 # _quick_health_check
 # ===========================================================================
