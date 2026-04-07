@@ -290,12 +290,26 @@ class TestFindAvailablePort:
         # Bind a port to make it unavailable, then check the function works
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind(("127.0.0.1", 0))
-            _ = s.getsockname()[1]
+            used_port = s.getsockname()[1]
 
-        # The function should still find a port (just not the used one)
-        port = _find_available_port(18888, max_tries=50)
-        assert isinstance(port, int)
-        assert port >= 18888
+            # The function should still find a port
+            # If start_port happens to be the used_port, it should skip it.
+            port = _find_available_port(used_port, max_tries=50)
+            assert isinstance(port, int)
+            assert port != used_port
+
+    def test_find_available_port_retries_on_conflict(self):
+        """Retries next port if bind fails with OSError."""
+        with patch("socket.socket") as mock_socket_cls:
+            mock_socket = MagicMock()
+            mock_socket.__enter__.return_value = mock_socket
+            # First call fails, second succeeds
+            mock_socket.bind.side_effect = [OSError("Address in use"), None]
+            mock_socket_cls.return_value = mock_socket
+
+            port = _find_available_port(18888, max_tries=5)
+            assert port >= 18888
+            assert mock_socket.bind.call_count == 2
 
 
 # ===========================================================================
