@@ -129,7 +129,7 @@ def _get_startup_lock() -> asyncio.Lock:
 # ---------------------------------------------------------------------------
 
 
-def _is_pid_alive(pid: int) -> bool:  # pragma: no cover
+def _is_pid_alive(pid: int) -> bool:
     """Check if a process with the given PID is alive (not zombie).
 
     On Windows, uses ctypes ``OpenProcess`` since ``os.kill(pid, 0)`` does
@@ -464,7 +464,7 @@ def _get_settings_path(port: int) -> Path:
 # ---------------------------------------------------------------------------
 
 
-def _sigterm_then_kill(pid: int, label: str = "") -> bool:  # pragma: no cover
+def _sigterm_then_kill(pid: int, label: str = "") -> bool:
     """Send SIGTERM to a PID, wait briefly, then SIGKILL if needed.
 
     Returns ``True`` if the process was successfully terminated.
@@ -495,7 +495,7 @@ def _sigterm_then_kill(pid: int, label: str = "") -> bool:  # pragma: no cover
         return True
 
 
-def _force_kill_process(proc: subprocess.Popen) -> None:  # pragma: no cover
+def _force_kill_process(proc: subprocess.Popen) -> None:
     """Force-kill a subprocess and all its children.
 
     Tries graceful SIGTERM first, then SIGKILL after a short timeout.
@@ -541,7 +541,7 @@ def _force_kill_process(proc: subprocess.Popen) -> None:  # pragma: no cover
         logger.debug("Error killing SearXNG process: %s", e)
 
 
-def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
+def _kill_stale_port_process(port: int) -> None:
     """Kill any process still holding the target port.
 
     This prevents 'address already in use' errors when restarting

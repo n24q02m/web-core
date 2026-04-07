@@ -23,6 +23,7 @@ from web_core.search.runner import (
     _SETTINGS_TEMPLATE,
     _cleanup_process,
     _find_available_port,
+    _force_kill_process,
     _get_pip_command,
     _get_process_kwargs,
     _get_settings_path,
@@ -35,6 +36,7 @@ from web_core.search.runner import (
     _quick_health_check,
     _read_discovery,
     _remove_discovery,
+    _sigterm_then_kill,
     _try_reuse_existing,
     _wait_for_service,
     _write_discovery,
@@ -863,3 +865,158 @@ class TestModuleExports:
 
         assert "ensure_searxng" in all_exports
         assert "shutdown_searxng" in all_exports
+
+
+# ===========================================================================
+# _sigterm_then_kill
+# ===========================================================================
+
+
+class TestSigtermThenKill:
+    def test_already_dead(self):
+        """Returns True if process is already dead (ProcessLookupError)."""
+        with patch("os.kill", side_effect=ProcessLookupError):
+            assert _sigterm_then_kill(12345) is True
+
+    def test_permission_error_on_sigterm(self):
+        """Returns True if SIGTERM fails with PermissionError."""
+        with patch("os.kill", side_effect=PermissionError):
+            assert _sigterm_then_kill(12345) is True
+
+    def test_graceful_exit(self):
+        """Returns True if process terminates gracefully after SIGTERM."""
+        # First call to os.kill(pid, SIGTERM) succeeds (None)
+        # Second call to os.kill(pid, 0) succeeds (None) - alive
+        # Third call to os.kill(pid, 0) raises ProcessLookupError - dead
+        with (
+            patch("os.kill", side_effect=[None, None, ProcessLookupError]),
+            patch("time.sleep"),
+        ):
+            assert _sigterm_then_kill(12345) is True
+
+    def test_permission_error_on_alive_check(self):
+        """Returns True if alive check fails with PermissionError."""
+        with patch("os.kill", side_effect=[None, PermissionError]):
+            assert _sigterm_then_kill(12345) is True
+
+    def test_force_kill(self):
+        """Returns True after SIGKILL if graceful exit fails."""
+        # 1. os.kill(pid, SIGTERM) -> None
+        # 2-31. os.kill(pid, 0) -> None (alive for 30 checks)
+        # 32. os.kill(pid, SIGKILL) -> None
+        side_effects = [None] + ([None] * 30) + [None]
+        with (
+            patch("os.kill", side_effect=side_effects),
+            patch("time.sleep"),
+        ):
+            assert _sigterm_then_kill(12345) is True
+
+    def test_force_kill_already_dead(self):
+        """Returns True if process dies right before SIGKILL."""
+        side_effects = [None] + ([None] * 30) + [ProcessLookupError]
+        with (
+            patch("os.kill", side_effect=side_effects),
+            patch("time.sleep"),
+        ):
+            assert _sigterm_then_kill(12345) is True
+
+
+# ===========================================================================
+# _force_kill_process
+# ===========================================================================
+
+
+class TestForceKillProcess:
+    def test_already_dead(self):
+        """No-op if process is already dead."""
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = 0  # exited
+        with patch("web_core.search.runner._sigterm_then_kill") as mock_kill:
+            _force_kill_process(mock_proc)
+            mock_kill.assert_not_called()
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
+    def test_unix_force_kill_process(self):
+        """Tests the Unix-specific path in _force_kill_process."""
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = None  # alive
+        mock_proc.pid = 12345
+
+        with (
+            patch("sys.platform", "linux"),
+            patch("os.killpg") as mock_killpg,
+            patch("os.getpgid", return_value=123),
+        ):
+            _force_kill_process(mock_proc)
+            # Should call killpg twice: SIGTERM then SIGKILL (since wait times out or we mock it)
+            assert mock_killpg.call_count >= 1
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
+    def test_windows_force_kill_process(self):
+        """Tests the Windows-specific path in _force_kill_process."""
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = None  # alive
+        mock_proc.pid = 12345
+
+        with (
+            patch("sys.platform", "win32"),
+            patch("web_core.search.runner._sigterm_then_kill") as mock_kill,
+        ):
+            _force_kill_process(mock_proc)
+            mock_kill.assert_called_once_with(12345, "SearXNG")
+
+
+# ===========================================================================
+# Coverage Boosters
+# ===========================================================================
+
+
+class TestCoverageBoosters:
+    def test_is_pid_alive_linux_oserror(self):
+        """Test OSError handling in _is_pid_alive on Linux."""
+        with (
+            patch("sys.platform", "linux"),
+            patch("os.kill", return_value=None),
+            patch("pathlib.Path.exists", side_effect=OSError("denied")),
+        ):
+            # Should catch OSError and return True (since os.kill succeeded)
+            assert _is_pid_alive(12345) is True
+
+    def test_remove_discovery_oserror(self, tmp_path, monkeypatch):
+        """Test Exception handling in _remove_discovery."""
+        discovery = tmp_path / "searxng_instance.json"
+        monkeypatch.setattr("web_core.search.runner._DISCOVERY_FILE", discovery)
+
+        discovery.write_text("test")
+        with patch("pathlib.Path.unlink", side_effect=Exception("failed")):
+            _remove_discovery()  # Should not raise
+
+    async def test_wait_for_service_exception(self):
+        """Test Exception handling in _wait_for_service."""
+        with patch("web_core.search.runner.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(side_effect=Exception("unexpected"))
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+
+            # Should catch Exception and eventually return False
+            assert await _wait_for_service("http://127.0.0.1:18888", timeout=0.1) is False
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
+    def test_unix_kill_stale_port_lsof_failure(self):
+        """Test fallback to fuser when lsof fails."""
+        with (
+            patch("subprocess.run", side_effect=[FileNotFoundError, MagicMock()]),
+            patch("web_core.search.runner._sigterm_then_kill") as mock_kill,
+        ):
+            _kill_stale_port_process(18888)
+            mock_kill.assert_not_called()
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
+    def test_unix_kill_stale_port_lsof_exception(self):
+        """Test general exception handling in lsof call."""
+        with (
+            patch("subprocess.run", side_effect=Exception("lsof failed")),
+            patch("web_core.search.runner._sigterm_then_kill") as mock_kill,
+        ):
+            _kill_stale_port_process(18888)
+            mock_kill.assert_not_called()
