@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import signal
 import socket
 import subprocess
 import sys
@@ -35,6 +36,7 @@ from web_core.search.runner import (
     _quick_health_check,
     _read_discovery,
     _remove_discovery,
+    _sigterm_then_kill,
     _try_reuse_existing,
     _wait_for_service,
     _write_discovery,
@@ -560,6 +562,60 @@ class TestKillStalePortProcess:
 # ===========================================================================
 # _cleanup_process / shutdown_searxng
 # ===========================================================================
+
+
+# ===========================================================================
+# _sigterm_then_kill
+# ===========================================================================
+
+
+class TestSigtermThenKill:
+    def test_sigterm_process_lookup_error(self):
+        """Returns True if process is already dead (ProcessLookupError)."""
+        with patch("os.kill", side_effect=ProcessLookupError):
+            assert _sigterm_then_kill(12345, "test") is True
+
+    def test_sigterm_permission_error(self):
+        """Returns True if process is inaccessible (PermissionError)."""
+        with patch("os.kill", side_effect=PermissionError):
+            assert _sigterm_then_kill(12345, "test") is True
+
+    def test_sigterm_graceful_termination(self):
+        """Returns True if process terminates gracefully during wait."""
+        # os.kill(pid, SIGTERM) succeeds
+        # os.kill(pid, 0) raises ProcessLookupError on first check
+        with patch("os.kill") as mock_kill:
+            mock_kill.side_effect = [None, ProcessLookupError]
+            assert _sigterm_then_kill(12345, "test") is True
+            assert mock_kill.call_count == 2
+
+    def test_sigterm_force_kill(self):
+        """Returns True after force-killing if graceful exit fails."""
+        # os.kill(pid, SIGTERM) succeeds
+        # os.kill(pid, 0) always succeeds (30 times)
+        # os.kill(pid, SIGKILL) succeeds
+        with patch("os.kill") as mock_kill, patch("time.sleep"):
+            mock_kill.return_value = None
+            assert _sigterm_then_kill(12345, "test") is True
+            # 1 (SIGTERM) + 30 (SIG0) + 1 (SIGKILL) = 32 calls
+            assert mock_kill.call_count == 32
+            mock_kill.assert_any_call(12345, signal.SIGKILL)
+
+    def test_sigterm_wait_permission_error(self):
+        """Returns True if process becomes inaccessible during wait (PermissionError)."""
+        with patch("os.kill") as mock_kill:
+            # SIGTERM succeeds, SIG0 raises PermissionError
+            mock_kill.side_effect = [None, PermissionError]
+            assert _sigterm_then_kill(12345, "test") is True
+            assert mock_kill.call_count == 2
+
+    def test_sigterm_force_kill_lookup_error(self):
+        """Returns True if process disappears during force-kill."""
+        with patch("os.kill") as mock_kill, patch("time.sleep"):
+            # SIGTERM succeeds, SIG0 always succeeds (30 times), SIGKILL raises ProcessLookupError
+            mock_kill.side_effect = [None] + [None] * 30 + [ProcessLookupError]
+            assert _sigterm_then_kill(12345, "test") is True
+            assert mock_kill.call_count == 32
 
 
 class TestCleanupProcess:
