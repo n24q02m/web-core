@@ -841,7 +841,7 @@ async def _ensure_searxng_locked(*, auto_start: bool, start_port: int) -> str:
     return await _handle_restart_and_start(start_port=start_port)
 
 
-async def _handle_restart_and_start(*, start_port: int) -> str:  # pragma: no cover
+async def _handle_restart_and_start(*, start_port: int) -> str:
     """Detect crashes, manage restart budget, install if needed, and start.
 
     Returns the local SearXNG URL on success.
