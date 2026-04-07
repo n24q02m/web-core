@@ -165,6 +165,19 @@ class TestIsSafeUrl:
 # ---------------------------------------------------------------------------
 
 
+    def test_blocks_unparseable_ip_from_dns(self):
+        """is_safe_url should block if DNS returns an unparseable IP string."""
+        with patch(
+            "web_core.http.client._original_getaddrinfo",
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("not-an-ip", 0))],
+        ):
+            assert is_safe_url("http://bad-dns.example.com") is False
+
+    def test_blocks_invalid_ipv6_url(self):
+        """URLs that cause urlparse to raise ValueError must be blocked."""
+        # urlparse("http://[::1") raises ValueError: Invalid IPv6 URL
+        assert is_safe_url("http://[::1") is False
+
 class TestPinnedGetaddrinfo:
     """Test the DNS pinning cache mechanism."""
 
@@ -279,6 +292,13 @@ class TestCheckIpSafe:
 # _ssrf_event_hook
 # ---------------------------------------------------------------------------
 
+
+    def test_check_ip_safe_unparseable_logs(self, caplog):
+        """Verify that unparseable IPs log a warning."""
+        import logging
+        with caplog.at_level(logging.WARNING):
+            assert _check_ip_safe("not-an-ip", "example.com") is False
+            assert "Unparseable IP 'not-an-ip' for host example.com, blocking" in caplog.text
 
 class TestSsrfEventHook:
     """Test the httpx request event hook for SSRF prevention."""
