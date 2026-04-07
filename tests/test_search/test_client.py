@@ -521,3 +521,30 @@ class TestSearch:
             await search(SEARXNG_URL, "test")
 
         mock_factory.assert_called_once_with(timeout=15.0)
+
+    async def test_dedup_sources_set_exact(self, mock_httpx_client):
+        """Verify that deduplication uses set-based exact membership for engines."""
+        raw_results = [
+            _raw_result("https://example.com/p", "T", "S", "google"),
+            _raw_result("https://example.com/p", "T", "S", "google_news"),
+        ]
+        mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response(raw_results))
+
+        with patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client):
+            results = await search(SEARXNG_URL, "test")
+
+        assert results[0].source == "google, google_news"
+
+    async def test_unexpected_exception_retries_and_fails(self, mock_httpx_client):
+        """Verify the generic Exception block and exhaustion."""
+        mock_httpx_client.get = AsyncMock(side_effect=Exception("catastrophic"))
+
+        with (
+            patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client),
+            patch("web_core.search.client.asyncio.sleep", new_callable=AsyncMock),
+            pytest.raises(SearchError) as exc_info
+        ):
+            await search(SEARXNG_URL, "test", max_retries=2)
+
+        assert "catastrophic" in exc_info.value.reason
+        assert mock_httpx_client.get.call_count == 2
