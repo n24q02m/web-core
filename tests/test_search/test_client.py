@@ -521,3 +521,53 @@ class TestSearch:
             await search(SEARXNG_URL, "test")
 
         mock_factory.assert_called_once_with(timeout=15.0)
+
+
+from unittest.mock import AsyncMock, patch
+import pytest
+from web_core.search.client import search, _prepare_search_params, _process_search_response
+from web_core.search.models import SearchResult
+
+
+@pytest.mark.asyncio
+async def test_prepare_search_params():
+    params = _prepare_search_params(
+        query="test query",
+        categories="news",
+        time_range="week",
+        language="en",
+        include_domains=["example.com"],
+        exclude_domains=["spam.com"],
+    )
+    assert params["q"] == "(site:example.com) test query -site:spam.com"
+    assert params["categories"] == "news"
+    assert params["time_range"] == "week"
+    assert params["language"] == "en"
+    assert params["format"] == "json"
+
+
+@pytest.mark.asyncio
+async def test_process_search_response_dedup_sources():
+    data = {
+        "results": [
+            {"url": "http://a.com", "title": "A", "content": "short", "engine": "google"},
+            {"url": "http://a.com/", "title": "A", "content": "longer content", "engine": "bing"},
+        ]
+    }
+    results = _process_search_response(data, max_results=10)
+    assert len(results) == 1
+    assert results[0].url == "http://a.com"
+    assert results[0].snippet == "longer content"
+    assert "google" in results[0].source
+    assert "bing" in results[0].source
+    assert "," in results[0].source
+
+
+@pytest.mark.asyncio
+async def test_process_search_response_domain_cap():
+    data = {
+        "results": [{"url": f"http://a.com/{i}", "title": str(i), "content": str(i), "engine": "e"} for i in range(5)]
+    }
+    # _MAX_PER_DOMAIN is 3
+    results = _process_search_response(data, max_results=10)
+    assert len(results) == 3
