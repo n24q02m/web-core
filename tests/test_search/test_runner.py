@@ -158,6 +158,19 @@ class TestDiscovery:
         tmp_discovery.write_text(json.dumps({"port": 8080}))  # Missing pid
         assert _read_discovery() is None
 
+    def test_read_discovery_read_error(self, tmp_discovery):
+        """Returns None on read error."""
+        tmp_discovery.parent.mkdir(parents=True, exist_ok=True)
+        tmp_discovery.write_text("{}")
+        with patch.object(Path, "read_text", side_effect=OSError("Read error")):
+            assert _read_discovery() is None
+
+    def test_read_discovery_not_dict(self, tmp_discovery):
+        """Returns None when JSON is not a dict."""
+        tmp_discovery.parent.mkdir(parents=True, exist_ok=True)
+        tmp_discovery.write_text("[1, 2, 3]")
+        assert _read_discovery() is None
+
     def test_remove_discovery(self, tmp_discovery):
         """Removes the discovery file if it exists."""
         _write_discovery(18888, 12345)

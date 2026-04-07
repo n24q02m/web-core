@@ -180,11 +180,10 @@ def _read_discovery() -> dict | None:
     Returns dict with ``{pid, port, owner_pid, started_at}`` or ``None``.
     """
     try:
-        if _DISCOVERY_FILE.exists():
-            data = _json.loads(_DISCOVERY_FILE.read_text())
-            if isinstance(data, dict) and "port" in data and "pid" in data:
-                return data
-    except Exception:
+        data = _json.loads(_DISCOVERY_FILE.read_text())
+        if isinstance(data, dict) and "port" in data and "pid" in data:
+            return data
+    except (FileNotFoundError, OSError, _json.JSONDecodeError):
         pass
     return None
 
