@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any
 from urllib.parse import urlparse
 
 import httpx
@@ -30,7 +31,7 @@ _MAX_PER_DOMAIN = 3
 # ---------------------------------------------------------------------------
 
 
-def _apply_domain_cap(items: list[dict[str, str]]) -> list[dict[str, str]]:
+def _apply_domain_cap(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Limit results to at most ``_MAX_PER_DOMAIN`` per domain."""
     domain_counts: dict[str, int] = {}
     result: list[dict[str, str]] = []
@@ -159,20 +160,25 @@ async def search(
                 ]
 
                 # Deduplicate: merge sources, keep longest snippet
-                seen: dict[str, dict[str, str]] = {}
+                seen: dict[str, dict[str, Any]] = {}
                 for item in formatted:
                     norm_url = normalize_url(item["url"])
                     if norm_url in seen:
                         existing = seen[norm_url]
-                        if item["source"] and item["source"] not in existing["source"]:
-                            existing["source"] += f", {item['source']}"
+                        if item["source"]:
+                            existing["sources"].add(item["source"])
                         if len(item.get("snippet", "")) > len(existing.get("snippet", "")):
                             existing["snippet"] = item["snippet"]
                             existing["title"] = item["title"] or existing["title"]
                     else:
+                        item["sources"] = {item["source"]} if item["source"] else set()
                         seen[norm_url] = item
 
                 # Domain cap + final limit
+                # Convert source sets back to strings
+                for item in seen.values():
+                    item["source"] = ", ".join(sorted(item.pop("sources", [])))
+
                 capped = _apply_domain_cap(list(seen.values()))[:max_results]
 
                 return [
