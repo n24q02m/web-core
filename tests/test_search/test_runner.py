@@ -125,6 +125,13 @@ class TestIsPidAlive:
         """An absurdly large PID should not be alive."""
         assert _is_pid_alive(999999999) is False
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only os.kill check")
+    @pytest.mark.parametrize("exception", [OSError, ProcessLookupError, PermissionError])
+    def test_os_kill_error_handling(self, exception):
+        """_is_pid_alive should return False if os.kill raises an expected exception."""
+        with patch("os.kill", side_effect=exception):
+            assert _is_pid_alive(12345) is False
+
 
 # ===========================================================================
 # Discovery file management
