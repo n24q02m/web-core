@@ -169,6 +169,18 @@ class TestDiscovery:
         """Does not raise when file doesn't exist."""
         _remove_discovery()  # Should not raise
 
+    def test_write_discovery_error(self, tmp_discovery, caplog):
+        """Logs debug message when writing discovery file fails."""
+        import logging
+
+        caplog.set_level(logging.DEBUG)
+
+        # Patch Path.mkdir in the runner module
+        with patch("web_core.search.runner.Path.mkdir", side_effect=OSError("Disk full")):
+            _write_discovery(18888, 12345)
+
+        assert "Failed to write discovery file: Disk full" in caplog.text
+
 
 # ===========================================================================
 # _quick_health_check
