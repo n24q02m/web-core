@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import atexit
+import contextlib
 import json as _json
 import logging
 import os
@@ -30,6 +31,7 @@ import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -108,6 +110,7 @@ engines:
 # Module-level process reference for cleanup.
 _searxng_process: subprocess.Popen | None = None
 _searxng_port: int | None = None
+_searxng_settings_path: Path | None = None
 _restart_count: int = 0
 _last_restart_time: float = 0.0
 
@@ -190,19 +193,30 @@ def _read_discovery() -> dict | None:
 
 
 def _write_discovery(port: int, pid: int) -> None:
-    """Write SearXNG discovery file for other instances to find."""
+    """Write SearXNG discovery file for other instances to find with secure permissions."""
     try:
         _DISCOVERY_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _DISCOVERY_FILE.write_text(
-            _json.dumps(
-                {
-                    "pid": pid,
-                    "port": port,
-                    "owner_pid": os.getpid(),
-                    "started_at": time.time(),
-                }
-            )
+        _DISCOVERY_FILE.parent.chmod(0o700)
+
+        data = _json.dumps(
+            {
+                "pid": pid,
+                "port": port,
+                "owner_pid": os.getpid(),
+                "started_at": time.time(),
+            }
         )
+
+        # Use os.open with 0o600 permissions to avoid race conditions and insecure defaults.
+        fd = os.open(_DISCOVERY_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(data)
+        except Exception:
+            with contextlib.suppress(OSError):
+                os.close(fd)
+            raise
+
     except Exception as e:
         logger.debug("Failed to write discovery file: %s", e)
 
@@ -435,14 +449,19 @@ def _install_searxng() -> bool:  # pragma: no cover
 def _get_settings_path(port: int) -> Path:
     """Get path to SearXNG settings file.
 
-    Uses per-process file to avoid write conflicts when multiple
-    server instances run simultaneously.  Generates settings inline
-    from the bundled template.
+    Uses a uniquely named temporary file to avoid write conflicts when
+    multiple server instances run simultaneously. Generates settings
+    inline from the bundled template.
     """
-    _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    global _searxng_settings_path
 
-    # Per-process settings file (avoids race condition between instances).
-    settings_file = _CONFIG_DIR / f"searxng_settings_{os.getpid()}.yml"
+    # Ensure config directory exists with secure permissions (0o700).
+    _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    _CONFIG_DIR.chmod(0o700)
+
+    # Create a uniquely named settings file with secure permissions (0o600).
+    fd, temp_path = tempfile.mkstemp(dir=str(_CONFIG_DIR), prefix="searxng_settings_", suffix=".yml", text=True)
+    settings_file = Path(temp_path)
 
     secret = secrets.token_hex(32)
     enable_http2 = "false" if sys.platform == "win32" else "true"
@@ -453,7 +472,15 @@ def _get_settings_path(port: int) -> Path:
         enable_http2=enable_http2,
     )
 
-    settings_file.write_text(content)
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(content)
+    except Exception:
+        with contextlib.suppress(OSError):
+            os.close(fd)
+        raise
+
+    _searxng_settings_path = settings_file
     logger.debug("SearXNG settings written to: %s", settings_file)
 
     return settings_file
@@ -616,7 +643,7 @@ def _cleanup_process() -> None:  # pragma: no cover
     Only kills SearXNG if this instance owns it (started it).
     Non-owner instances just clear their local references.
     """
-    global _searxng_process, _searxng_port, _is_owner
+    global _searxng_process, _searxng_port, _is_owner, _searxng_settings_path
     if _searxng_process is not None:
         if _is_owner:
             try:
@@ -633,12 +660,10 @@ def _cleanup_process() -> None:  # pragma: no cover
         _is_owner = False
 
     # Cleanup per-process settings file.
-    try:
-        pid_settings = _CONFIG_DIR / f"searxng_settings_{os.getpid()}.yml"
-        if pid_settings.exists():
-            pid_settings.unlink()
-    except Exception:
-        pass
+    if _searxng_settings_path and _searxng_settings_path.exists():
+        with contextlib.suppress(Exception):
+            _searxng_settings_path.unlink()
+    _searxng_settings_path = None
 
 
 def _is_process_alive() -> bool:
@@ -660,11 +685,17 @@ async def _start_searxng_subprocess(start_port: int) -> str | None:  # pragma: n
     """
     global _searxng_process, _searxng_port, _is_owner
 
-    # Kill any existing process first.
+    # Kill any existing process and clean up settings first.
     if _searxng_process is not None:
         _force_kill_process(_searxng_process)
         _searxng_process = None
         _searxng_port = None
+
+    global _searxng_settings_path
+    if _searxng_settings_path and _searxng_settings_path.exists():
+        with contextlib.suppress(Exception):
+            _searxng_settings_path.unlink()
+    _searxng_settings_path = None
 
     try:
         # Find available port.
