@@ -32,6 +32,8 @@ from web_core.search.runner import (
     _is_process_alive,
     _is_searxng_installed,
     _kill_stale_port_process,
+    _kill_stale_port_process_unix,
+    _kill_stale_port_process_win32,
     _quick_health_check,
     _read_discovery,
     _remove_discovery,
@@ -540,6 +542,51 @@ class TestKillStalePortProcess:
             patch("web_core.search.runner._sigterm_then_kill") as mock_kill,
         ):
             _kill_stale_port_process(18888)
+            mock_kill.assert_called_once_with(99999, "stale port 18888")
+
+    def test_kill_stale_port_process_win32_calls_helper(self):
+        """_kill_stale_port_process calls win32 helper on Windows."""
+        with (
+            patch("sys.platform", "win32"),
+            patch("web_core.search.runner._kill_stale_port_process_win32") as mock_win32,
+            patch("web_core.search.runner._kill_stale_port_process_unix") as mock_unix,
+        ):
+            _kill_stale_port_process(18888)
+            mock_win32.assert_called_once_with(18888)
+            mock_unix.assert_not_called()
+
+    def test_kill_stale_port_process_unix_calls_helper(self):
+        """_kill_stale_port_process calls unix helper on Unix."""
+        with (
+            patch("sys.platform", "linux"),
+            patch("web_core.search.runner._kill_stale_port_process_win32") as mock_win32,
+            patch("web_core.search.runner._kill_stale_port_process_unix") as mock_unix,
+        ):
+            _kill_stale_port_process(18888)
+            mock_unix.assert_called_once_with(18888)
+            mock_win32.assert_not_called()
+
+    def test_win32_helper_direct(self):
+        """Directly test _kill_stale_port_process_win32 logic."""
+        mock_result = MagicMock()
+        mock_result.stdout = "  TCP    127.0.0.1:18888    0.0.0.0:0    LISTENING    99999\n"
+        with (
+            patch("subprocess.run", return_value=mock_result),
+            patch("web_core.search.runner._sigterm_then_kill") as mock_kill,
+        ):
+            _kill_stale_port_process_win32(18888)
+            mock_kill.assert_called_once_with(99999, "stale port 18888")
+
+    def test_unix_helper_direct(self):
+        """Directly test _kill_stale_port_process_unix logic."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "99999\n"
+        with (
+            patch("subprocess.run", return_value=mock_result),
+            patch("web_core.search.runner._sigterm_then_kill") as mock_kill,
+        ):
+            _kill_stale_port_process_unix(18888)
             mock_kill.assert_called_once_with(99999, "stale port 18888")
 
     @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")

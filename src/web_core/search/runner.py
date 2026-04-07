@@ -541,7 +541,64 @@ def _force_kill_process(proc: subprocess.Popen) -> None:  # pragma: no cover
         logger.debug("Error killing SearXNG process: %s", e)
 
 
-def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
+def _kill_stale_port_process_win32(port: int) -> None:
+    """Kill processes on a specific port on Windows using netstat."""
+    try:
+        result = subprocess.run(
+            ["netstat", "-ano"],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        for line in result.stdout.splitlines():
+            if f"127.0.0.1:{port}" in line and "LISTENING" in line:
+                parts = line.split()
+                pid_str = parts[-1]
+                try:
+                    pid = int(pid_str)
+                    if pid > 0:
+                        _sigterm_then_kill(pid, f"stale port {port}")
+                except (ValueError, ProcessLookupError, PermissionError) as e:
+                    logger.debug("Could not kill process %s on port %d: %s", pid_str, port, e)
+    except Exception as e:
+        logger.debug("Error finding processes on port %d using netstat: %s", port, e)
+
+
+def _kill_stale_port_process_unix(port: int) -> None:
+    """Kill processes on a specific port on Unix using lsof or fuser."""
+    try:
+        result = subprocess.run(
+            ["lsof", "-ti", f":{port}"],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            for pid_str in result.stdout.strip().splitlines():
+                try:
+                    pid = int(pid_str.strip())
+                    if pid > 0 and pid != os.getpid():
+                        _sigterm_then_kill(pid, f"stale port {port}")
+                except (ValueError, ProcessLookupError, PermissionError) as e:
+                    logger.debug("Could not kill process %s on port %d: %s", pid_str, port, e)
+    except FileNotFoundError:
+        # lsof not available, try fuser.
+        try:
+            subprocess.run(
+                ["fuser", "-k", f"{port}/tcp"],
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                timeout=5,
+            )
+        except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+            logger.debug("Could not free port %d using fuser: %s", port, e)
+    except Exception as e:
+        logger.debug("Error finding processes on port %d using lsof: %s", port, e)
+
+
+def _kill_stale_port_process(port: int) -> None:
     """Kill any process still holding the target port.
 
     This prevents 'address already in use' errors when restarting
@@ -551,56 +608,9 @@ def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
         return
 
     if sys.platform == "win32":
-        try:
-            result = subprocess.run(
-                ["netstat", "-ano"],
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            for line in result.stdout.splitlines():
-                if f"127.0.0.1:{port}" in line and "LISTENING" in line:
-                    parts = line.split()
-                    pid_str = parts[-1]
-                    try:
-                        pid = int(pid_str)
-                        if pid > 0:
-                            _sigterm_then_kill(pid, f"stale port {port}")
-                    except (ValueError, ProcessLookupError, PermissionError) as e:
-                        logger.debug("Could not kill process %s on port %d: %s", pid_str, port, e)
-        except Exception as e:
-            logger.debug("Error finding processes on port %d using netstat: %s", port, e)
+        _kill_stale_port_process_win32(port)
     else:
-        try:
-            result = subprocess.run(
-                ["lsof", "-ti", f":{port}"],
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                for pid_str in result.stdout.strip().splitlines():
-                    try:
-                        pid = int(pid_str.strip())
-                        if pid > 0 and pid != os.getpid():
-                            _sigterm_then_kill(pid, f"stale port {port}")
-                    except (ValueError, ProcessLookupError, PermissionError) as e:
-                        logger.debug("Could not kill process %s on port %d: %s", pid_str, port, e)
-        except FileNotFoundError:
-            # lsof not available, try fuser.
-            try:
-                subprocess.run(
-                    ["fuser", "-k", f"{port}/tcp"],
-                    stdin=subprocess.DEVNULL,
-                    capture_output=True,
-                    timeout=5,
-                )
-            except (FileNotFoundError, subprocess.TimeoutExpired) as e:
-                logger.debug("Could not free port %d using fuser: %s", port, e)
-        except Exception as e:
-            logger.debug("Error finding processes on port %d using lsof: %s", port, e)
+        _kill_stale_port_process_unix(port)
 
 
 def _get_process_kwargs() -> dict:  # pragma: no cover
