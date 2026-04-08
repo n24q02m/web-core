@@ -39,3 +39,46 @@ class TestBrowserProvider:
             name = "incomplete"
 
         assert not isinstance(Incomplete(), BrowserProvider)
+
+    async def test_protocol_launch_and_close_callable(self):
+        """Verify that a conforming provider's launch and close can be called."""
+
+        class FakeProvider:
+            name = "test"
+            supports_arm64 = True
+            launched = False
+            closed = False
+
+            async def launch(self, config=None):
+                self.launched = True
+                return {"browser": True}
+
+            async def close(self):
+                self.closed = True
+
+        provider = FakeProvider()
+        result = await provider.launch()
+        assert result == {"browser": True}
+        assert provider.launched is True
+
+        await provider.close()
+        assert provider.closed is True
+
+    async def test_protocol_launch_with_config(self):
+        """Launch with config parameter."""
+
+        class FakeProvider:
+            name = "configurable"
+            supports_arm64 = False
+            _config = None
+
+            async def launch(self, config=None):
+                self._config = config
+                return "browser-instance"
+
+            async def close(self):
+                pass
+
+        provider: BrowserProvider = FakeProvider()
+        result = await provider.launch(config={"headless": True})
+        assert result == "browser-instance"
