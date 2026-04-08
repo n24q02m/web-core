@@ -84,6 +84,9 @@ def get_domain_selectors(url: str) -> dict[str, str] | None:
 
     Also injects domain-specific cookies into selectors["cookies"]
     if the domain requires them (e.g., Syosetu R18 age verification).
+
+    Logs domain usage for analytics — enabling the Tiered Scraping
+    feedback loop (track unknown domains → hardcode popular ones).
     """
     from urllib.parse import urlparse
 
@@ -95,6 +98,10 @@ def get_domain_selectors(url: str) -> dict[str, str] | None:
     # Exact match
     if domain in DOMAIN_CONFIGS:
         selectors = DOMAIN_CONFIGS[domain].copy()
+        logger.info(
+            "domain_selector_hit",
+            extra={"domain": domain, "tier": "hardcoded", "url": url},
+        )
     else:
         # Wildcard match (e.g. newtoki*.com)
         for pattern, config in DOMAIN_CONFIGS.items():
@@ -102,7 +109,23 @@ def get_domain_selectors(url: str) -> dict[str, str] | None:
                 regex = pattern.replace(".", r"\.").replace("*", ".*")
                 if re.match(regex, domain):
                     selectors = config.copy()
+                    logger.info(
+                        "domain_selector_hit",
+                        extra={
+                            "domain": domain,
+                            "tier": "hardcoded_wildcard",
+                            "pattern": pattern,
+                            "url": url,
+                        },
+                    )
                     break
+
+    # Log unknown domain — candidate for future hardcoding
+    if selectors is None:
+        logger.info(
+            "domain_selector_miss",
+            extra={"domain": domain, "tier": "unknown", "url": url},
+        )
 
     # Inject domain-specific cookies
     if selectors is not None:
@@ -154,7 +177,20 @@ async def infer_selectors_with_llm(
             for key in ("content", "title", "next_chapter"):
                 if key in result and isinstance(result[key], str):
                     selectors[key] = result[key]
-            logger.info(f"LLM inferred selectors for {url}: {selectors}")
+
+            from urllib.parse import urlparse
+
+            domain = urlparse(url).netloc.lower()
+            logger.info(
+                "domain_selector_inferred",
+                extra={
+                    "domain": domain,
+                    "tier": "llm_inferred",
+                    "url": url,
+                    "selectors": selectors,
+                    "model": model,
+                },
+            )
             return selectors
 
     except ImportError:
