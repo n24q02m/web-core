@@ -4,14 +4,12 @@ Shared web infrastructure package for search, scraping, HTTP security, and steal
 
 ## Installation
 
-This is a **private** package installed via `git+ssh` (not published to PyPI):
-
 ```bash
-# Pin to a specific version tag
-uv add git+ssh://git@github.com/n24q02m/web-core.git@v0.1.0
+# From PyPI
+uv add n24q02m-web-core
 
-# Or latest main
-uv add git+ssh://git@github.com/n24q02m/web-core.git
+# Or pin to a specific version
+uv add "n24q02m-web-core>=1.0.0"
 ```
 
 ## Quick Usage
