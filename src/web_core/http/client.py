@@ -48,11 +48,10 @@ def _pinned_getaddrinfo(host: str, port: int | str | None, *args: Any, **kwargs:
         if entry is not None:
             cached_results, cached_at = entry
             if time.monotonic() - cached_at < _DNS_CACHE_TTL:
-                pinned = []
-                for family, stype, proto, canonname, sockaddr in cached_results:
-                    pinned_addr = (sockaddr[0], port, *sockaddr[2:])
-                    pinned.append((family, stype, proto, canonname, pinned_addr))
-                return pinned
+                return [
+                    (family, stype, proto, canonname, (sockaddr[0], port, *sockaddr[2:]))
+                    for family, stype, proto, canonname, sockaddr in cached_results
+                ]
             del _dns_cache[host]
 
     return _original_getaddrinfo(host, port, *args, **kwargs)
