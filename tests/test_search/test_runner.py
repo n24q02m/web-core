@@ -759,19 +759,20 @@ class TestEnsureSearxng:
             url = await ensure_searxng()
             assert url == "http://127.0.0.1:18888"
 
-    async def test_install_failure_raises(self, tmp_discovery, monkeypatch):
+    @patch("web_core.search.runner._try_reuse_existing", new_callable=AsyncMock, return_value=None)
+    @patch("web_core.search.runner._is_searxng_installed", return_value=False)
+    @patch("web_core.search.runner._install_searxng", return_value=False)
+    async def test_install_failure_raises(
+        self, mock_install, mock_is_installed, mock_reuse, tmp_discovery, monkeypatch
+    ):
         """Raises RuntimeError when SearXNG installation fails."""
         monkeypatch.delenv("SEARXNG_URL", raising=False)
 
-        with (
-            patch("web_core.search.runner._try_reuse_existing", new_callable=AsyncMock, return_value=None),
-            patch("web_core.search.runner._is_searxng_installed", return_value=False),
-            patch("web_core.search.runner._install_searxng", return_value=False),
-            pytest.raises(RuntimeError, match="installation failed"),
-        ):
+        with pytest.raises(RuntimeError, match="installation failed"):
             await ensure_searxng()
 
-    async def test_restart_limit_reached(self, tmp_discovery, monkeypatch):
+    @patch("web_core.search.runner._try_reuse_existing", new_callable=AsyncMock, return_value=None)
+    async def test_restart_limit_reached(self, mock_reuse, tmp_discovery, monkeypatch):
         """Raises RuntimeError when restart limit is reached."""
         import web_core.search.runner as mod
 
@@ -780,23 +781,20 @@ class TestEnsureSearxng:
         mod._restart_count = 3
         mod._last_restart_time = time.time()  # Recent, so counter won't reset
 
-        with (
-            patch("web_core.search.runner._try_reuse_existing", new_callable=AsyncMock, return_value=None),
-            pytest.raises(RuntimeError, match="restart limit reached"),
-        ):
+        with pytest.raises(RuntimeError, match="restart limit reached"):
             await ensure_searxng()
 
-    async def test_start_failure_raises(self, tmp_discovery, monkeypatch):
+    @patch("web_core.search.runner._try_reuse_existing", new_callable=AsyncMock, return_value=None)
+    @patch("web_core.search.runner._is_searxng_installed", return_value=True)
+    @patch("web_core.search.runner._start_searxng_subprocess", new_callable=AsyncMock, return_value=None)
+    @patch("web_core.search.runner._find_available_port", return_value=18888)
+    async def test_start_failure_raises(
+        self, mock_find_port, mock_start, mock_is_installed, mock_reuse, tmp_discovery, monkeypatch
+    ):
         """Raises RuntimeError when subprocess start fails."""
         monkeypatch.delenv("SEARXNG_URL", raising=False)
 
-        with (
-            patch("web_core.search.runner._try_reuse_existing", new_callable=AsyncMock, return_value=None),
-            patch("web_core.search.runner._is_searxng_installed", return_value=True),
-            patch("web_core.search.runner._start_searxng_subprocess", new_callable=AsyncMock, return_value=None),
-            patch("web_core.search.runner._find_available_port", return_value=18888),
-            pytest.raises(RuntimeError, match="start failed"),
-        ):
+        with pytest.raises(RuntimeError, match="start failed"):
             await ensure_searxng()
 
 
