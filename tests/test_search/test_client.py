@@ -199,7 +199,7 @@ class TestSearch:
         ]
         mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response(raw_results))
 
-        with patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client):
+        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
             results = await search(SEARXNG_URL, "test query")
 
         assert len(results) == 2
@@ -217,7 +217,7 @@ class TestSearch:
         ]
         mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response(raw_results))
 
-        with patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client):
+        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
             results = await search(SEARXNG_URL, "test")
 
         assert len(results) == 1
@@ -235,7 +235,7 @@ class TestSearch:
         ]
         mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response(raw_results))
 
-        with patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client):
+        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
             results = await search(SEARXNG_URL, "test")
 
         assert results[0].snippet == "A very long snippet with details"
@@ -248,7 +248,7 @@ class TestSearch:
         ]
         mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response(raw_results))
 
-        with patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client):
+        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
             results = await search(SEARXNG_URL, "test")
 
         assert results[0].source == "google"
@@ -259,7 +259,7 @@ class TestSearch:
         raw_results = [_raw_result(f"https://example.com/page{i}", f"Title {i}", f"Snippet {i}") for i in range(10)]
         mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response(raw_results))
 
-        with patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client):
+        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
             results = await search(SEARXNG_URL, "test")
 
         assert len(results) == _MAX_PER_DOMAIN
@@ -269,7 +269,7 @@ class TestSearch:
         raw_results = [_raw_result(f"https://d{i}.com/page", f"Title {i}", f"Snippet {i}") for i in range(20)]
         mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response(raw_results))
 
-        with patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client):
+        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
             results = await search(SEARXNG_URL, "test", max_results=5)
 
         assert len(results) == 5
@@ -278,7 +278,7 @@ class TestSearch:
         """Empty SearXNG response should return empty list."""
         mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response([]))
 
-        with patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client):
+        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
             results = await search(SEARXNG_URL, "obscure query")
 
         assert results == []
@@ -291,7 +291,7 @@ class TestSearch:
         mock_httpx_client.get = AsyncMock(side_effect=[fail_resp, ok_resp])
 
         with (
-            patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client),
+            patch("httpx.AsyncClient", return_value=mock_httpx_client),
             patch("web_core.search.client.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
         ):
             results = await search(SEARXNG_URL, "test", max_retries=3)
@@ -306,7 +306,7 @@ class TestSearch:
         mock_httpx_client.get = AsyncMock(return_value=fail_resp)
 
         with (
-            patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client),
+            patch("httpx.AsyncClient", return_value=mock_httpx_client),
             pytest.raises(SearchError) as exc_info,
         ):
             await search(SEARXNG_URL, "test", max_retries=3)
@@ -322,7 +322,7 @@ class TestSearch:
         mock_httpx_client.get = AsyncMock(return_value=fail_resp)
 
         with (
-            patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client),
+            patch("httpx.AsyncClient", return_value=mock_httpx_client),
             patch("web_core.search.client.asyncio.sleep", new_callable=AsyncMock),
             pytest.raises(SearchError) as exc_info,
         ):
@@ -341,7 +341,7 @@ class TestSearch:
         mock_httpx_client.get = AsyncMock(side_effect=[conn_error, ok_resp])
 
         with (
-            patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client),
+            patch("httpx.AsyncClient", return_value=mock_httpx_client),
             patch("web_core.search.client.asyncio.sleep", new_callable=AsyncMock),
         ):
             results = await search(SEARXNG_URL, "test", max_retries=3)
@@ -356,7 +356,7 @@ class TestSearch:
         mock_httpx_client.get = AsyncMock(side_effect=[conn_error, conn_error])
 
         with (
-            patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client),
+            patch("httpx.AsyncClient", return_value=mock_httpx_client),
             patch("web_core.search.client.asyncio.sleep", new_callable=AsyncMock),
             pytest.raises(SearchError) as exc_info,
         ):
@@ -369,7 +369,7 @@ class TestSearch:
         ok_resp = _make_searxng_response([])
         mock_httpx_client.get = AsyncMock(return_value=ok_resp)
 
-        with patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client):
+        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
             await search(SEARXNG_URL, "test", time_range="week")
 
         call_kwargs = mock_httpx_client.get.call_args
@@ -380,7 +380,7 @@ class TestSearch:
         ok_resp = _make_searxng_response([])
         mock_httpx_client.get = AsyncMock(return_value=ok_resp)
 
-        with patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client):
+        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
             await search(SEARXNG_URL, "test", time_range="invalid")
 
         call_kwargs = mock_httpx_client.get.call_args
@@ -391,7 +391,7 @@ class TestSearch:
         ok_resp = _make_searxng_response([])
         mock_httpx_client.get = AsyncMock(return_value=ok_resp)
 
-        with patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client):
+        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
             await search(SEARXNG_URL, "test", language="en")
 
         call_kwargs = mock_httpx_client.get.call_args
@@ -402,7 +402,7 @@ class TestSearch:
         ok_resp = _make_searxng_response([])
         mock_httpx_client.get = AsyncMock(return_value=ok_resp)
 
-        with patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client):
+        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
             await search(SEARXNG_URL, "test", categories="news")
 
         call_kwargs = mock_httpx_client.get.call_args
@@ -413,7 +413,7 @@ class TestSearch:
         ok_resp = _make_searxng_response([])
         mock_httpx_client.get = AsyncMock(return_value=ok_resp)
 
-        with patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client):
+        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
             await search(SEARXNG_URL, "test", include_domains=["docs.python.org"])
 
         call_kwargs = mock_httpx_client.get.call_args
@@ -424,7 +424,7 @@ class TestSearch:
         ok_resp = _make_searxng_response([])
         mock_httpx_client.get = AsyncMock(return_value=ok_resp)
 
-        with patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client):
+        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
             await search(SEARXNG_URL, "test", exclude_domains=["spam.com"])
 
         call_kwargs = mock_httpx_client.get.call_args
@@ -436,7 +436,7 @@ class TestSearch:
         mock_httpx_client.get = AsyncMock(return_value=fail_resp)
 
         with (
-            patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client),
+            patch("httpx.AsyncClient", return_value=mock_httpx_client),
             patch("web_core.search.client.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
             pytest.raises(SearchError),
         ):
@@ -452,7 +452,7 @@ class TestSearch:
         ok_resp = _make_searxng_response([])
         mock_httpx_client.get = AsyncMock(return_value=ok_resp)
 
-        with patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client):
+        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
             await search(SEARXNG_URL, "test")
 
         call_kwargs = mock_httpx_client.get.call_args
@@ -465,7 +465,7 @@ class TestSearch:
         ok_resp = _make_searxng_response([])
         mock_httpx_client.get = AsyncMock(return_value=ok_resp)
 
-        with patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client):
+        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
             await search(SEARXNG_URL, "test")
 
         call_args = mock_httpx_client.get.call_args
@@ -477,7 +477,7 @@ class TestSearch:
         mock_httpx_client.get = AsyncMock(side_effect=[ValueError("unexpected"), ok_resp])
 
         with (
-            patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client),
+            patch("httpx.AsyncClient", return_value=mock_httpx_client),
             patch("web_core.search.client.asyncio.sleep", new_callable=AsyncMock),
         ):
             results = await search(SEARXNG_URL, "test", max_retries=3)
@@ -490,7 +490,7 @@ class TestSearch:
         mock_httpx_client.get = AsyncMock(return_value=fail_resp)
 
         with (
-            patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client),
+            patch("httpx.AsyncClient", return_value=mock_httpx_client),
             patch("web_core.search.client.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
             pytest.raises(SearchError),
         ):
@@ -507,7 +507,7 @@ class TestSearch:
         ]
         mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response(raw_results))
 
-        with patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client):
+        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
             results = await search(SEARXNG_URL, "test")
 
         assert len(results) == 1
@@ -517,7 +517,7 @@ class TestSearch:
         ok_resp = _make_searxng_response([])
         mock_httpx_client.get = AsyncMock(return_value=ok_resp)
 
-        with patch("web_core.search.client.safe_httpx_client", return_value=mock_httpx_client) as mock_factory:
+        with patch("httpx.AsyncClient", return_value=mock_httpx_client) as mock_factory:
             await search(SEARXNG_URL, "test")
 
         mock_factory.assert_called_once_with(timeout=15.0)
