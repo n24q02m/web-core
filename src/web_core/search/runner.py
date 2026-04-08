@@ -694,8 +694,11 @@ async def _start_docker_searxng(start_port: int) -> str | None:
 
     try:
         # Avoid docker inside docker issues or daemon socket errors
-        res = await asyncio.to_thread(subprocess.run, [docker_bin, "info"], capture_output=True, check=False)
+        res = await asyncio.to_thread(subprocess.run, [docker_bin, "info"], capture_output=True, check=False, text=True)
         if res.returncode != 0:
+            msg = "Docker is installed but the Daemon is NOT running. Please open Docker Desktop!"
+            logger.warning(msg)
+            print(f"\n[!] {msg}\n", file=sys.stderr)
             return None
 
         port = await asyncio.to_thread(_find_available_port, start_port)
