@@ -457,18 +457,13 @@ def _get_settings_path(port: int) -> Path:
 
     import contextlib
 
-    fd, path_str = tempfile.mkstemp(
-        prefix="searxng_settings_",
-        suffix=".yml",
-        dir=_CONFIG_DIR,
-        text=True
-    )
+    fd, path_str = tempfile.mkstemp(prefix="searxng_settings_", suffix=".yml", dir=_CONFIG_DIR, text=True)
 
     settings_file = Path(path_str)
     _searxng_settings_path = settings_file
 
     try:
-        with os.fdopen(fd, 'w') as f:
+        with os.fdopen(fd, "w") as f:
             f.write(content)
     except Exception:
         with contextlib.suppress(OSError):
