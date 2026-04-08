@@ -761,6 +761,7 @@ class TestEnsureSearxng:
 
         with (
             patch("web_core.search.runner._try_reuse_existing", new_callable=AsyncMock, return_value=None),
+            patch("web_core.search.runner._start_docker_searxng", new_callable=AsyncMock, return_value=None),
             patch("web_core.search.runner._is_searxng_installed", return_value=False),
             patch("web_core.search.runner._install_searxng", return_value=True),
             patch(
