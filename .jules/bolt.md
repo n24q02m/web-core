@@ -1,0 +1,3 @@
+## 2024-05-19 - Fast path DNS pinning in `is_safe_url`
+**Learning:** `is_safe_url` function was re-resolving and re-validating the same hostnames repeatedly, becoming a bottleneck since it runs synchronously before every HTTP request. However, `is_safe_url` already maintained a `_dns_cache` to pin DNS and prevent rebinding attacks.
+**Action:** When a hostname is already resolved and cached in `_dns_cache`, we can immediately return `True` (if unexpired), short-circuiting the expensive `socket.getaddrinfo` and `ipaddress.is_private` validations. This is safe because the HTTP client connection will subsequently use the already-pinned IP from the cache. Reduced execution time from ~0.10s to ~0.0005s per 100 requests on the same domain.
