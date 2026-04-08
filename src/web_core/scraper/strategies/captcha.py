@@ -139,7 +139,7 @@ class CaptchaStrategy(BaseStrategy):
         scripts = await page.query_selector_all("script")
         for s in scripts:
             text = await s.text_content() or ""
-            m = re.search(r"""sitekey['"\s:=]+['"]([A-Za-z0-9]{10,})['"]""", text, re.IGNORECASE)
+            m = re.search(r"""sitekey['"\s:=]+['"]([A-Za-z0-9_-]{10,})['"]""", text, re.IGNORECASE)
             if m:
                 return m.group(1)
 

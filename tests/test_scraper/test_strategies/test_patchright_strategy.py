@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import contextlib
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from web_core.scraper.strategies.patchright_browser import PatchrightStrategy
 
@@ -177,3 +177,118 @@ class TestPatchrightStrategy:
 
         call_kwargs = page.goto.call_args
         assert call_kwargs[1]["wait_until"] == "networkidle"
+
+    async def test_fetch_uses_patchright_provider_when_no_provider(self):
+        """When no provider injected, instantiates PatchrightProvider."""
+        mock_page = AsyncMock()
+        mock_page.content = AsyncMock(return_value=NORMAL_HTML)
+        mock_page.url = "https://example.com"
+        mock_page.close = AsyncMock()
+        mock_page.context = MagicMock()
+        mock_page.context.cookies = AsyncMock(return_value=[])
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_page.goto = AsyncMock(return_value=mock_response)
+
+        mock_browser = AsyncMock()
+        mock_browser.new_page = AsyncMock(return_value=mock_page)
+
+        mock_provider_instance = AsyncMock()
+        mock_provider_instance.launch = AsyncMock(return_value=mock_browser)
+        mock_provider_instance.close = AsyncMock()
+
+        with patch(
+            "web_core.browsers.patchright.PatchrightProvider",
+            return_value=mock_provider_instance,
+        ):
+            strategy = PatchrightStrategy()  # No provider argument
+            result = await strategy.fetch("https://example.com")
+
+        assert result.content == NORMAL_HTML
+        mock_provider_instance.close.assert_awaited_once()
+
+    async def test_cf_verification_cookie_resolves(self):
+        """CF JS challenge resolves when __cf_bm cookie is set (line 66-68)."""
+        provider, page = _make_mock_provider(CF_JS_CHALLENGE_HTML)
+
+        # Content stays challenge but cookie appears
+        cf_cookie_appeared = False
+
+        async def cookies_side_effect():
+            nonlocal cf_cookie_appeared
+            if cf_cookie_appeared:
+                return [{"name": "__cf_bm", "value": "abc123"}]
+            cf_cookie_appeared = True
+            return []
+
+        page.context.cookies = AsyncMock(side_effect=cookies_side_effect)
+        # After cookie, page content returns normal
+        content_calls = 0
+
+        async def content_side_effect():
+            nonlocal content_calls
+            content_calls += 1
+            if content_calls <= 1:
+                return CF_JS_CHALLENGE_HTML  # Initial load
+            return NORMAL_HTML  # After cookie verification
+
+        page.content = AsyncMock(side_effect=content_side_effect)
+
+        strategy = PatchrightStrategy(provider=provider)
+        result = await strategy.fetch("https://cf-protected.com")
+
+        assert result.content == NORMAL_HTML
+
+    async def test_cf_js_challenge_exhausts_polls(self):
+        """CF JS challenge stays unresolved after all poll attempts (line 75)."""
+        provider, page = _make_mock_provider(CF_JS_CHALLENGE_HTML)
+
+        # Content always stays challenge, no cookies
+        page.context.cookies = AsyncMock(return_value=[])
+        page.content = AsyncMock(return_value=CF_JS_CHALLENGE_HTML)
+
+        strategy = PatchrightStrategy(provider=provider)
+        result = await strategy.fetch("https://cf-stuck.com")
+
+        # Should still return something (the challenge HTML)
+        assert "Just a moment" in result.content
+        assert result.metadata["cf_challenge"] == "js_challenge"
+
+    async def test_managed_challenge_unresolved_waits_for_navigation(self):
+        """Managed challenge polls, doesn't resolve, waits for networkidle (lines 125-131)."""
+        provider, page = _make_mock_provider(CF_MANAGED_HTML)
+
+        # Always returns managed HTML -- challenge never resolves during polls
+        page.content = AsyncMock(return_value=CF_MANAGED_HTML)
+        page.wait_for_load_state = AsyncMock()
+
+        strategy = PatchrightStrategy(provider=provider, cf_wait=0.01)
+        # Fetch should not hang
+        await strategy.fetch("https://managed-stuck.com")
+
+        # wait_for_load_state should have been called
+        page.wait_for_load_state.assert_awaited()
+
+    async def test_managed_challenge_wait_for_load_state_exception(self):
+        """Managed challenge handles exception in wait_for_load_state (line 130-131)."""
+        provider, page = _make_mock_provider(CF_MANAGED_HTML)
+
+        page.content = AsyncMock(return_value=CF_MANAGED_HTML)
+        page.wait_for_load_state = AsyncMock(side_effect=TimeoutError("navigation timeout"))
+
+        strategy = PatchrightStrategy(provider=provider, cf_wait=0.01)
+        result = await strategy.fetch("https://managed-timeout.com")
+
+        # Should not raise, just return whatever content is available
+        assert result.strategy == "patchright"
+
+    async def test_goto_returns_none_response(self):
+        """When goto returns None response, status_code defaults to 200 (line 133)."""
+        provider, page = _make_mock_provider(NORMAL_HTML)
+        page.goto = AsyncMock(return_value=None)
+
+        strategy = PatchrightStrategy(provider=provider)
+        result = await strategy.fetch("https://example.com")
+
+        assert result.status_code == 200

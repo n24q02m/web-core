@@ -28,3 +28,6 @@ class ScrapingState(TypedDict, total=False):
     strategies_tried: list[str]
     errors: list[str]
     metadata: dict[str, Any]
+    # LLM selector inference
+    inferred_selectors: dict[str, str]
+    selector_inference_attempted: bool
