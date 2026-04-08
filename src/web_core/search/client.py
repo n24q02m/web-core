@@ -15,7 +15,6 @@ from urllib.parse import urlparse
 
 import httpx
 
-from web_core.http.client import safe_httpx_client
 from web_core.http.url import is_valid_domain, normalize_url
 from web_core.search.models import SearchError, SearchResult
 
@@ -135,7 +134,10 @@ async def search(
 
     last_error: str | None = None
 
-    async with safe_httpx_client(timeout=15.0) as client:
+    # SearXNG is a trusted local service — bypass SSRF protection.
+    # SSRF-safe client blocks localhost/private IPs by design, but SearXNG
+    # runs on localhost. External URL fetching still uses safe_httpx_client.
+    async with httpx.AsyncClient(timeout=15.0) as client:
         for attempt in range(1, max_retries + 1):
             try:
                 response = await client.get(
