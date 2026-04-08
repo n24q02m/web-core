@@ -30,6 +30,7 @@ import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -109,6 +110,7 @@ engines:
 _searxng_process: subprocess.Popen[bytes] | None = None
 _searxng_port: int | None = None
 _searxng_docker_container: str | None = None
+_searxng_settings_path: Path | None = None
 _restart_count: int = 0
 _last_restart_time: float = 0.0
 
@@ -440,10 +442,9 @@ def _get_settings_path(port: int) -> Path:
     server instances run simultaneously.  Generates settings inline
     from the bundled template.
     """
+    global _searxng_settings_path
     _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Per-process settings file (avoids race condition between instances).
-    settings_file = _CONFIG_DIR / f"searxng_settings_{os.getpid()}.yml"
+    _CONFIG_DIR.chmod(0o700)
 
     secret = secrets.token_hex(32)
     enable_http2 = "false" if sys.platform == "win32" else "true"
@@ -454,7 +455,28 @@ def _get_settings_path(port: int) -> Path:
         enable_http2=enable_http2,
     )
 
-    settings_file.write_text(content)
+    import contextlib
+
+    fd, path_str = tempfile.mkstemp(
+        prefix="searxng_settings_",
+        suffix=".yml",
+        dir=_CONFIG_DIR,
+        text=True
+    )
+
+    settings_file = Path(path_str)
+    _searxng_settings_path = settings_file
+
+    try:
+        with os.fdopen(fd, 'w') as f:
+            f.write(content)
+    except Exception:
+        with contextlib.suppress(OSError):
+            os.close(fd)
+        with contextlib.suppress(OSError):
+            settings_file.unlink()
+        raise
+
     logger.debug("SearXNG settings written to: %s", settings_file)
 
     return settings_file
@@ -617,7 +639,7 @@ def _cleanup_process() -> None:  # pragma: no cover
     Only kills SearXNG if this instance owns it (started it).
     Non-owner instances just clear their local references.
     """
-    global _searxng_process, _searxng_port, _is_owner, _searxng_docker_container
+    global _searxng_process, _searxng_port, _is_owner, _searxng_docker_container, _searxng_settings_path
     if _searxng_docker_container is not None:
         if _is_owner:
             docker_bin = shutil.which("docker")
@@ -647,9 +669,8 @@ def _cleanup_process() -> None:  # pragma: no cover
 
     # Cleanup per-process settings file.
     try:
-        pid_settings = _CONFIG_DIR / f"searxng_settings_{os.getpid()}.yml"
-        if pid_settings.exists():
-            pid_settings.unlink()
+        if _searxng_settings_path is not None and _searxng_settings_path.exists():
+            _searxng_settings_path.unlink()
     except Exception:
         pass
 
