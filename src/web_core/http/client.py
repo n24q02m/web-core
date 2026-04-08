@@ -117,6 +117,14 @@ def is_safe_url(url: str) -> bool:
     if hostname.lower() in _BLOCKED_HOSTNAMES:
         return False
 
+    # Fast path: already resolved, validated, and pinned
+    with _dns_cache_lock:
+        entry = _dns_cache.get(hostname)
+        if entry is not None:
+            _, cached_at = entry
+            if time.monotonic() - cached_at < _DNS_CACHE_TTL:
+                return True
+
     try:
         results = _original_getaddrinfo(hostname, None)
         for res in results:
