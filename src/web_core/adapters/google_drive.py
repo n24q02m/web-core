@@ -95,7 +95,7 @@ async def _list_folder_via_gdown(folder_id: str) -> list[DriveFile]:
 
 async def _list_folder_via_html(folder_id: str) -> list[DriveFile]:
     """Parse public Drive folder HTML to extract file metadata."""
-    import httpx
+    from web_core.http.client import safe_httpx_client
 
     url = f"https://drive.google.com/drive/folders/{folder_id}"
     headers = {
@@ -103,7 +103,7 @@ async def _list_folder_via_html(folder_id: str) -> list[DriveFile]:
         "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
-    async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
+    async with safe_httpx_client(follow_redirects=True, timeout=30.0) as client:
         resp = await client.get(url, headers=headers)
         resp.raise_for_status()
 
