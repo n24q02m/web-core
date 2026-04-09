@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import atexit
+import contextlib
 import json as _json
 import logging
 import os
@@ -196,16 +197,27 @@ def _write_discovery(port: int, pid: int) -> None:
     """Write SearXNG discovery file for other instances to find."""
     try:
         _DISCOVERY_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _DISCOVERY_FILE.write_text(
-            _json.dumps(
-                {
-                    "pid": pid,
-                    "port": port,
-                    "owner_pid": os.getpid(),
-                    "started_at": time.time(),
-                }
-            )
-        )
+
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+        mode = 0o600
+
+        fd = os.open(str(_DISCOVERY_FILE), flags, mode)
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(
+                    _json.dumps(
+                        {
+                            "pid": pid,
+                            "port": port,
+                            "owner_pid": os.getpid(),
+                            "started_at": time.time(),
+                        }
+                    )
+                )
+        except Exception:
+            with contextlib.suppress(OSError):
+                os.close(fd)
+            raise
     except Exception as e:
         logger.debug("Failed to write discovery file: %s", e)
 
