@@ -54,6 +54,13 @@ DOMAIN_CONFIGS: dict[str, dict[str, str]] = {
     },
 }
 
+# Pre-compile wildcard patterns for fast lookup
+_WILDCARD_CONFIGS: list[tuple[re.Pattern[str], dict[str, str]]] = [
+    (re.compile(pattern.replace(".", r"\.").replace("*", ".*")), config)
+    for pattern, config in DOMAIN_CONFIGS.items()
+    if "*" in pattern
+]
+
 # Prompt cho LLM infer selectors tu HTML
 _INFER_SELECTORS_PROMPT = """\
 You are a CSS selector expert. Analyze this HTML and extract the best CSS selectors.
@@ -104,21 +111,19 @@ def get_domain_selectors(url: str) -> dict[str, str] | None:
         )
     else:
         # Wildcard match (e.g. newtoki*.com)
-        for pattern, config in DOMAIN_CONFIGS.items():
-            if "*" in pattern:
-                regex = pattern.replace(".", r"\.").replace("*", ".*")
-                if re.match(regex, domain):
-                    selectors = config.copy()
-                    logger.info(
-                        "domain_selector_hit",
-                        extra={
-                            "domain": domain,
-                            "tier": "hardcoded_wildcard",
-                            "pattern": pattern,
-                            "url": url,
-                        },
-                    )
-                    break
+        for pattern_re, config in _WILDCARD_CONFIGS:
+            if pattern_re.match(domain):
+                selectors = config.copy()
+                logger.info(
+                    "domain_selector_hit",
+                    extra={
+                        "domain": domain,
+                        "tier": "hardcoded_wildcard",
+                        "pattern": pattern_re.pattern,
+                        "url": url,
+                    },
+                )
+                break
 
     # Log unknown domain — candidate for future hardcoding
     if selectors is None:
