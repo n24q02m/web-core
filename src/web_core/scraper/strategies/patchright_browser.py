@@ -98,16 +98,34 @@ class PatchrightStrategy(BaseStrategy):
             page = await browser.new_page()
 
             try:
-                response = await page.goto(url, wait_until="networkidle", timeout=self.timeout * 1000)
+                # Use domcontentloaded first so we don't blind wait 60s if there's a CF challenge
+                response = await page.goto(url, wait_until="domcontentloaded", timeout=self.timeout * 1000)
 
                 content = await page.content()
                 cf_challenge_type = detect_cloudflare_challenge(content)
+
+                # Wait networkidle right away if no challenge initially
+                if cf_challenge_type is None:
+                    try:
+                        # Now wait for networkidle safely
+                        await page.wait_for_load_state("networkidle", timeout=self.timeout * 1000)
+                        content = await page.content()
+                    except Exception:
+                        # May timeout if site has active websockets etc, that's fine
+                        pass
+                    cf_challenge_type = detect_cloudflare_challenge(content)
 
                 if cf_challenge_type == "js_challenge":
                     logger.info("CF JS challenge detected for %s, polling for resolution", url)
                     content = await self._wait_for_cf_resolution(page)
                     # Re-check after wait
                     cf_challenge_type = detect_cloudflare_challenge(content)
+                    if cf_challenge_type is None:
+                        try:
+                            await page.wait_for_load_state("networkidle", timeout=15000)
+                            content = await page.content()
+                        except Exception:
+                            pass
                 elif cf_challenge_type == "turnstile":
                     logger.info("CF Turnstile detected for %s, cannot solve here", url)
                     # Return the challenge HTML — CaptchaStrategy will handle
@@ -124,9 +142,16 @@ class PatchrightStrategy(BaseStrategy):
                     # If still challenged after polls, wait for navigation
                     if cf_challenge_type is not None:
                         try:
-                            await page.wait_for_load_state("networkidle", timeout=15000)
+                            await page.wait_for_load_state("domcontentloaded", timeout=15000)
                             content = await page.content()
                             cf_challenge_type = detect_cloudflare_challenge(content)
+                        except Exception:
+                            pass
+
+                    if cf_challenge_type is None:
+                        try:
+                            await page.wait_for_load_state("networkidle", timeout=15000)
+                            content = await page.content()
                         except Exception:
                             pass
 
