@@ -445,9 +445,10 @@ class TestGetSettingsPath:
         assert "{port}" not in content
 
     def test_per_process_filename(self, tmp_config_dir):
-        """Settings file is named with current PID."""
+        """Settings file is securely named with a prefix and correct suffix."""
         path = _get_settings_path(18888)
-        assert f"searxng_settings_{os.getpid()}.yml" in path.name
+        assert path.name.startswith("searxng_settings_")
+        assert path.name.endswith(".yml")
 
     def test_http2_disabled_on_windows(self, tmp_config_dir):
         """HTTP/2 is disabled on Windows to avoid deadlocks."""
@@ -563,8 +564,8 @@ class TestKillStalePortProcess:
 
 
 class TestCleanupProcess:
-    def test_cleanup_as_owner(self, tmp_discovery):
-        """Owner kills process and removes discovery file."""
+    def test_cleanup_as_owner(self, tmp_discovery, tmp_path):
+        """Owner kills process, removes discovery file, and deletes settings path."""
         import web_core.search.runner as mod
 
         mock_proc = MagicMock()
@@ -576,6 +577,11 @@ class TestCleanupProcess:
         mod._searxng_port = 18888
         mod._is_owner = True
 
+        # Mock settings path
+        dummy_settings = tmp_path / "searxng_settings_test.yml"
+        dummy_settings.write_text("test")
+        mod._searxng_settings_path = dummy_settings
+
         _write_discovery(18888, 12345)
         assert tmp_discovery.exists()
 
@@ -585,6 +591,7 @@ class TestCleanupProcess:
         assert mod._searxng_port is None
         assert mod._is_owner is False
         assert not tmp_discovery.exists()
+        assert not dummy_settings.exists()
 
     def test_cleanup_as_non_owner(self, tmp_discovery):
         """Non-owner clears local refs but does not kill or remove discovery."""
@@ -629,9 +636,12 @@ class TestCleanupProcess:
         assert mod._searxng_process is None
 
     def test_cleanup_removes_settings_file(self, tmp_config_dir):
-        """Cleanup removes the per-process settings file."""
-        settings_file = tmp_config_dir / f"searxng_settings_{os.getpid()}.yml"
+        """Cleanup removes the dynamically generated settings file."""
+        import web_core.search.runner as mod
+
+        settings_file = tmp_config_dir / "searxng_settings_test.yml"
         settings_file.write_text("test")
+        mod._searxng_settings_path = settings_file
         assert settings_file.exists()
 
         _cleanup_process()
@@ -732,6 +742,11 @@ class TestEnsureSearxng:
             patch("web_core.search.runner._try_reuse_existing", new_callable=AsyncMock, return_value=None),
             patch("web_core.search.runner._is_searxng_installed", return_value=True),
             patch(
+                "web_core.search.runner._start_docker_searxng",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
                 "web_core.search.runner._start_searxng_subprocess",
                 new_callable=AsyncMock,
                 return_value="http://127.0.0.1:18889",
@@ -746,6 +761,7 @@ class TestEnsureSearxng:
 
         with (
             patch("web_core.search.runner._try_reuse_existing", new_callable=AsyncMock, return_value=None),
+            patch("web_core.search.runner._start_docker_searxng", new_callable=AsyncMock, return_value=None),
             patch("web_core.search.runner._is_searxng_installed", return_value=False),
             patch("web_core.search.runner._install_searxng", return_value=True),
             patch(
@@ -763,6 +779,7 @@ class TestEnsureSearxng:
 
         with (
             patch("web_core.search.runner._try_reuse_existing", new_callable=AsyncMock, return_value=None),
+            patch("web_core.search.runner._start_docker_searxng", new_callable=AsyncMock, return_value=None),
             patch("web_core.search.runner._is_searxng_installed", return_value=False),
             patch("web_core.search.runner._install_searxng", return_value=False),
             pytest.raises(RuntimeError, match="installation failed"),
@@ -790,6 +807,7 @@ class TestEnsureSearxng:
 
         with (
             patch("web_core.search.runner._try_reuse_existing", new_callable=AsyncMock, return_value=None),
+            patch("web_core.search.runner._start_docker_searxng", new_callable=AsyncMock, return_value=None),
             patch("web_core.search.runner._is_searxng_installed", return_value=True),
             patch("web_core.search.runner._start_searxng_subprocess", new_callable=AsyncMock, return_value=None),
             pytest.raises(RuntimeError, match="start failed"),
