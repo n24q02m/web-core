@@ -14,13 +14,24 @@ import re
 
 logger = logging.getLogger(__name__)
 
-# Built-in domain cookies for sites requiring specific cookies
-# (e.g., age verification bypass, session persistence)
-DOMAIN_COOKIES: dict[str, dict[str, str]] = {
-    "novel18.syosetu.com": {
-        "over18": "yes",  # Syosetu R18 age verification bypass
-    },
-}
+
+def _get_domain_cookies(domain: str) -> dict[str, str] | None:
+    """Load domain-specific cookies from WEB_CORE_DOMAIN_COOKIES env var.
+
+    Expects a JSON-encoded dictionary: {"domain": {"cookie_name": "value"}}
+    """
+    raw = os.environ.get("WEB_CORE_DOMAIN_COOKIES")
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            cookies = data.get(domain)
+            return cookies if isinstance(cookies, dict) else None
+    except (json.JSONDecodeError, TypeError):
+        logger.warning("Failed to parse WEB_CORE_DOMAIN_COOKIES environment variable")
+    return None
+
 
 # Built-in domain configs for known sites — saves LLM calls
 DOMAIN_CONFIGS: dict[str, dict[str, str]] = {
@@ -134,7 +145,7 @@ def get_domain_selectors(url: str) -> dict[str, str] | None:
 
     # Inject domain-specific cookies
     if selectors is not None:
-        cookies = DOMAIN_COOKIES.get(domain)
+        cookies = _get_domain_cookies(domain)
         if cookies:
             selectors["cookies"] = cookies  # type: ignore[assignment]
 
