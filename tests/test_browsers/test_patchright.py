@@ -4,11 +4,21 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
+import web_core.browsers.patchright as patchright_mod
 from web_core.browsers.patchright import PatchrightProvider
 from web_core.browsers.protocol import BrowserProvider
 
 
 class TestPatchrightProvider:
+    @pytest.fixture(autouse=True)
+    def reset_cache(self):
+        """Reset the module-level cache for patchright async_api."""
+        patchright_mod._async_playwright = None
+        yield
+        patchright_mod._async_playwright = None
+
     def test_name(self):
         p = PatchrightProvider()
         assert p.name == "patchright"

@@ -5,3 +5,6 @@
 ## 2024-05-20 - Set-based deduplication in search client
 **Learning:** During search result deduplication, overlapping engine names (like 'google' and 'google_news') caused logical bugs and string searches took O(n) time. The `item["source"]` was a comma-separated string, leading to `if item["source"] not in existing["source"]` returning incorrectly for subsets.
 **Action:** Changed deduplication logic to parse `item["source"]` into sets initially (`set()` or `{item["source"]}`), use `.add()` to insert sources to guarantee uniqueness, and then perform `.join(sorted(sources))` only on completion. This prevents substring matching errors, allows correct subset evaluation, and improves algorithmic scaling from O(n) to O(1) for uniqueness checks.
+## 2026-04-10 - Synchronous Import Optimization in Async Functions
+**Learning:** Importing heavy modules (like patchright.async_api, ~230ms) within an async function blocks the event loop, causing latency spikes. Using asyncio.to_thread for the import and caching the result maintains laziness while keeping the event loop responsive.
+**Action:** Identify lazy imports in async functions and wrap them in asyncio.to_thread if the module import time is significant (>50ms).

@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# Cache for patchright async_api function to avoid repeated to_thread overhead
+_async_playwright: Any = None
 
 
 class PatchrightProvider:
@@ -26,9 +30,18 @@ class PatchrightProvider:
 
     async def launch(self, config: dict[str, Any] | None = None) -> Any:
         """Launch Patchright browser."""
-        from patchright.async_api import async_playwright
+        global _async_playwright
 
-        self._playwright = await async_playwright().start()
+        if _async_playwright is None:
+            # Move blocking import to thread to avoid event loop lag
+            def _import_patchright():
+                from patchright.async_api import async_playwright
+
+                return async_playwright
+
+            _async_playwright = await asyncio.to_thread(_import_patchright)
+
+        self._playwright = await _async_playwright().start()
         launch_args: dict[str, Any] = {
             "headless": self._headless,
             "args": ["--disable-blink-features=AutomationControlled"],
