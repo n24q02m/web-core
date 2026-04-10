@@ -16,6 +16,9 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+import gdown
+import httpx
+
 logger = logging.getLogger(__name__)
 
 FOLDER_URL_PATTERN = re.compile(r"drive\.google\.com/drive/(?:u/\d+/)?folders/([A-Za-z0-9_-]+)")
@@ -67,18 +70,13 @@ async def list_folder_files(folder_id: str) -> list[DriveFile]:
 
 async def _list_folder_via_gdown(folder_id: str) -> list[DriveFile]:
     """Use gdown skip_download=True to list folder files without downloading."""
-    try:
-        import gdown as gdown_mod
-    except ImportError as e:
-        raise RuntimeError("gdown not installed.") from e
-
     url = f"https://drive.google.com/drive/folders/{folder_id}"
     loop = asyncio.get_running_loop()
 
     _SUPPORTED_EXTS = {".txt", ".epub", ".pdf", ".md", ".html", ".htm", ".docx"}
 
     def _list_sync() -> list[DriveFile]:
-        items = gdown_mod.download_folder(url, skip_download=True, quiet=True, use_cookies=False)
+        items = gdown.download_folder(url, skip_download=True, quiet=True, use_cookies=False)
         if not items:
             return []
         files = []
@@ -95,8 +93,6 @@ async def _list_folder_via_gdown(folder_id: str) -> list[DriveFile]:
 
 async def _list_folder_via_html(folder_id: str) -> list[DriveFile]:
     """Parse public Drive folder HTML to extract file metadata."""
-    import httpx
-
     url = f"https://drive.google.com/drive/folders/{folder_id}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -135,18 +131,13 @@ async def download_text_file(file_id: str) -> str:
 
     Su dung gdown de download file text tu Google Drive public.
     """
-    try:
-        import gdown as gdown_mod
-    except ImportError as e:
-        raise RuntimeError("gdown not installed.") from e
-
     loop = asyncio.get_running_loop()
 
     def _download_sync() -> str:
         with tempfile.TemporaryDirectory() as tmpdir:
             dest = os.path.join(tmpdir, "file.txt")
             dl_url = f"https://drive.google.com/uc?id={file_id}"
-            result = gdown_mod.download(dl_url, dest, quiet=True, fuzzy=True)
+            result = gdown.download(dl_url, dest, quiet=True, fuzzy=True)
             if result and os.path.exists(result):
                 return Path(result).read_text(encoding="utf-8", errors="replace")
             return ""

@@ -5,3 +5,7 @@
 ## 2024-05-20 - Set-based deduplication in search client
 **Learning:** During search result deduplication, overlapping engine names (like 'google' and 'google_news') caused logical bugs and string searches took O(n) time. The `item["source"]` was a comma-separated string, leading to `if item["source"] not in existing["source"]` returning incorrectly for subsets.
 **Action:** Changed deduplication logic to parse `item["source"]` into sets initially (`set()` or `{item["source"]}`), use `.add()` to insert sources to guarantee uniqueness, and then perform `.join(sorted(sources))` only on completion. This prevents substring matching errors, allows correct subset evaluation, and improves algorithmic scaling from O(n) to O(1) for uniqueness checks.
+
+## 2026-04-10 - Top-level imports for performance in async functions
+**Learning:** Synchronous imports inside async functions cause blocking I/O on the event loop, especially for heavy packages like `gdown`. While lazy imports are sometimes used to reduce startup time, they introduce latency spikes during execution.
+**Action:** Moved `gdown` and `httpx` imports to the top level in `src/web_core/adapters/google_drive.py`. Removed `try...except ImportError` blocks since these are mandatory dependencies in `pyproject.toml`. Updated unit tests to mock the module-level import instead of patching `sys.modules`. This ensures the event loop is not blocked by module loading during search or crawl operations.
