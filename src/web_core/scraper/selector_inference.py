@@ -56,7 +56,7 @@ DOMAIN_CONFIGS: dict[str, dict[str, str]] = {
 
 # Pre-compile wildcard patterns for fast lookup
 _WILDCARD_CONFIGS: list[tuple[re.Pattern[str], dict[str, str]]] = [
-    (re.compile(pattern.replace(".", r"\.").replace("*", ".*")), config)
+    (re.compile(f"^{re.escape(pattern).replace(r'\*', '[^.]*')}$"), config)
     for pattern, config in DOMAIN_CONFIGS.items()
     if "*" in pattern
 ]
