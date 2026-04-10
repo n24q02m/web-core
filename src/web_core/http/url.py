@@ -41,7 +41,7 @@ _TRACKING_PARAMS = frozenset(
 # Domain validation regex
 # ---------------------------------------------------------------------------
 
-_DOMAIN_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*\.[a-zA-Z]{2,}$")
+_DOMAIN_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*\.[a-zA-Z]{2,}\Z")
 
 # ---------------------------------------------------------------------------
 # Public API

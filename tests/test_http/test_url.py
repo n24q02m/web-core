@@ -228,3 +228,8 @@ class TestIsValidDomain:
     def test_search_operator_injection_blocked(self):
         """Domains with operators like site:evil.com should be rejected."""
         assert is_valid_domain("site:evil.com") is False
+
+    def test_domain_with_newline_rejected(self):
+        """Domains with trailing newlines must be rejected (CVE-2024-XXXX mitigation)."""
+        assert is_valid_domain("example.com\n") is False
+        assert is_valid_domain("example.com\r\n") is False
