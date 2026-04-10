@@ -176,7 +176,8 @@ class TestPatchrightStrategy:
         await strategy.fetch("https://example.com")
 
         call_kwargs = page.goto.call_args
-        assert call_kwargs[1]["wait_until"] == "networkidle"
+        assert call_kwargs[1]["wait_until"] == "domcontentloaded"
+        page.wait_for_load_state.assert_any_call("networkidle", timeout=60000.0)
 
     async def test_fetch_uses_patchright_provider_when_no_provider(self):
         """When no provider injected, instantiates PatchrightProvider."""
