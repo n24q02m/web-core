@@ -16,6 +16,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from web_core.http import safe_httpx_client
+
 logger = logging.getLogger(__name__)
 
 FOLDER_URL_PATTERN = re.compile(r"drive\.google\.com/drive/(?:u/\d+/)?folders/([A-Za-z0-9_-]+)")
@@ -67,17 +69,17 @@ async def list_folder_files(folder_id: str) -> list[DriveFile]:
 
 async def _list_folder_via_gdown(folder_id: str) -> list[DriveFile]:
     """Use gdown skip_download=True to list folder files without downloading."""
-    try:
-        import gdown as gdown_mod
-    except ImportError as e:
-        raise RuntimeError("gdown not installed.") from e
-
     url = f"https://drive.google.com/drive/folders/{folder_id}"
     loop = asyncio.get_running_loop()
 
     _SUPPORTED_EXTS = {".txt", ".epub", ".pdf", ".md", ".html", ".htm", ".docx"}
 
     def _list_sync() -> list[DriveFile]:
+        try:
+            import gdown as gdown_mod
+        except ImportError as e:
+            raise RuntimeError("gdown not installed.") from e
+
         items = gdown_mod.download_folder(url, skip_download=True, quiet=True, use_cookies=False)
         if not items:
             return []
@@ -95,15 +97,13 @@ async def _list_folder_via_gdown(folder_id: str) -> list[DriveFile]:
 
 async def _list_folder_via_html(folder_id: str) -> list[DriveFile]:
     """Parse public Drive folder HTML to extract file metadata."""
-    import httpx
-
     url = f"https://drive.google.com/drive/folders/{folder_id}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
-    async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
+    async with safe_httpx_client(follow_redirects=True, timeout=30.0) as client:
         resp = await client.get(url, headers=headers)
         resp.raise_for_status()
 
@@ -135,14 +135,14 @@ async def download_text_file(file_id: str) -> str:
 
     Su dung gdown de download file text tu Google Drive public.
     """
-    try:
-        import gdown as gdown_mod
-    except ImportError as e:
-        raise RuntimeError("gdown not installed.") from e
-
     loop = asyncio.get_running_loop()
 
     def _download_sync() -> str:
+        try:
+            import gdown as gdown_mod
+        except ImportError as e:
+            raise RuntimeError("gdown not installed.") from e
+
         with tempfile.TemporaryDirectory() as tmpdir:
             dest = os.path.join(tmpdir, "file.txt")
             dl_url = f"https://drive.google.com/uc?id={file_id}"
