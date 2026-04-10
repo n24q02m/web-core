@@ -5,26 +5,27 @@ from __future__ import annotations
 import re
 
 # Cloudflare challenge detection patterns
-_CF_TURNSTILE_PATTERNS = [
-    re.compile(r"challenges\.cloudflare\.com/turnstile", re.IGNORECASE),
-    re.compile(r"cf-turnstile-response", re.IGNORECASE),
-    re.compile(r"/cdn-cgi/challenge-platform/", re.IGNORECASE),
+# Using lowercase substring checks is significantly faster than regex search
+_CF_TURNSTILE_STRINGS = [
+    "challenges.cloudflare.com/turnstile",
+    "cf-turnstile-response",
+    "/cdn-cgi/challenge-platform/",
 ]
 
-_CF_JS_CHALLENGE_PATTERNS = [
-    re.compile(r"Just a moment\.\.\.", re.IGNORECASE),
-    re.compile(r"Checking your browser", re.IGNORECASE),
-    re.compile(r"Verifying you are human", re.IGNORECASE),
-    re.compile(r"cf-browser-verification", re.IGNORECASE),
-    re.compile(r"jschl-answer", re.IGNORECASE),
+_CF_JS_CHALLENGE_STRINGS = [
+    "just a moment...",
+    "checking your browser",
+    "verifying you are human",
+    "cf-browser-verification",
+    "jschl-answer",
 ]
 
-_CF_MANAGED_PATTERNS = [
-    re.compile(r"managed_checking_msg", re.IGNORECASE),
-    re.compile(r"cf-please-wait", re.IGNORECASE),
-    re.compile(r"Performing security verification", re.IGNORECASE),
-    re.compile(r"security service to protect", re.IGNORECASE),
-    re.compile(r"verifies you are not a bot", re.IGNORECASE),
+_CF_MANAGED_STRINGS = [
+    "managed_checking_msg",
+    "cf-please-wait",
+    "performing security verification",
+    "security service to protect",
+    "verifies you are not a bot",
 ]
 
 _CF_SITEKEY_PATTERNS = [
@@ -46,16 +47,18 @@ def detect_cloudflare_challenge(html: str) -> str | None:
     if not html or len(html) < 50:
         return None
 
-    for pattern in _CF_TURNSTILE_PATTERNS:
-        if pattern.search(html):
+    html_lower = html.lower()
+
+    for s in _CF_TURNSTILE_STRINGS:
+        if s in html_lower:
             return "turnstile"
 
-    for pattern in _CF_MANAGED_PATTERNS:
-        if pattern.search(html):
+    for s in _CF_MANAGED_STRINGS:
+        if s in html_lower:
             return "managed"
 
-    for pattern in _CF_JS_CHALLENGE_PATTERNS:
-        if pattern.search(html):
+    for s in _CF_JS_CHALLENGE_STRINGS:
+        if s in html_lower:
             return "js_challenge"
 
     return None

@@ -99,7 +99,7 @@ class PatchrightStrategy(BaseStrategy):
 
             try:
                 # Use domcontentloaded first so we don't blind wait 60s if there's a CF challenge
-                response = await page.goto(url, wait_until="domcontentloaded", timeout=self.timeout * 1000)
+                response = await page.goto(url, wait_until="networkidle", timeout=self.timeout * 1000)
 
                 content = await page.content()
                 cf_challenge_type = detect_cloudflare_challenge(content)
