@@ -19,7 +19,6 @@ src/web_core/
     agent.py               -- ScrapingAgent (LangGraph state machine)
     base.py                -- BaseStrategy ABC, ScrapingResult
     cache.py               -- StrategyCache (per-domain performance tracking)
-    registry.py            -- StrategyRegistry voi lazy-loaded strategies
     state.py               -- ScrapingState TypedDict, ScrapingError
     strategies/            -- Concrete implementations
       api_direct.py        -- API endpoint detection
@@ -30,7 +29,6 @@ src/web_core/
   browsers/                -- Layer 2: Stealth browser abstraction
     protocol.py            -- BrowserProvider Protocol (structural typing)
     patchright.py          -- Patchright (undetected Playwright) provider
-tests/                     -- Mirror cau truc source modules
 ```
 
 ## Build Commands

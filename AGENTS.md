@@ -99,13 +99,12 @@ src/web_core/
     url.py                 # normalize_url, strip_tracking_params, is_valid_domain
   search/                  # SearXNG search engine
     client.py              # search() with retry, dedup, domain filtering
-    models.py              # SearchResult, SearchError
+    models.py              # SearchResult, SearchError dataclasses
     runner.py              # Cross-process SearXNG singleton manager
   scraper/                 # Multi-strategy scraping agent
     agent.py               # ScrapingAgent (LangGraph state machine)
     base.py                # BaseStrategy ABC, ScrapingResult
     cache.py               # StrategyCache (per-domain performance tracking)
-    registry.py            # StrategyRegistry with default factory
     state.py               # ScrapingState TypedDict, ScrapingError
     strategies/            # Concrete strategy implementations
       api_direct.py        # API endpoint detection
@@ -116,7 +115,6 @@ src/web_core/
   browsers/                # Stealth browser abstraction
     protocol.py            # BrowserProvider Protocol
     patchright.py          # Patchright (undetected Playwright) implementation
-tests/                     # Mirrors source module structure
 ```
 
 ### Documentation
