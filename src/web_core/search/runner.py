@@ -196,16 +196,24 @@ def _write_discovery(port: int, pid: int) -> None:
     """Write SearXNG discovery file for other instances to find."""
     try:
         _DISCOVERY_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _DISCOVERY_FILE.write_text(
-            _json.dumps(
-                {
-                    "pid": pid,
-                    "port": port,
-                    "owner_pid": os.getpid(),
-                    "started_at": time.time(),
-                }
-            )
+        content = _json.dumps(
+            {
+                "pid": pid,
+                "port": port,
+                "owner_pid": os.getpid(),
+                "started_at": time.time(),
+            }
         )
+        fd = os.open(_DISCOVERY_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(content)
+        except Exception:
+            import contextlib
+
+            with contextlib.suppress(OSError):
+                os.close(fd)
+            raise
     except Exception as e:
         logger.debug("Failed to write discovery file: %s", e)
 
