@@ -60,7 +60,7 @@ _CONFIG_DIR = Path.home() / ".web-core"
 _DISCOVERY_FILE = _CONFIG_DIR / "searxng_instance.json"
 
 # SearXNG install URL (zip archive avoids git filename issues on Windows).
-_SEARXNG_INSTALL_URL = "https://github.com/searxng/searxng/archive/refs/heads/master.zip"
+_SEARXNG_INSTALL_URL = "https://github.com/searxng/searxng/archive/08ef7a63d7ffd278dddd68cbb643f30d969a4329.zip#sha256=8aa2fa84ae0163951f0e49c2c558d80c3cb70768f202316fa052751a28338fae"
 
 # Minimal SearXNG settings template.
 _SETTINGS_TEMPLATE = """\
@@ -404,6 +404,14 @@ def _install_searxng() -> bool:  # pragma: no cover
         )
         if deps_result.returncode != 0:
             logger.error("Build deps installation failed: %s", deps_result.stderr[:500])
+            return False
+
+        # Security: Validate the installation URL before execution.
+        if (
+            not _SEARXNG_INSTALL_URL.startswith("https://github.com/searxng/searxng/archive/")
+            or "#sha256=" not in _SEARXNG_INSTALL_URL
+        ):
+            logger.error("Invalid or insecure SearXNG install URL: %s", _SEARXNG_INSTALL_URL)
             return False
 
         # Install SearXNG with --no-build-isolation (uses pre-installed deps).
