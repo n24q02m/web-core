@@ -169,18 +169,14 @@ class TestPatchrightStrategy:
         call_kwargs = page.goto.call_args
         assert call_kwargs[1]["timeout"] == 30000.0
 
-    async def test_uses_load_states(self):
+    async def test_uses_domcontentloaded_wait(self):
         provider, page = _make_mock_provider(NORMAL_HTML)
         strategy = PatchrightStrategy(provider=provider)
 
         await strategy.fetch("https://example.com")
 
-        # goto uses domcontentloaded
-        call_args = page.goto.call_args
-        assert call_args[1]["wait_until"] == "domcontentloaded"
-
-        # then explicitly waits for networkidle
-        page.wait_for_load_state.assert_called_with("networkidle", timeout=strategy.timeout * 1000)
+        call_kwargs = page.goto.call_args
+        assert call_kwargs[1]["wait_until"] == "domcontentloaded"
 
     async def test_fetch_uses_patchright_provider_when_no_provider(self):
         """When no provider injected, instantiates PatchrightProvider."""

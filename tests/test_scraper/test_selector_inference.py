@@ -31,7 +31,7 @@ def test_get_domain_selectors_wildcard_vulnerability():
     # because the regex is missing the end anchor '$'
     selectors = get_domain_selectors("https://newtoki123.com.evil.com/phish")
 
-    # In the vulnerable state, this will be NOT None
+    # In the vulnerable state, this was NOT None
     # After the fix, this should be None
     assert selectors is None
 
