@@ -239,3 +239,11 @@ class TestStrategyCache:
         """Clearing a domain with no stats should not raise."""
         cache = StrategyCache()
         await cache.clear("https://nonexistent.com")  # no error
+
+    def test_extract_domain_with_query_params(self):
+        assert StrategyCache._extract_domain("https://example.com?foo=bar") == "example.com"
+        assert StrategyCache._extract_domain("https://example.com/path?foo=bar") == "example.com"
+
+    def test_extract_domain_with_fragment(self):
+        assert StrategyCache._extract_domain("http://test.org#hash") == "test.org"
+        assert StrategyCache._extract_domain("http://test.org/path#hash") == "test.org"
