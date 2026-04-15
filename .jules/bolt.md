@@ -9,3 +9,7 @@
 ## 2024-05-18 - [Optimize Regex Extractions with Fast-Path Substring Checks]
 **Learning:** When extracting data (like sitekeys) from large strings using regular expressions, the `re` module evaluates the entire string even if a required static substring is missing. For example, `re.IGNORECASE` searches on a 100KB HTML string can take ~1.5ms per regex, whereas a static `.lower()` and `in` check takes ~0.05ms.
 **Action:** When searching for patterns that contain static keywords (e.g., "sitekey="), wrap the regex execution in an early return `if 'keyword' not in text.lower(): return`. This skips regex evaluation entirely on the vast majority of non-matching strings, yielding a 20-30x performance improvement for the negative path.
+
+## 2024-05-21 - [Optimize File Downloads via Bounded Concurrency]
+**Learning:** Sequential downloading of files (e.g., from Google Drive using an `async for` or sequential `for` loop) creates an N+1 performance bottleneck. Downloading 50 files sequentially will take 50 * RTT (Round Trip Time).
+**Action:** Replace the sequential downloads with `asyncio.gather(*tasks)` combined with an `asyncio.Semaphore(5)`. This bounds the concurrency to prevent thread starvation or rate-limits, while drastically improving throughput compared to sequential execution. Always return failed downloads as `None` and filter them out to prevent exceptions from halting the entire batch.

@@ -175,20 +175,30 @@ async def fetch_folder_chapters(
     files = files[:max_chapters]
 
     chapters: list[DriveChapter] = []
-    for i, f in enumerate(files):
-        try:
-            text = await download_text_file(f.file_id)
-            if text.strip():
-                chapters.append(
-                    DriveChapter(
+    sem = asyncio.Semaphore(5)
+
+    async def _download_with_semaphore(f: DriveFile, idx: int) -> DriveChapter | None:
+        async with sem:
+            try:
+                text = await download_text_file(f.file_id)
+                if text.strip():
+                    return DriveChapter(
                         title=Path(f.name).stem,
                         text=text,
-                        order=i + 1,
+                        order=idx + 1,
                         file_id=f.file_id,
                     )
-                )
-        except Exception as e:
-            logger.warning("Failed to download Drive file %s (%s): %s", f.name, f.file_id, e)
+            except Exception as e:
+                logger.warning("Failed to download Drive file %s (%s): %s", f.name, f.file_id, e)
+            return None
+
+    # Bolt: ⚡ Optimize N+1 sequential downloads by running them concurrently with a semaphore bound
+    tasks = [_download_with_semaphore(f, i) for i, f in enumerate(files)]
+    results = await asyncio.gather(*tasks)
+
+    for res in results:
+        if res is not None:
+            chapters.append(res)
 
     return chapters
 
