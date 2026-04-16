@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from web_core.adapters.google_drive import (
     DriveChapter,
     DriveFile,
@@ -94,6 +96,8 @@ def test_drive_chapter_fields():
 
 # ---------------------------------------------------------------------------
 # Async tests (mocked I/O)
+
+
 async def test_list_folder_via_gdown_success():
     """list_folder_via_gdown returns DriveFile list from gdown output."""
     mock_item_1 = MagicMock()
@@ -111,7 +115,7 @@ async def test_list_folder_via_gdown_success():
     mock_gdown = MagicMock()
     mock_gdown.download_folder.return_value = [mock_item_1, mock_item_2, mock_item_3]
 
-    with patch.dict("sys.modules", {"gdown": mock_gdown}):
+    with patch("web_core.adapters.google_drive.gdown", mock_gdown):
         result = await _list_folder_via_gdown("test_folder_id")
 
     assert len(result) == 2  # .png filtered out
@@ -125,7 +129,7 @@ async def test_list_folder_via_gdown_empty():
     mock_gdown = MagicMock()
     mock_gdown.download_folder.return_value = None
 
-    with patch.dict("sys.modules", {"gdown": mock_gdown}):
+    with patch("web_core.adapters.google_drive.gdown", mock_gdown):
         result = await _list_folder_via_gdown("empty_folder")
 
     assert result == []
@@ -140,7 +144,7 @@ async def test_list_folder_via_gdown_no_path():
     mock_gdown = MagicMock()
     mock_gdown.download_folder.return_value = [mock_item]
 
-    with patch.dict("sys.modules", {"gdown": mock_gdown}):
+    with patch("web_core.adapters.google_drive.gdown", mock_gdown):
         result = await _list_folder_via_gdown("test_folder")
 
     assert result == []  # Empty name, no extension match
@@ -166,7 +170,8 @@ async def test_list_folder_via_html_parses_ids():
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("httpx.AsyncClient", return_value=mock_client):
+    # Now using safe_httpx_client factory
+    with patch("web_core.adapters.google_drive.safe_httpx_client", return_value=mock_client):
         result = await _list_folder_via_html("test_folder_id")
 
     assert len(result) == 2
@@ -184,7 +189,7 @@ async def test_list_folder_via_html_no_files(caplog):
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("httpx.AsyncClient", return_value=mock_client):
+    with patch("web_core.adapters.google_drive.safe_httpx_client", return_value=mock_client):
         result = await _list_folder_via_html("empty_folder")
 
     assert result == []
@@ -222,7 +227,7 @@ async def test_download_text_file_success():
         mock_gdown = MagicMock()
         mock_gdown.download.return_value = temp_path
 
-        with patch.dict("sys.modules", {"gdown": mock_gdown}):
+        with patch("web_core.adapters.google_drive.gdown", mock_gdown):
             result = await download_text_file("test_file_id")
 
         assert "Chapter 1 content" in result
@@ -235,7 +240,7 @@ async def test_download_text_file_returns_empty_on_failure():
     mock_gdown = MagicMock()
     mock_gdown.download.return_value = None
 
-    with patch.dict("sys.modules", {"gdown": mock_gdown}):
+    with patch("web_core.adapters.google_drive.gdown", mock_gdown):
         result = await download_text_file("bad_file_id")
 
     assert result == ""
@@ -266,16 +271,12 @@ async def test_fetch_folder_chapters_success():
 
 async def test_fetch_folder_chapters_invalid_url():
     """fetch_folder_chapters raises ValueError for non-Drive URL."""
-    import pytest
-
     with pytest.raises(ValueError, match="Cannot extract folder ID"):
         await fetch_folder_chapters("https://example.com/not-a-drive-url")
 
 
 async def test_fetch_folder_chapters_no_files():
     """fetch_folder_chapters raises ValueError when folder is empty."""
-    import pytest
-
     with (
         patch("web_core.adapters.google_drive.list_folder_files", return_value=[]),
         pytest.raises(ValueError, match="No text files found"),
