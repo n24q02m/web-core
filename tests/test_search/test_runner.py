@@ -336,6 +336,21 @@ class TestWaitForService:
 
 
 class TestSearxngInstallation:
+    def test_is_safe_install_url_valid(self):
+        """Correctly identifies official SearXNG URLs as safe."""
+        from web_core.search.runner import _is_safe_install_url
+
+        assert _is_safe_install_url("https://github.com/searxng/searxng/archive/refs/heads/master.zip") is True
+        assert _is_safe_install_url("https://github.com/searxng/searxng/archive/v1.0.0.zip") is True
+
+    def test_is_safe_install_url_invalid(self):
+        """Rejects URLs from non-official sources."""
+        from web_core.search.runner import _is_safe_install_url
+
+        assert _is_safe_install_url("https://github.com/attacker/searxng/archive/master.zip") is False
+        assert _is_safe_install_url("https://malicious.com/payload.zip") is False
+        assert _is_safe_install_url("http://github.com/searxng/searxng/") is False  # Must be HTTPS
+
     def test_is_searxng_installed_true(self):
         """Returns True when searx.webapp is importable."""
         with patch("importlib.util.find_spec", return_value=MagicMock()):

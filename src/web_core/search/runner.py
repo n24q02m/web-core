@@ -359,6 +359,15 @@ def _get_pip_command() -> list[str]:
     return [sys.executable, "-m", "pip", "install"]
 
 
+def _is_safe_install_url(url: str) -> bool:
+    """Validate that the SearXNG install URL is from a trusted source.
+
+    Prevents malicious package installation via dynamic URLs.
+    """
+    # Strict prefix check for official SearXNG repository.
+    return url.startswith("https://github.com/searxng/searxng/")
+
+
 def _is_searxng_installed() -> bool:
     """Check if the SearXNG Python package is fully installed.
 
@@ -383,6 +392,10 @@ def _install_searxng() -> bool:  # pragma: no cover
     Returns ``True`` if installation succeeded.
     """
     logger.info("Installing SearXNG from GitHub (first run)...")
+
+    if not _is_safe_install_url(_SEARXNG_INSTALL_URL):
+        logger.error("SearXNG install URL is not from a trusted source: %s", _SEARXNG_INSTALL_URL)
+        return False
 
     try:
         pip_cmd = _get_pip_command()
