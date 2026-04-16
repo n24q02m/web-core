@@ -538,7 +538,7 @@ class TestKillStalePortProcess:
 
         with (
             patch("subprocess.run", return_value=mock_result),
-            patch("web_core.search.runner._sigterm_then_kill") as mock_kill,
+            patch("web_core.search.runner._sigterm_then_kill", new_callable=AsyncMock) as mock_kill,
         ):
             await _kill_stale_port_process(18888)
             mock_kill.assert_called_once_with(99999, "stale port 18888")
@@ -552,7 +552,7 @@ class TestKillStalePortProcess:
 
         with (
             patch("subprocess.run", return_value=mock_result),
-            patch("web_core.search.runner._sigterm_then_kill") as mock_kill,
+            patch("web_core.search.runner._sigterm_then_kill", new_callable=AsyncMock) as mock_kill,
         ):
             await _kill_stale_port_process(18888)
             mock_kill.assert_called_once_with(99999, "stale port 18888")
