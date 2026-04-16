@@ -513,6 +513,7 @@ def _sigterm_then_kill_sync(pid: int, label: str = "") -> bool:  # pragma: no co
 
     # Wait up to 3 seconds for graceful exit.
     import time
+
     for _ in range(30):
         if _is_process_dead(pid):
             logger.debug("Process PID=%d%s terminated gracefully", pid, tag)
@@ -646,7 +647,8 @@ async def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
 
     if sys.platform == "win32":
         try:
-            result = await asyncio.to_thread(subprocess.run,
+            result = await asyncio.to_thread(
+                subprocess.run,
                 ["netstat", "-ano"],
                 stdin=subprocess.DEVNULL,
                 capture_output=True,
@@ -667,7 +669,8 @@ async def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
             logger.debug("Error finding processes on port %d using netstat: %s", port, e)
     else:
         try:
-            result = await asyncio.to_thread(subprocess.run,
+            result = await asyncio.to_thread(
+                subprocess.run,
                 ["lsof", "-ti", f":{port}"],
                 stdin=subprocess.DEVNULL,
                 capture_output=True,
@@ -685,7 +688,8 @@ async def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
         except FileNotFoundError:
             # lsof not available, try fuser.
             try:
-                await asyncio.to_thread(subprocess.run,
+                await asyncio.to_thread(
+                    subprocess.run,
                     ["fuser", "-k", f"{port}/tcp"],
                     stdin=subprocess.DEVNULL,
                     capture_output=True,
