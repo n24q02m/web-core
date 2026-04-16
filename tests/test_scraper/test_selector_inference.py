@@ -1,8 +1,11 @@
 """Tests for selector inference utility functions."""
 
+import importlib
+import json
 import sys
 from unittest.mock import MagicMock
 
+from web_core.scraper import selector_inference
 from web_core.scraper.selector_inference import merge_selectors
 
 
@@ -69,3 +72,46 @@ def test_get_domain_selectors_wildcard():
     # Non-wildcard exact matches
     assert get_domain_selectors("https://ncode.syosetu.com") is not None
     assert get_domain_selectors("https://ncode.syosetu.com.evil.com") is None
+
+
+def test_load_domain_cookies_from_env(monkeypatch):
+    # Mock environment variable
+    custom_cookies = {"test.com": {"cookie_name": "cookie_value"}}
+    monkeypatch.setenv("WEB_CORE_DOMAIN_COOKIES", json.dumps(custom_cookies))
+
+    # Reload module to re-initialize DOMAIN_COOKIES
+    importlib.reload(selector_inference)
+
+    assert selector_inference.DOMAIN_COOKIES["test.com"] == {"cookie_name": "cookie_value"}
+    assert "novel18.syosetu.com" not in selector_inference.DOMAIN_COOKIES
+
+
+def test_load_domain_cookies_empty_env(monkeypatch):
+    # Mock empty/missing environment variable
+    monkeypatch.delenv("WEB_CORE_DOMAIN_COOKIES", raising=False)
+
+    # Reload module
+    importlib.reload(selector_inference)
+
+    # It should be empty if we remove the hardcoded ones
+    assert selector_inference.DOMAIN_COOKIES == {}
+
+
+def test_get_domain_selectors_injects_cookies(monkeypatch):
+    custom_cookies = {"novel18.syosetu.com": {"over18": "yes"}}
+    monkeypatch.setenv("WEB_CORE_DOMAIN_COOKIES", json.dumps(custom_cookies))
+    importlib.reload(selector_inference)
+
+    url = "https://novel18.syosetu.com/n1234abc/"
+    selectors = selector_inference.get_domain_selectors(url)
+
+    assert selectors is not None
+    assert selectors["cookies"] == {"over18": "yes"}
+
+
+def test_load_domain_cookies_invalid_json(monkeypatch):
+    monkeypatch.setenv("WEB_CORE_DOMAIN_COOKIES", "invalid-json")
+
+    # Should log an error and fallback to empty dict
+    importlib.reload(selector_inference)
+    assert selector_inference.DOMAIN_COOKIES == {}
