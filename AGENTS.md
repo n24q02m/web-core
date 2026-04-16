@@ -1,40 +1,87 @@
-# AGENTS.md - web-core
+# Agents Guide
 
-Shared web infrastructure package: SearXNG search, multi-strategy scraping, SSRF-safe HTTP, stealth browsers. Python 3.13, uv, src layout.
+This guide is for automated agents working on the `web-core` repository.
 
-## Build / Lint / Test Commands
+## Project Structure
 
-```bash
-uv sync --all-extras                # Install dependencies
-uv build                            # Build package (hatchling)
-uv run ruff check src/ tests/       # Lint
-uv run ruff format --check src/ tests/  # Format check
-uv run ruff format src/ tests/      # Format fix
-uv run ruff check --fix src/ tests/ # Lint fix
-uv run ty check src/                # Type check (Astral ty)
-uv run pytest                       # Run all tests
-uv run pytest --cov -q              # Run tests with coverage
-
-# Run a single test file
-uv run pytest tests/test_http/test_client.py
-
-# Run a single test function
-uv run pytest tests/test_http/test_client.py::test_function_name -v
-
-# Mise shortcuts
-mise run setup     # Full dev environment setup
-mise run lint      # ruff check + ruff format --check
-mise run test      # pytest with coverage
-mise run fix       # ruff check --fix --unsafe-fixes + ruff format
+```
+src/web_core/
+  __init__.py              # Public API re-exports
+  py.typed                 # PEP 561 marker
+  http/                    # SSRF-safe HTTP client, URL normalization
+    client.py              # safe_httpx_client, DNS pinning, IP validation
+    url.py                 # normalize_url, strip_tracking_params, is_valid_domain
+  search/                  # SearXNG search engine
+    client.py              # search() with retry, dedup, domain filtering
+    models.py              # SearchResult, SearchError
+    runner.py              # Cross-process SearXNG singleton manager
+  scraper/                 # Multi-strategy scraping agent
+    agent.py               # ScrapingAgent (LangGraph state machine)
+    base.py                # BaseStrategy ABC, ScrapingResult
+    cache.py               # StrategyCache (per-domain performance tracking)
+    robots.py              # Robots.txt cache and enforcement
+    selector_inference.py  # LLM-based CSS selector inference
+    state.py               # ScrapingState TypedDict, ScrapingError
+    utils.py               # Scraping utilities (Cloudflare detection, etc.)
+    strategies/            # Concrete strategy implementations
+      api_direct.py        # API endpoint detection
+      basic_http.py        # Simple httpx fetch
+      captcha.py           # CapSolver-backed captcha bypass
+      headless.py          # Crawl4ai headless browser
+      patchright_browser.py # Patchright-based browser fetch
+      tls_spoof.py         # curl_cffi TLS fingerprint spoofing
+  browsers/                # Stealth browser abstraction
+    protocol.py            # BrowserProvider Protocol
+    patchright.py          # Patchright (undetected Playwright) implementation
+tests/                     # Mirrors source module structure
 ```
 
-### Pytest Configuration
+## Coding Standards
 
-- `asyncio_mode = "auto"` -- no `@pytest.mark.asyncio` needed
-- Default timeout: 30 seconds per test
-- Integration tests excluded by default (`-m 'not integration and not live'`)
-- Test files: `test_*.py` mirroring source module structure
-- Coverage threshold: 95% (enforced in CI and pyproject.toml)
+### Python Version
+Requires **Python 3.13**. Use modern syntax: `str | None`, `list[int]`, etc.
+
+### Imports
+- Use absolute imports: `from web_core.http.client import safe_httpx_client`.
+- Lazy imports inside functions for heavy dependencies (`crawl4ai`, `patchright`) to minimize module-load overhead.
+- Strategies can be imported from `web_core.scraper.strategies`.
+
+### SSRF Protection
+All outbound HTTP requests MUST use `web_core.http.client.safe_httpx_client` to prevent SSRF vulnerabilities.
+
+### Async/Await
+The codebase is async-first. Use `async/await` for all I/O operations.
+
+### Testing
+- Coverage threshold: **95%**.
+- Use `pytest` for all tests. `asyncio_mode = "auto"` is enabled.
+- Default test timeout is 30 seconds.
+
+## Workflow
+
+1. **Verify**: Run `uv run ruff check src/` and `uv run pytest` before submitting.
+2. **Format**: Use `uv run ruff format src/`.
+3. **Type Check**: Use `uv run ty check src/`.
+
+## Important Configuration
+
+- Ruff: line-length 120, target py313, rules E/F/W/I/UP/B/SIM/RUF.
+- ty: lenient (`unresolved-import`, `unresolved-attribute` = "ignore").
+- Coverage: >= 95%, branch = true.
+
+## Pytest Configuration
+
+- `asyncio_mode = "auto"` -- no `@pytest.mark.asyncio` needed.
+- Default timeout: 30 seconds per test.
+- Integration tests excluded by default (`-m 'not integration and not live'`).
+- Test files: `test_*.py` mirroring source module structure.
+- Coverage threshold: 95% (enforced in CI and pyproject.toml).
+
+## Mise shortcuts
+- `mise run setup`     # Full dev environment setup
+- `mise run lint`      # ruff check + ruff format --check
+- `mise run test`      # pytest with coverage
+- `mise run fix`       # ruff check --fix --unsafe-fixes + ruff format
 
 ## Code Style
 
@@ -87,37 +134,6 @@ Lazy imports inside functions for heavy deps (crawl4ai, patchright) to avoid imp
 - try/except with `logger.warning()` for non-fatal failures
 - Graceful fallback chains in scraping agent (strategy escalation)
 - Retry with exponential backoff on transient HTTP errors
-
-### File Organization
-
-```
-src/web_core/
-  __init__.py              # Public API re-exports
-  py.typed                 # PEP 561 marker
-  http/                    # SSRF-safe HTTP client, URL normalization
-    client.py              # safe_httpx_client, DNS pinning, IP validation
-    url.py                 # normalize_url, strip_tracking_params, is_valid_domain
-  search/                  # SearXNG search engine
-    client.py              # search() with retry, dedup, domain filtering
-    models.py              # SearchResult, SearchError
-    runner.py              # Cross-process SearXNG singleton manager
-  scraper/                 # Multi-strategy scraping agent
-    agent.py               # ScrapingAgent (LangGraph state machine)
-    base.py                # BaseStrategy ABC, ScrapingResult
-    cache.py               # StrategyCache (per-domain performance tracking)
-    registry.py            # StrategyRegistry with default factory
-    state.py               # ScrapingState TypedDict, ScrapingError
-    strategies/            # Concrete strategy implementations
-      api_direct.py        # API endpoint detection
-      basic_http.py        # Simple httpx fetch
-      captcha.py           # CapSolver-backed captcha bypass
-      headless.py          # Crawl4AI headless browser
-      tls_spoof.py         # curl_cffi TLS fingerprint spoofing
-  browsers/                # Stealth browser abstraction
-    protocol.py            # BrowserProvider Protocol
-    patchright.py          # Patchright (undetected Playwright) implementation
-tests/                     # Mirrors source module structure
-```
 
 ### Documentation
 
