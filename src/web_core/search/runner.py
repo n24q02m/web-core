@@ -512,8 +512,6 @@ def _sigterm_then_kill_sync(pid: int, label: str = "") -> bool:  # pragma: no co
         return True
 
     # Wait up to 3 seconds for graceful exit.
-    import time
-
     for _ in range(30):
         if _is_process_dead(pid):
             logger.debug("Process PID=%d%s terminated gracefully", pid, tag)
