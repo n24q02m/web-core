@@ -112,3 +112,66 @@ jobs:
             -f 'client_payload[version]=${{ needs.release.outputs.version }}' \
             -f 'client_payload[tag]=${{ needs.release.outputs.tag }}' \
             -f 'client_payload[release_url]=https://github.com/${{ github.repository }}/releases/tag/${{ needs.release.outputs.tag }}'
+
+  # =================== Create downstream bump issues ===================
+  create-downstream-issues:
+    name: Create downstream bump issues
+    needs: [release, publish-pypi]
+    if: needs.release.outputs.released == 'true' && needs.release.outputs.is_prerelease != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2
+        with:
+          egress-policy: audit
+
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3
+        with:
+          app-id: ${{ vars.CI_APP_ID }}
+          private-key: ${{ secrets.CI_APP_KEY }}
+          owner: n24q02m
+          repositories: wet-mcp,knowledge-core
+
+      - name: Create issues in downstream repos
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          VERSION: ${{ needs.release.outputs.version }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          DOWNSTREAM="wet-mcp knowledge-core"
+          PKG_NAME="n24q02m-web-core"
+          CHANGELOG_URL="https://github.com/n24q02m/web-core/releases/tag/${TAG}"
+
+          for repo in $DOWNSTREAM; do
+            title="chore: bump ${PKG_NAME} to ${VERSION}"
+            body=$(cat <<EOF
+          web-core released stable **${TAG}**.
+
+          **Changelog:** ${CHANGELOG_URL}
+
+          ## Action required
+
+          Bump the \`${PKG_NAME}\` pin in \`pyproject.toml\` and regenerate lockfile:
+
+          \`\`\`bash
+          uv lock --upgrade-package ${PKG_NAME}
+          \`\`\`
+
+          Then open a PR with title \`fix: bump ${PKG_NAME} to ${VERSION}\`.
+
+          _Auto-created by web-core CD. See \`feedback_core_release_auto_issue.md\`._
+          EOF
+          )
+
+            existing=$(gh issue list -R "n24q02m/${repo}" --search "in:title \"bump ${PKG_NAME} to ${VERSION}\"" --state all --json number --jq '.[0].number // ""')
+            if [ -n "$existing" ]; then
+              echo "::notice::Issue already exists in ${repo}: #${existing}"
+              continue
+            fi
+            gh issue create -R "n24q02m/${repo}" --title "$title" --body "$body" --label "dependencies" || \
+              gh issue create -R "n24q02m/${repo}" --title "$title" --body "$body" || \
+              echo "::warning::Failed to create issue in $repo"
+          done
