@@ -146,7 +146,7 @@ async def download_text_file(file_id: str) -> str:
         with tempfile.TemporaryDirectory() as tmpdir:
             dest = os.path.join(tmpdir, "file.txt")
             dl_url = f"https://drive.google.com/uc?id={file_id}"
-            result = gdown_mod.download(dl_url, dest, quiet=True, fuzzy=True)
+            result = gdown_mod.download(dl_url, dest, quiet=True)
             if result and os.path.exists(result):
                 return Path(result).read_text(encoding="utf-8", errors="replace")
             return ""
