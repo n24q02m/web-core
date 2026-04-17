@@ -8,3 +8,8 @@ build/
 .pytest_cache/
 .ruff_cache/
 *.egg
+
+# Test coverage artifacts
+coverage.xml
+htmlcov/
+.coverage
