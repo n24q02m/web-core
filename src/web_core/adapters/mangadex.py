@@ -283,13 +283,3 @@ def _extract_cover_url(manga_item: dict) -> str | None:
             if cover_fn:
                 return f"{MangaDexClient.COVERS_CDN}/{manga_id}/{cover_fn}"
     return None
-
-
-def build_page_url(base_url: str, hash: str, filename: str, *, saver: bool = False) -> str:
-    """Build the full URL for a chapter page image.
-
-    Useful for constructing URLs without downloading (e.g. for proxying
-    or prefetching).
-    """
-    quality = "data-saver" if saver else "data"
-    return f"{base_url}/{quality}/{hash}/{filename}"
