@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import re
 from typing import Any
 
 from web_core.http.client import safe_httpx_client
@@ -15,6 +16,10 @@ logger = logging.getLogger(__name__)
 # CapSolver task types
 RECAPTCHA_V2_PROXYLESS = "ReCaptchaV2TaskProxyLess"
 TURNSTILE_PROXYLESS = "AntiTurnstileTaskProxyLess"
+
+_RE_CF_IFRAME_0X = re.compile(r"/(0x[A-Za-z0-9]+)[/&]")
+_RE_CF_IFRAME_LONG = re.compile(r"/([A-Za-z0-9]{20,})/(?:light|dark|auto)")
+_RE_SCRIPT_SITEKEY = re.compile(r"""sitekey['"\s:=]+['"]([A-Za-z0-9_-]{10,})['"]""", re.IGNORECASE)
 
 # Token extraction keys per captcha type (CapSolver API response format)
 _SOLUTION_KEYS: dict[str, str] = {
@@ -112,7 +117,6 @@ class CaptchaStrategy(BaseStrategy):
         since CF challenge iframes may not be accessible via document.querySelectorAll.
         """
         import contextlib
-        import re
 
         # Wait for the Turnstile iframe to appear
         with contextlib.suppress(Exception):
@@ -128,10 +132,11 @@ class CaptchaStrategy(BaseStrategy):
         iframes = await page.query_selector_all("iframe")
         for f in iframes:
             src = await f.get_attribute("src") or ""
-            m = re.search(r"/(0x[A-Za-z0-9]+)[/&]", src)
-            if m:
-                return m.group(1)
-            m2 = re.search(r"/([A-Za-z0-9]{20,})/(?:light|dark|auto)", src)
+            if "/0x" in src:
+                m = _RE_CF_IFRAME_0X.search(src)
+                if m:
+                    return m.group(1)
+            m2 = _RE_CF_IFRAME_LONG.search(src)
             if m2:
                 return m2.group(1)
 
@@ -139,7 +144,9 @@ class CaptchaStrategy(BaseStrategy):
         scripts = await page.query_selector_all("script")
         for s in scripts:
             text = await s.text_content() or ""
-            m = re.search(r"""sitekey['"\s:=]+['"]([A-Za-z0-9_-]{10,})['"]""", text, re.IGNORECASE)
+            if "sitekey" not in text.lower():
+                continue
+            m = _RE_SCRIPT_SITEKEY.search(text)
             if m:
                 return m.group(1)
 
