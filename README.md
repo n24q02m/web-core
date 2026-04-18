@@ -41,13 +41,15 @@ await shutdown_searxng()
 ### Multi-Strategy Scraping
 
 ```python
-from web_core.scraper import ScrapingAgent, StrategyRegistry
+from web_core.scraper import ScrapingAgent
+from web_core.scraper.strategies import BasicHTTPStrategy, TLSSpoofStrategy
 
-# Create registry with all available strategies
-registry = StrategyRegistry.create_default()
+# Initialize agent with desired strategies
+# Note: Some strategies (e.g., HeadlessStrategy, PatchrightStrategy)
+# require optional dependencies like crawl4ai or patchright.
 agent = ScrapingAgent(strategies={
-    name: registry.get(name)
-    for name in registry.list_strategies()
+    "basic": BasicHTTPStrategy(),
+    "tls": TLSSpoofStrategy(),
 })
 
 # Scrape with automatic strategy escalation
@@ -99,7 +101,6 @@ src/web_core/
     agent.py               -- ScrapingAgent (LangGraph state machine)
     base.py                -- BaseStrategy ABC, ScrapingResult
     cache.py               -- StrategyCache (per-domain performance tracking)
-    registry.py            -- StrategyRegistry with lazy-loaded strategies
     state.py               -- ScrapingState TypedDict, ScrapingError
     strategies/            -- Concrete strategy implementations
       api_direct.py        -- API endpoint detection and direct fetch
