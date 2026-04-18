@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "n24q02m-web-core"
-version = "1.2.0"
+version = "1.1.1-beta.7"
 description = "Shared web infrastructure: search, scraping, HTTP security, browsers"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
@@ -29,7 +29,6 @@ dependencies = [
     "capsolver>=1.0.7",
     "pydantic>=2.12.5",
     "gdown>=5.2.0",
-    "pillow>=12.2.0",
 ]
 
 [project.optional-dependencies]

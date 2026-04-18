@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, ClassVar
+from urllib.parse import urlparse
 
 
 @dataclass
@@ -19,6 +20,11 @@ class StrategyStats:
     def success_rate(self) -> float:
         """Fraction of attempts that succeeded (0.0 .. 1.0)."""
         return self.successes / self.attempts if self.attempts > 0 else 0.0
+
+    @property
+    def avg_time_ms(self) -> float:
+        """Average response time across all attempts."""
+        return self.total_time_ms / self.attempts if self.attempts > 0 else 0.0
 
 
 class StrategyCache:
@@ -51,15 +57,8 @@ class StrategyCache:
     @staticmethod
     def _extract_domain(url: str) -> str:
         """Extract the network-location (domain:port) from *url*."""
-        # Performance Optimization: Using string partitioning is ~3.5x faster
-        # than urllib.parse.urlparse by avoiding regex and tuple allocation overhead.
-        # This is a hot path called for every URL caching operation.
-        if url.startswith("//"):
-            return url[2:].partition("/")[0].partition("?")[0].partition("#")[0]
-
-        _, sep, rest = url.partition("://")
-        domain_part = rest if sep else url
-        return domain_part.partition("/")[0].partition("?")[0].partition("#")[0]
+        parsed = urlparse(url)
+        return parsed.netloc or parsed.path.split("/")[0]
 
     async def record(
         self,

@@ -16,11 +16,10 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from web_core.http import safe_httpx_client
-
 logger = logging.getLogger(__name__)
 
 FOLDER_URL_PATTERN = re.compile(r"drive\.google\.com/drive/(?:u/\d+/)?folders/([A-Za-z0-9_-]+)")
+FILE_URL_PATTERN = re.compile(r"drive\.google\.com/(?:file/d/|open\?id=)([A-Za-z0-9_-]+)")
 
 
 @dataclass
@@ -45,6 +44,12 @@ class DriveChapter:
 def extract_folder_id(url: str) -> str | None:
     """Extract folder ID from a Google Drive folder URL."""
     match = FOLDER_URL_PATTERN.search(url)
+    return match.group(1) if match else None
+
+
+def extract_file_id(url: str) -> str | None:
+    """Extract file ID from a Google Drive file URL."""
+    match = FILE_URL_PATTERN.search(url)
     return match.group(1) if match else None
 
 
@@ -90,6 +95,7 @@ async def _list_folder_via_gdown(folder_id: str) -> list[DriveFile]:
 
 async def _list_folder_via_html(folder_id: str) -> list[DriveFile]:
     """Parse public Drive folder HTML to extract file metadata."""
+    import httpx
 
     url = f"https://drive.google.com/drive/folders/{folder_id}"
     headers = {
@@ -97,7 +103,7 @@ async def _list_folder_via_html(folder_id: str) -> list[DriveFile]:
         "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
-    async with safe_httpx_client(follow_redirects=True, timeout=30.0) as client:
+    async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
         resp = await client.get(url, headers=headers)
         resp.raise_for_status()
 

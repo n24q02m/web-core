@@ -523,28 +523,28 @@ class TestIsProcessAlive:
 
 
 class TestKillStalePortProcess:
-    async def test_invalid_port_noop(self):
+    def test_invalid_port_noop(self):
         """Invalid ports are silently ignored."""
-        await _kill_stale_port_process(0)  # No error
-        await _kill_stale_port_process(-1)  # No error
-        await _kill_stale_port_process(70000)  # No error
-        await _kill_stale_port_process("abc")  # type: ignore[arg-type]  # No error
+        _kill_stale_port_process(0)  # No error
+        _kill_stale_port_process(-1)  # No error
+        _kill_stale_port_process(70000)  # No error
+        _kill_stale_port_process("abc")  # type: ignore[arg-type]  # No error
 
     @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
-    async def test_windows_netstat(self):
+    def test_windows_netstat(self):
         """On Windows, uses netstat to find stale PIDs."""
         mock_result = MagicMock()
         mock_result.stdout = "  TCP    127.0.0.1:18888    0.0.0.0:0    LISTENING    99999\n"
 
         with (
             patch("subprocess.run", return_value=mock_result),
-            patch("web_core.search.runner._sigterm_then_kill", new_callable=AsyncMock) as mock_kill,
+            patch("web_core.search.runner._sigterm_then_kill") as mock_kill,
         ):
-            await _kill_stale_port_process(18888)
+            _kill_stale_port_process(18888)
             mock_kill.assert_called_once_with(99999, "stale port 18888")
 
     @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
-    async def test_unix_lsof(self):
+    def test_unix_lsof(self):
         """On Unix, uses lsof to find stale PIDs."""
         mock_result = MagicMock()
         mock_result.returncode = 0
@@ -552,9 +552,9 @@ class TestKillStalePortProcess:
 
         with (
             patch("subprocess.run", return_value=mock_result),
-            patch("web_core.search.runner._sigterm_then_kill", new_callable=AsyncMock) as mock_kill,
+            patch("web_core.search.runner._sigterm_then_kill") as mock_kill,
         ):
-            await _kill_stale_port_process(18888)
+            _kill_stale_port_process(18888)
             mock_kill.assert_called_once_with(99999, "stale port 18888")
 
 
