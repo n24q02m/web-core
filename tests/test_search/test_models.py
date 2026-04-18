@@ -29,6 +29,39 @@ class TestSearchResult:
         assert result.snippet == "A snippet"
         assert result.source == "google"
 
+    def test_to_dict_minimal(self):
+        result = SearchResult(url="https://example.com", title="Example", snippet="A snippet")
+        d = result.to_dict()
+        assert d == {
+            "url": "https://example.com",
+            "title": "Example",
+            "snippet": "A snippet",
+            "source": "",
+        }
+
+    def test_to_dict_full(self):
+        result = SearchResult(
+            url="https://example.com",
+            title="Example",
+            snippet="A snippet",
+            source="duckduckgo",
+        )
+        d = result.to_dict()
+        assert d == {
+            "url": "https://example.com",
+            "title": "Example",
+            "snippet": "A snippet",
+            "source": "duckduckgo",
+        }
+
+    def test_to_dict_returns_new_dict(self):
+        """Each call to to_dict should return a fresh dict."""
+        result = SearchResult(url="https://example.com", title="T", snippet="S")
+        d1 = result.to_dict()
+        d2 = result.to_dict()
+        assert d1 == d2
+        assert d1 is not d2
+
     def test_equality(self):
         a = SearchResult(url="https://example.com", title="T", snippet="S", source="g")
         b = SearchResult(url="https://example.com", title="T", snippet="S", source="g")

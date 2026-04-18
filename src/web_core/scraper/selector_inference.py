@@ -19,8 +19,14 @@ def _load_domain_cookies() -> dict[str, dict[str, str]]:
     """Load domain-specific cookies from WEB_CORE_DOMAIN_COOKIES environment variable.
 
     Expected format: {"domain": {"cookie_name": "value"}, ...}
+    Provides a default age bypass cookie for novel18.syosetu.com.
     """
-    cookies: dict[str, dict[str, str]] = {}
+    # Default cookies (non-sensitive bypasses)
+    cookies: dict[str, dict[str, str]] = {
+        "novel18.syosetu.com": {
+            "over18": "yes",  # Syosetu R18 age verification bypass
+        },
+    }
 
     # Load from environment variable to allow configuration of tokens/secrets
     raw = os.environ.get("WEB_CORE_DOMAIN_COOKIES")
@@ -79,7 +85,7 @@ DOMAIN_CONFIGS: dict[str, dict[str, str]] = {
 
 # Pre-compile wildcard patterns for fast lookup
 _WILDCARD_CONFIGS: list[tuple[re.Pattern[str], dict[str, str]]] = [
-    (re.compile(re.escape(pattern).replace(r"\*", r"[^.]*") + r"\Z"), config)
+    (re.compile(pattern.replace(".", r"\.").replace("*", ".*")), config)
     for pattern, config in DOMAIN_CONFIGS.items()
     if "*" in pattern
 ]

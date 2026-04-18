@@ -14,6 +14,9 @@ class SearchResult:
     snippet: str
     source: str = ""
 
+    def to_dict(self) -> dict[str, str]:
+        return {"url": self.url, "title": self.title, "snippet": self.snippet, "source": self.source}
+
 
 class SearchError(Exception):
     """Raised when a search operation fails after all retries."""
