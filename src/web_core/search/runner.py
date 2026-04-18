@@ -653,7 +653,9 @@ async def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
                 text=True,
                 timeout=5,
             )
-            for line in result.stdout.splitlines():
+            # result.stdout is str because text=True, but ty can't infer through asyncio.to_thread.
+            stdout_text = result.stdout if isinstance(result.stdout, str) else result.stdout.decode(errors="replace")
+            for line in stdout_text.splitlines():
                 if f"127.0.0.1:{port}" in line and "LISTENING" in line:
                     parts = line.split()
                     pid_str = parts[-1]
