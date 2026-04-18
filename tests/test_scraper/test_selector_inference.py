@@ -51,12 +51,14 @@ def test_merge_selectors_no_existing():
     assert merge_selectors({}, inferred) == {"title": ".title"}
 
 
-def test_get_domain_selectors_wildcard():
-    # Mock heavy dependencies imported at module level in src/web_core/__init__.py
-    sys.modules["httpx"] = MagicMock()
-    sys.modules["langgraph"] = MagicMock()
-    sys.modules["langgraph.graph"] = MagicMock()
-    sys.modules["google.genai"] = MagicMock()
+def test_get_domain_selectors_wildcard(monkeypatch):
+    # Mock heavy dependencies imported at module level in src/web_core/__init__.py.
+    # Use monkeypatch so sys.modules is restored after the test — otherwise the
+    # MagicMock for httpx leaks into later tests and breaks patch("httpx.AsyncClient").
+    monkeypatch.setitem(sys.modules, "httpx", MagicMock())
+    monkeypatch.setitem(sys.modules, "langgraph", MagicMock())
+    monkeypatch.setitem(sys.modules, "langgraph.graph", MagicMock())
+    monkeypatch.setitem(sys.modules, "google.genai", MagicMock())
 
     from web_core.scraper.selector_inference import get_domain_selectors
 
