@@ -1,7 +1,0 @@
-## $(date +%Y-%m-%d) - Secure Temporary File Creation for Settings
-**Vulnerability:** Predictable temporary file path creation with insecure default permissions via `Path.write_text()`.
-**Learning:** Using predictable paths (e.g., `f"searxng_settings_{os.getpid()}.yml"`) in world-accessible or user-accessible configuration directories (even with directory chmod) creates vectors for symlink attacks and configuration tampering. `Path.write_text()` does not enforce strict file permissions during creation, which can leak locally generated secrets if the umask allows world-read.
-**Prevention:** Always use `tempfile.mkstemp()` (with appropriate `prefix`, `suffix`, and `dir`) to generate cryptographically random filenames and automatically enforce strict `0o600` permissions. Handle the resulting file descriptor securely using `os.fdopen()` and `try...finally` (or `contextlib.suppress`) cleanup logic to avoid resource leaks.
-## 2026-04-10 - Pinning and Validating External Dependencies in Subprocess
-**Learning:** Installing dependencies from dynamic URLs in subprocesses without validation or integrity checks (hashes) can lead to Supply Chain Attacks. Even if the URL is hardcoded, branches like 'master' can be compromised.
-**Action:** Always pin external dependencies to specific commit hashes and use integrity fragments (e.g., #sha256=) when using pip. Add explicit validation logic in the code to ensure URLs match expected prefixes and contain required security tokens.

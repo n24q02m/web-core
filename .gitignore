@@ -13,3 +13,9 @@ build/
 coverage.xml
 htmlcov/
 .coverage
+
+# AI traces (public repo hygiene)
+.jules/
+.Jules/
+.superpower/
+docs/superpowers/
