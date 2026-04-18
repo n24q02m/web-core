@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
 from web_core.scraper.agent import ScrapingAgent
@@ -262,3 +264,93 @@ class TestScrapingAgent:
         content = await agent.scrape("https://example.com")
 
         assert content == "x" * 200
+
+    # ------------------------------------------------------------------
+    # Selector Inference
+    # ------------------------------------------------------------------
+
+    async def test_infer_selectors_node_domain_match(self):
+        """_infer_selectors_node should use domain selectors if found."""
+        agent = ScrapingAgent()
+        state = {
+            "url": "https://ncode.syosetu.com/n1234",
+            "content": "some content",
+            "selectors": {},
+        }
+
+        domain_selectors = {"content": "#novel_honbun"}
+        with patch("web_core.scraper.agent.get_domain_selectors", return_value=domain_selectors):
+            new_state = await agent._infer_selectors_node(state)
+
+        assert new_state["selectors"] == domain_selectors
+        assert new_state["inferred_selectors"] == domain_selectors
+        assert new_state["selector_inference_attempted"] is True
+
+    async def test_infer_selectors_node_llm_inference(self):
+        """_infer_selectors_node should use LLM if no domain match."""
+        agent = ScrapingAgent()
+        state = {
+            "url": "https://unknown.com",
+            "content": "some content",
+            "selectors": {"title": "h1"},
+        }
+
+        inferred = {"content": ".main-text"}
+        with (
+            patch("web_core.scraper.agent.get_domain_selectors", return_value=None),
+            patch("web_core.scraper.agent.infer_selectors_with_llm", new_callable=AsyncMock) as mock_llm,
+        ):
+            mock_llm.return_value = inferred
+            new_state = await agent._infer_selectors_node(state)
+
+        assert new_state["selectors"] == {"title": "h1", "content": ".main-text"}
+        assert new_state["inferred_selectors"] == inferred
+        assert new_state["selector_inference_attempted"] is True
+
+    async def test_infer_selectors_node_exception_handling(self):
+        """_infer_selectors_node should handle LLM exceptions gracefully."""
+        agent = ScrapingAgent()
+        state = {
+            "url": "https://unknown.com",
+            "content": "some content",
+            "selectors": {},
+        }
+
+        with (
+            patch("web_core.scraper.agent.get_domain_selectors", return_value=None),
+            patch("web_core.scraper.agent.infer_selectors_with_llm", side_effect=Exception("LLM error")),
+        ):
+            new_state = await agent._infer_selectors_node(state)
+
+        assert new_state["selector_inference_attempted"] is True
+        assert new_state["selectors"] == {}
+
+    async def test_infer_selectors_node_no_content(self):
+        """_infer_selectors_node should mark as attempted even if no content."""
+        agent = ScrapingAgent()
+        state = {"content": "", "url": "https://example.com"}
+
+        new_state = await agent._infer_selectors_node(state)
+        assert new_state["selector_inference_attempted"] is True
+
+    async def test_scrape_with_selector_inference_flow(self):
+        """Agent should trigger LLM inference when content is too short."""
+        # Content length 60 is > 50 (min to trigger inference) but < 100 (min_content_length)
+        strategy = MockStrategy(name="basic", content="A" * 60)
+        agent = ScrapingAgent(strategies={"basic": strategy}, min_content_length=100, enable_selector_inference=True)
+
+        inferred = {"content": ".new-selector"}
+        with (
+            patch("web_core.scraper.agent.get_domain_selectors", return_value=None),
+            patch("web_core.scraper.agent.infer_selectors_with_llm", new_callable=AsyncMock) as mock_llm,
+        ):
+            mock_llm.return_value = inferred
+
+            # This should eventually fail because even with inferred selectors,
+            # MockStrategy still returns the same short content.
+            # But we can verify it was called twice and LLM was called.
+            with pytest.raises(ScrapingError):
+                await agent.scrape("https://example.com")
+
+        assert strategy.call_count == 2
+        mock_llm.assert_called_once()
