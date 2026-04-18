@@ -15,8 +15,25 @@ import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from web_core.http import safe_httpx_client
+
+_gdown_mod: Any = None
+
+
+async def _get_gdown() -> Any:
+    """Lazy load gdown module with thread offloading."""
+    global _gdown_mod
+    if _gdown_mod is None:
+        try:
+            import importlib
+
+            _gdown_mod = await asyncio.to_thread(importlib.import_module, "gdown")
+        except ImportError as e:
+            raise RuntimeError("gdown not installed.") from e
+    return _gdown_mod
+
 
 logger = logging.getLogger(__name__)
 
@@ -62,10 +79,7 @@ async def list_folder_files(folder_id: str) -> list[DriveFile]:
 
 async def _list_folder_via_gdown(folder_id: str) -> list[DriveFile]:
     """Use gdown skip_download=True to list folder files without downloading."""
-    try:
-        import gdown as gdown_mod
-    except ImportError as e:
-        raise RuntimeError("gdown not installed.") from e
+    gdown_mod = await _get_gdown()
 
     url = f"https://drive.google.com/drive/folders/{folder_id}"
     loop = asyncio.get_running_loop()
@@ -129,10 +143,7 @@ async def download_text_file(file_id: str) -> str:
 
     Su dung gdown de download file text tu Google Drive public.
     """
-    try:
-        import gdown as gdown_mod
-    except ImportError as e:
-        raise RuntimeError("gdown not installed.") from e
+    gdown_mod = await _get_gdown()
 
     loop = asyncio.get_running_loop()
 
