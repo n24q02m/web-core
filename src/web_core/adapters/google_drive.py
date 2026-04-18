@@ -15,13 +15,9 @@ import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-import httpx
-
-if TYPE_CHECKING:
-    pass
-
+from web_core.http import safe_httpx_client
 
 _gdown_mod: Any = None
 
@@ -38,8 +34,6 @@ async def _get_gdown() -> Any:
             raise RuntimeError("gdown not installed.") from e
     return _gdown_mod
 
-
-from web_core.http import safe_httpx_client
 
 logger = logging.getLogger(__name__)
 
