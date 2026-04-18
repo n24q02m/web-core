@@ -41,7 +41,7 @@ _TRACKING_PARAMS = frozenset(
 # Domain validation regex
 # ---------------------------------------------------------------------------
 
-_DOMAIN_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*\.[a-zA-Z]{2,}\Z")
+_DOMAIN_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*\.[a-zA-Z]{2,}$")
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -101,7 +101,7 @@ def is_valid_domain(domain: str) -> bool:
     """Validate a domain name to prevent search operator injection.
 
     Returns True only for well-formed domain names matching
-    ``[a-zA-Z0-9][a-zA-Z0-9._-]*\\.[a-zA-Z]{2,}\\Z`` with no consecutive dots.
+    ``[a-zA-Z0-9][a-zA-Z0-9._-]*\\.[a-zA-Z]{2,}`` with no consecutive dots.
     IP addresses, special characters, and unicode are rejected.
     """
     return bool(_DOMAIN_RE.match(domain)) and ".." not in domain

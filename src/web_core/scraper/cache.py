@@ -21,6 +21,11 @@ class StrategyStats:
         """Fraction of attempts that succeeded (0.0 .. 1.0)."""
         return self.successes / self.attempts if self.attempts > 0 else 0.0
 
+    @property
+    def avg_time_ms(self) -> float:
+        """Average response time across all attempts."""
+        return self.total_time_ms / self.attempts if self.attempts > 0 else 0.0
+
 
 class StrategyCache:
     """In-memory cache that tracks per-domain strategy performance.

@@ -5,28 +5,26 @@ from __future__ import annotations
 import re
 
 # Cloudflare challenge detection patterns
-# Performance Optimization: Using static lowercase strings and `in` checks is ~20-30x faster
-# than running multiple `re.IGNORECASE` searches over large HTML documents.
-_CF_TURNSTILE_STRINGS = [
-    "challenges.cloudflare.com/turnstile",
-    "cf-turnstile-response",
-    "/cdn-cgi/challenge-platform/",
+_CF_TURNSTILE_PATTERNS = [
+    re.compile(r"challenges\.cloudflare\.com/turnstile", re.IGNORECASE),
+    re.compile(r"cf-turnstile-response", re.IGNORECASE),
+    re.compile(r"/cdn-cgi/challenge-platform/", re.IGNORECASE),
 ]
 
-_CF_JS_CHALLENGE_STRINGS = [
-    "just a moment...",
-    "checking your browser",
-    "verifying you are human",
-    "cf-browser-verification",
-    "jschl-answer",
+_CF_JS_CHALLENGE_PATTERNS = [
+    re.compile(r"Just a moment\.\.\.", re.IGNORECASE),
+    re.compile(r"Checking your browser", re.IGNORECASE),
+    re.compile(r"Verifying you are human", re.IGNORECASE),
+    re.compile(r"cf-browser-verification", re.IGNORECASE),
+    re.compile(r"jschl-answer", re.IGNORECASE),
 ]
 
-_CF_MANAGED_STRINGS = [
-    "managed_checking_msg",
-    "cf-please-wait",
-    "performing security verification",
-    "security service to protect",
-    "verifies you are not a bot",
+_CF_MANAGED_PATTERNS = [
+    re.compile(r"managed_checking_msg", re.IGNORECASE),
+    re.compile(r"cf-please-wait", re.IGNORECASE),
+    re.compile(r"Performing security verification", re.IGNORECASE),
+    re.compile(r"security service to protect", re.IGNORECASE),
+    re.compile(r"verifies you are not a bot", re.IGNORECASE),
 ]
 
 _CF_SITEKEY_PATTERNS = [
@@ -48,20 +46,16 @@ def detect_cloudflare_challenge(html: str) -> str | None:
     if not html or len(html) < 50:
         return None
 
-    # Benchmark: Lowercasing once and using `in` check reduces execution time for non-matches
-    # from ~1.5ms to ~0.05ms for a 100KB document.
-    lower_html = html.lower()
-
-    for s in _CF_TURNSTILE_STRINGS:
-        if s in lower_html:
+    for pattern in _CF_TURNSTILE_PATTERNS:
+        if pattern.search(html):
             return "turnstile"
 
-    for s in _CF_MANAGED_STRINGS:
-        if s in lower_html:
+    for pattern in _CF_MANAGED_PATTERNS:
+        if pattern.search(html):
             return "managed"
 
-    for s in _CF_JS_CHALLENGE_STRINGS:
-        if s in lower_html:
+    for pattern in _CF_JS_CHALLENGE_PATTERNS:
+        if pattern.search(html):
             return "js_challenge"
 
     return None
@@ -72,11 +66,6 @@ def extract_turnstile_sitekey(html: str) -> str | None:
 
     Returns the site key string, or None if not found.
     """
-    # Fast path: skip regex execution entirely if "sitekey" is not present in the HTML.
-    # Speeds up processing of normal pages significantly.
-    if "sitekey" not in html.lower():
-        return None
-
     for pattern in _CF_SITEKEY_PATTERNS:
         match = pattern.search(html)
         if match:

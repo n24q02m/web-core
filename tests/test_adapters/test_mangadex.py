@@ -13,6 +13,7 @@ from web_core.adapters.mangadex import (
     MangaDexClient,
     MangaInfo,
     _extract_cover_url,
+    build_page_url,
 )
 
 # ---------------------------------------------------------------------------
@@ -104,6 +105,28 @@ class TestChapterImages:
 # ---------------------------------------------------------------------------
 # URL construction helpers
 # ---------------------------------------------------------------------------
+
+
+class TestBuildPageUrl:
+    """Test build_page_url helper."""
+
+    def test_full_quality(self):
+        url = build_page_url("https://server.example.com", "abc123", "page1.png")
+        assert url == "https://server.example.com/data/abc123/page1.png"
+
+    def test_data_saver(self):
+        url = build_page_url("https://server.example.com", "abc123", "page1.jpg", saver=True)
+        assert url == "https://server.example.com/data-saver/abc123/page1.jpg"
+
+    def test_preserves_base_url_without_trailing_slash(self):
+        url = build_page_url("https://s.example.com", "h", "f.png")
+        assert url.startswith("https://s.example.com/data/")
+
+    def test_no_double_slash(self):
+        """Base URL should not have a trailing slash in practice,
+        but the function concatenates with / so no double slash."""
+        url = build_page_url("https://s.example.com", "h", "f.png")
+        assert "//" not in url.replace("https://", "")
 
 
 class TestExtractCoverUrl:

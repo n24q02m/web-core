@@ -32,6 +32,14 @@ class TestStrategyStats:
         stats = StrategyStats(attempts=5, successes=0)
         assert stats.success_rate == pytest.approx(0.0)
 
+    def test_avg_time_ms_zero_attempts(self):
+        stats = StrategyStats()
+        assert stats.avg_time_ms == 0.0
+
+    def test_avg_time_ms_with_data(self):
+        stats = StrategyStats(attempts=4, total_time_ms=1000.0)
+        assert stats.avg_time_ms == pytest.approx(250.0)
+
 
 class TestStrategyCache:
     """Test StrategyCache."""
@@ -114,6 +122,7 @@ class TestStrategyCache:
         assert stats["basic_http"].successes == 2
         assert stats["basic_http"].total_time_ms == 600.0
         assert stats["basic_http"].success_rate == pytest.approx(2 / 3)
+        assert stats["basic_http"].avg_time_ms == pytest.approx(200.0)
 
     async def test_record_different_strategies(self):
         cache = StrategyCache()
