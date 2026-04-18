@@ -29,6 +29,7 @@ dependencies = [
     "capsolver>=1.0.7",
     "pydantic>=2.12.5",
     "gdown>=5.2.0",
+    "pillow>=12.2.0",
 ]
 
 [project.optional-dependencies]

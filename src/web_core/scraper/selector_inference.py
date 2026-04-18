@@ -14,13 +14,36 @@ import re
 
 logger = logging.getLogger(__name__)
 
-# Built-in domain cookies for sites requiring specific cookies
-# (e.g., age verification bypass, session persistence)
-DOMAIN_COOKIES: dict[str, dict[str, str]] = {
-    "novel18.syosetu.com": {
-        "over18": "yes",  # Syosetu R18 age verification bypass
-    },
-}
+
+def _load_domain_cookies() -> dict[str, dict[str, str]]:
+    """Load domain-specific cookies from WEB_CORE_DOMAIN_COOKIES environment variable.
+
+    Expected format: {"domain": {"cookie_name": "value"}, ...}
+    """
+    cookies: dict[str, dict[str, str]] = {}
+
+    # Load from environment variable to allow configuration of tokens/secrets
+    raw = os.environ.get("WEB_CORE_DOMAIN_COOKIES")
+    if raw:
+        try:
+            env_cookies = json.loads(raw)
+            if isinstance(env_cookies, dict):
+                for domain, domain_cookies in env_cookies.items():
+                    if isinstance(domain_cookies, dict):
+                        cookies[domain] = domain_cookies
+            else:
+                logger.warning("WEB_CORE_DOMAIN_COOKIES is not a JSON object")
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse WEB_CORE_DOMAIN_COOKIES: {e}")
+        except Exception as e:
+            logger.warning(f"Unexpected error loading WEB_CORE_DOMAIN_COOKIES: {e}")
+
+    return cookies
+
+
+# Domain cookies for sites requiring specific cookies (e.g., age verification)
+# Loaded from environment to avoid hardcoding secrets in the source code.
+DOMAIN_COOKIES: dict[str, dict[str, str]] = _load_domain_cookies()
 
 # Built-in domain configs for known sites — saves LLM calls
 DOMAIN_CONFIGS: dict[str, dict[str, str]] = {
