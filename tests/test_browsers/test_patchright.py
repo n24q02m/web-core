@@ -4,8 +4,17 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from web_core.browsers.patchright import PatchrightProvider
 from web_core.browsers.protocol import BrowserProvider
+
+
+@pytest.fixture(autouse=True)
+def reset_patchright_cache(monkeypatch):
+    import web_core.browsers.patchright as patchright_mod
+
+    monkeypatch.setattr(patchright_mod, "_async_playwright_func", None)
 
 
 class TestPatchrightProvider:
@@ -34,9 +43,9 @@ class TestPatchrightProvider:
         mock_pw.chromium.launch = AsyncMock(return_value=mock_browser)
         mock_start = AsyncMock(return_value=mock_pw)
         mock_async_pw = MagicMock()
-        mock_async_pw.start = mock_start
+        mock_async_pw.return_value.start = mock_start
 
-        with patch("patchright.async_api.async_playwright", return_value=mock_async_pw):
+        with patch("web_core.browsers.patchright._get_async_playwright", AsyncMock(return_value=mock_async_pw)):
             p = PatchrightProvider()
             result = await p.launch()
             assert result is mock_browser
@@ -49,9 +58,9 @@ class TestPatchrightProvider:
         mock_pw.chromium.launch = AsyncMock(return_value=mock_browser)
         mock_start = AsyncMock(return_value=mock_pw)
         mock_async_pw = MagicMock()
-        mock_async_pw.start = mock_start
+        mock_async_pw.return_value.start = mock_start
 
-        with patch("patchright.async_api.async_playwright", return_value=mock_async_pw):
+        with patch("web_core.browsers.patchright._get_async_playwright", AsyncMock(return_value=mock_async_pw)):
             p = PatchrightProvider()
             result = await p.launch(config={"slow_mo": 100})
             assert result is mock_browser

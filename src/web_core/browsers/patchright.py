@@ -2,10 +2,29 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from collections.abc import Callable
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# Cache for the lazy-loaded async_playwright function
+_async_playwright_func: Callable | None = None
+
+
+async def _get_async_playwright() -> Callable:
+    """Import async_playwright in a thread and cache it."""
+    global _async_playwright_func
+    if _async_playwright_func is None:
+
+        def _import():
+            from patchright.async_api import async_playwright
+
+            return async_playwright
+
+        _async_playwright_func = await asyncio.to_thread(_import)
+    return _async_playwright_func
 
 
 class PatchrightProvider:
@@ -26,7 +45,7 @@ class PatchrightProvider:
 
     async def launch(self, config: dict[str, Any] | None = None) -> Any:
         """Launch Patchright browser."""
-        from patchright.async_api import async_playwright
+        async_playwright = await _get_async_playwright()
 
         self._playwright = await async_playwright().start()
         launch_args: dict[str, Any] = {
