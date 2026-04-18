@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from web_core.adapters.google_drive import (
     DriveChapter,
     DriveFile,
@@ -74,6 +76,18 @@ def test_drive_chapter_fields():
 
 # ---------------------------------------------------------------------------
 # Async tests (mocked I/O)
+
+
+@pytest.fixture(autouse=True)
+def reset_gdown_cache():
+    """Reset the lazy-loaded gdown module cache before each test."""
+    import web_core.adapters.google_drive as gd
+
+    gd._gdown_mod = None
+    yield
+    gd._gdown_mod = None
+
+
 async def test_list_folder_via_gdown_success():
     """list_folder_via_gdown returns DriveFile list from gdown output."""
     mock_item_1 = MagicMock()
