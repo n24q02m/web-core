@@ -16,6 +16,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from web_core.http import safe_httpx_client
+
 logger = logging.getLogger(__name__)
 
 FOLDER_URL_PATTERN = re.compile(r"drive\.google\.com/drive/(?:u/\d+/)?folders/([A-Za-z0-9_-]+)")
@@ -95,7 +97,6 @@ async def _list_folder_via_gdown(folder_id: str) -> list[DriveFile]:
 
 async def _list_folder_via_html(folder_id: str) -> list[DriveFile]:
     """Parse public Drive folder HTML to extract file metadata."""
-    import httpx
 
     url = f"https://drive.google.com/drive/folders/{folder_id}"
     headers = {
@@ -103,7 +104,7 @@ async def _list_folder_via_html(folder_id: str) -> list[DriveFile]:
         "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
-    async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
+    async with safe_httpx_client(follow_redirects=True, timeout=30.0) as client:
         resp = await client.get(url, headers=headers)
         resp.raise_for_status()
 
