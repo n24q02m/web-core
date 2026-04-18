@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from web_core.adapters.google_drive import (
     DriveChapter,
     DriveFile,
@@ -16,6 +18,15 @@ from web_core.adapters.google_drive import (
     fetch_folder_chapters,
     list_folder_files,
 )
+
+
+@pytest.fixture(autouse=True)
+def reset_gdown_cache():
+    """Reset the lazy-loaded gdown module cache before each test."""
+    from web_core.adapters import google_drive
+
+    google_drive._gdown_mod = None
+
 
 # ---------------------------------------------------------------------------
 # extract_folder_id
@@ -111,7 +122,7 @@ async def test_list_folder_via_gdown_success():
     mock_gdown = MagicMock()
     mock_gdown.download_folder.return_value = [mock_item_1, mock_item_2, mock_item_3]
 
-    with patch("web_core.adapters.google_drive.gdown", mock_gdown):
+    with patch("web_core.adapters.google_drive._get_gdown", return_value=mock_gdown):
         result = await _list_folder_via_gdown("test_folder_id")
 
     assert len(result) == 2  # .png filtered out
@@ -125,7 +136,7 @@ async def test_list_folder_via_gdown_empty():
     mock_gdown = MagicMock()
     mock_gdown.download_folder.return_value = None
 
-    with patch("web_core.adapters.google_drive.gdown", mock_gdown):
+    with patch("web_core.adapters.google_drive._get_gdown", return_value=mock_gdown):
         result = await _list_folder_via_gdown("empty_folder")
 
     assert result == []
@@ -140,7 +151,7 @@ async def test_list_folder_via_gdown_no_path():
     mock_gdown = MagicMock()
     mock_gdown.download_folder.return_value = [mock_item]
 
-    with patch("web_core.adapters.google_drive.gdown", mock_gdown):
+    with patch("web_core.adapters.google_drive._get_gdown", return_value=mock_gdown):
         result = await _list_folder_via_gdown("test_folder")
 
     assert result == []  # Empty name, no extension match
@@ -166,7 +177,7 @@ async def test_list_folder_via_html_parses_ids():
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("web_core.adapters.google_drive.safe_httpx_client", return_value=mock_client):
+    with patch("web_core.http.client.safe_httpx_client", return_value=mock_client):
         result = await _list_folder_via_html("test_folder_id")
 
     assert len(result) == 2
@@ -184,7 +195,7 @@ async def test_list_folder_via_html_no_files(caplog):
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("web_core.adapters.google_drive.safe_httpx_client", return_value=mock_client):
+    with patch("web_core.http.client.safe_httpx_client", return_value=mock_client):
         result = await _list_folder_via_html("empty_folder")
 
     assert result == []
@@ -222,7 +233,7 @@ async def test_download_text_file_success():
         mock_gdown = MagicMock()
         mock_gdown.download.return_value = temp_path
 
-        with patch("web_core.adapters.google_drive.gdown", mock_gdown):
+        with patch("web_core.adapters.google_drive._get_gdown", return_value=mock_gdown):
             result = await download_text_file("test_file_id")
 
         assert "Chapter 1 content" in result
@@ -235,7 +246,7 @@ async def test_download_text_file_returns_empty_on_failure():
     mock_gdown = MagicMock()
     mock_gdown.download.return_value = None
 
-    with patch("web_core.adapters.google_drive.gdown", mock_gdown):
+    with patch("web_core.adapters.google_drive._get_gdown", return_value=mock_gdown):
         result = await download_text_file("bad_file_id")
 
     assert result == ""

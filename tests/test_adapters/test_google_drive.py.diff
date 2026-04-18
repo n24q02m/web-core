@@ -1,0 +1,14 @@
+<<<<<<< SEARCH
+    with patch("web_core.adapters.google_drive.safe_httpx_client", return_value=mock_client):
+        result = await _list_folder_via_html("test_folder_id")
+=======
+    with patch("web_core.http.client.safe_httpx_client", return_value=mock_client):
+        result = await _list_folder_via_html("test_folder_id")
+>>>>>>> REPLACE
+<<<<<<< SEARCH
+    with patch("web_core.adapters.google_drive.safe_httpx_client", return_value=mock_client):
+        result = await _list_folder_via_html("empty_folder")
+=======
+    with patch("web_core.http.client.safe_httpx_client", return_value=mock_client):
+        result = await _list_folder_via_html("empty_folder")
+>>>>>>> REPLACE

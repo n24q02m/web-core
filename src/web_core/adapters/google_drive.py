@@ -16,11 +16,24 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-import gdown
-
-from web_core.http.client import safe_httpx_client
-
 logger = logging.getLogger(__name__)
+
+_gdown_mod = None
+
+
+async def _get_gdown():
+    """Lazy-load gdown using asyncio.to_thread to avoid event loop lag."""
+    global _gdown_mod
+    if _gdown_mod is None:
+
+        def _import():
+            import gdown
+
+            return gdown
+
+        _gdown_mod = await asyncio.to_thread(_import)
+    return _gdown_mod
+
 
 FOLDER_URL_PATTERN = re.compile(r"drive\.google\.com/drive/(?:u/\d+/)?folders/([A-Za-z0-9_-]+)")
 FILE_URL_PATTERN = re.compile(r"drive\.google\.com/(?:file/d/|open\?id=)([A-Za-z0-9_-]+)")
@@ -71,6 +84,7 @@ async def list_folder_files(folder_id: str) -> list[DriveFile]:
 
 async def _list_folder_via_gdown(folder_id: str) -> list[DriveFile]:
     """Use gdown skip_download=True to list folder files without downloading."""
+    gdown = await _get_gdown()
     url = f"https://drive.google.com/drive/folders/{folder_id}"
     loop = asyncio.get_running_loop()
 
@@ -94,6 +108,8 @@ async def _list_folder_via_gdown(folder_id: str) -> list[DriveFile]:
 
 async def _list_folder_via_html(folder_id: str) -> list[DriveFile]:
     """Parse public Drive folder HTML to extract file metadata."""
+    from web_core.http.client import safe_httpx_client
+
     url = f"https://drive.google.com/drive/folders/{folder_id}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -132,6 +148,7 @@ async def download_text_file(file_id: str) -> str:
 
     Su dung gdown de download file text tu Google Drive public.
     """
+    gdown = await _get_gdown()
     loop = asyncio.get_running_loop()
 
     def _download_sync() -> str:
