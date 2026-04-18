@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
-import pytest
-
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from web_core.browsers.patchright import PatchrightProvider, _get_async_playwright
+import pytest
+
+from web_core.browsers.patchright import PatchrightProvider
 from web_core.browsers.protocol import BrowserProvider
 
 
 @pytest.fixture(autouse=True)
 def reset_patchright_cache(monkeypatch):
     import web_core.browsers.patchright as patchright_mod
+
     monkeypatch.setattr(patchright_mod, "_async_playwright_func", None)
 
 
