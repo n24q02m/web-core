@@ -21,7 +21,6 @@ from web_core.http import safe_httpx_client
 logger = logging.getLogger(__name__)
 
 FOLDER_URL_PATTERN = re.compile(r"drive\.google\.com/drive/(?:u/\d+/)?folders/([A-Za-z0-9_-]+)")
-FILE_URL_PATTERN = re.compile(r"drive\.google\.com/(?:file/d/|open\?id=)([A-Za-z0-9_-]+)")
 
 
 @dataclass
@@ -46,12 +45,6 @@ class DriveChapter:
 def extract_folder_id(url: str) -> str | None:
     """Extract folder ID from a Google Drive folder URL."""
     match = FOLDER_URL_PATTERN.search(url)
-    return match.group(1) if match else None
-
-
-def extract_file_id(url: str) -> str | None:
-    """Extract file ID from a Google Drive file URL."""
-    match = FILE_URL_PATTERN.search(url)
     return match.group(1) if match else None
 
 
