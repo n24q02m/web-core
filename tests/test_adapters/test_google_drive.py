@@ -11,7 +11,6 @@ from web_core.adapters.google_drive import (
     _list_folder_via_html,
     _natural_sort_key,
     download_text_file,
-    extract_file_id,
     extract_folder_id,
     fetch_folder_chapters,
     list_folder_files,
@@ -38,25 +37,6 @@ def test_extract_folder_id_none_for_non_drive():
 
 def test_extract_folder_id_none_for_file():
     assert extract_folder_id("https://drive.google.com/file/d/1abc/view") is None
-
-
-# ---------------------------------------------------------------------------
-# extract_file_id
-# ---------------------------------------------------------------------------
-
-
-def test_extract_file_id_standard():
-    url = "https://drive.google.com/file/d/1XYZabcDEF/view"
-    assert extract_file_id(url) == "1XYZabcDEF"
-
-
-def test_extract_file_id_open():
-    url = "https://drive.google.com/open?id=1XYZabcDEF"
-    assert extract_file_id(url) == "1XYZabcDEF"
-
-
-def test_extract_file_id_none_for_folder():
-    assert extract_file_id("https://drive.google.com/drive/folders/1abc") is None
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +146,7 @@ async def test_list_folder_via_html_parses_ids():
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("httpx.AsyncClient", return_value=mock_client):
+    with patch("web_core.adapters.google_drive.safe_httpx_client", return_value=mock_client):
         result = await _list_folder_via_html("test_folder_id")
 
     assert len(result) == 2
@@ -184,7 +164,7 @@ async def test_list_folder_via_html_no_files(caplog):
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("httpx.AsyncClient", return_value=mock_client):
+    with patch("web_core.adapters.google_drive.safe_httpx_client", return_value=mock_client):
         result = await _list_folder_via_html("empty_folder")
 
     assert result == []
