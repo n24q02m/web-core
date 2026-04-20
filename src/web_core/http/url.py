@@ -37,6 +37,10 @@ _TRACKING_PARAMS = frozenset(
     }
 )
 
+_TRACKING_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(p) for p in _TRACKING_PARAMS) + r")="
+)
+
 # ---------------------------------------------------------------------------
 # Domain validation regex
 # ---------------------------------------------------------------------------
@@ -78,9 +82,14 @@ def normalize_url(url: str) -> str:
     path = parsed.path.rstrip("/") or ""
 
     if parsed.query:
-        params = parse_qs(parsed.query, keep_blank_values=True)
-        cleaned = {k: v for k, v in params.items() if k not in _TRACKING_PARAMS}
-        query = urlencode(cleaned, doseq=True)
+        # Performance Optimization: Bypass expensive parse_qs/urlencode if no tracking
+        # parameters are present in the query string.
+        if _TRACKING_RE.search(parsed.query):
+            params = parse_qs(parsed.query, keep_blank_values=True)
+            cleaned = {k: v for k, v in params.items() if k not in _TRACKING_PARAMS}
+            query = urlencode(cleaned, doseq=True)
+        else:
+            query = parsed.query
     else:
         query = ""
 
