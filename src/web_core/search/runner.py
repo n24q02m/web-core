@@ -780,8 +780,35 @@ def _is_process_alive() -> bool:
 # ---------------------------------------------------------------------------
 
 
+_DOCKER_SETTINGS_TEMPLATE = """\
+use_default_settings: true
+
+general:
+  instance_name: "web-core SearXNG (Docker)"
+
+server:
+  secret_key: "{secret_key}"
+  limiter: false
+  public_instance: false
+  image_proxy: false
+
+search:
+  safe_search: 0
+  default_lang: ""
+  formats:
+    - html
+    - json
+"""
+
+
 async def _start_docker_searxng(start_port: int) -> str | None:
-    """Try starting SearXNG via Docker as a fallback."""
+    """Try starting SearXNG via Docker as a fallback.
+
+    Mounts a generated settings.yml so that JSON format is enabled and the
+    rate limiter is disabled -- otherwise searxng/searxng:latest default
+    config returns 403 on ``/search?format=json`` which makes the API
+    unusable even though ``/healthz`` returns 200.
+    """
     global _searxng_docker_container, _searxng_port, _is_owner
 
     docker_bin = shutil.which("docker")
@@ -811,6 +838,16 @@ async def _start_docker_searxng(start_port: int) -> str | None:
             check=False,
         )
 
+        # Write Docker-specific settings (JSON format + limiter off) so the
+        # container exposes a usable /search JSON API.
+        settings_path = _CONFIG_DIR / f"searxng_docker_{port}.yml"
+        await asyncio.to_thread(_CONFIG_DIR.mkdir, parents=True, exist_ok=True)
+        await asyncio.to_thread(
+            settings_path.write_text,
+            _DOCKER_SETTINGS_TEMPLATE.format(secret_key=secrets.token_hex(32)),
+            "utf-8",
+        )
+
         cmd = [
             docker_bin,
             "run",
@@ -822,6 +859,8 @@ async def _start_docker_searxng(start_port: int) -> str | None:
             f"127.0.0.1:{port}:8080",
             "-e",
             f"SEARXNG_SECRET={secrets.token_hex(32)}",
+            "-v",
+            f"{settings_path}:/etc/searxng/settings.yml:ro",
             "searxng/searxng:latest",
         ]
 
