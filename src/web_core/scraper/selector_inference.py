@@ -309,10 +309,7 @@ async def _call_anthropic(prompt: str, model: str) -> str:
         messages=[
             {
                 "role": "user",
-                "content": (
-                    prompt
-                    + "\n\nRespond ONLY with a raw JSON object, no prose, no code fence."
-                ),
+                "content": (prompt + "\n\nRespond ONLY with a raw JSON object, no prose, no code fence."),
             }
         ],
     )
@@ -404,9 +401,7 @@ async def infer_selectors_with_llm(
     try:
         raw = await llm_caller(prompt, html_content)
     except ImportError as e:
-        logger.debug(
-            "selector_inference: provider SDK not installed (%s), skipping", e
-        )
+        logger.debug("selector_inference: provider SDK not installed (%s), skipping", e)
         return {}
     except Exception as e:
         logger.warning("LLM selector inference failed: %s", e)
@@ -420,15 +415,9 @@ async def infer_selectors_with_llm(
             logger.warning("LLM selector inference returned invalid JSON: %s", e)
             return {}
     elif isinstance(raw, dict):
-        selectors = {
-            k: v
-            for k, v in raw.items()
-            if k in {"content", "title", "next_chapter"} and isinstance(v, str)
-        }
+        selectors = {k: v for k, v in raw.items() if k in {"content", "title", "next_chapter"} and isinstance(v, str)}
     else:
-        logger.warning(
-            "LLM selector inference returned unexpected type: %s", type(raw)
-        )
+        logger.warning("LLM selector inference returned unexpected type: %s", type(raw))
         return {}
 
     from urllib.parse import urlparse
