@@ -37,9 +37,7 @@ _TRACKING_PARAMS = frozenset(
     }
 )
 
-_TRACKING_RE = re.compile(
-    r"(?:^|&)(?:" + "|".join(sorted(_TRACKING_PARAMS)) + r")(?:=|$|&)"
-)
+_TRACKING_RE = re.compile(r"(?:^|&)(?:" + "|".join(sorted(_TRACKING_PARAMS)) + r")(?:=|$|&)")
 
 # ---------------------------------------------------------------------------
 # Domain validation regex
