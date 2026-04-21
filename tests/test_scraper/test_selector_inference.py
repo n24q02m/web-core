@@ -290,7 +290,9 @@ async def test_infer_dispatches_to_provider_via_env(monkeypatch):
     _clear_llm_env(monkeypatch)
     monkeypatch.setenv("OPENAI_API_KEY", "dummy")
 
-    mock_call = AsyncMock(return_value=json.dumps({"content": "#c", "title": ".t", "next_chapter": "a"}))
+    mock_call = AsyncMock(
+        return_value=json.dumps({"content": "#c", "title": ".t", "next_chapter": "a"})
+    )
     monkeypatch.setattr(selector_inference, "_call_openai_compatible", mock_call)
 
     result = await infer_selectors_with_llm("https://example.com", "<html/>")
@@ -309,7 +311,9 @@ async def test_infer_dispatches_to_xai_with_base_url(monkeypatch):
     _clear_llm_env(monkeypatch)
     monkeypatch.setenv("XAI_API_KEY", "dummy")
 
-    mock_call = AsyncMock(return_value=json.dumps({"content": "#c"}))
+    mock_call = AsyncMock(
+        return_value=json.dumps({"content": "#c"})
+    )
     monkeypatch.setattr(selector_inference, "_call_openai_compatible", mock_call)
 
     result = await infer_selectors_with_llm("https://example.com", "<html/>")
@@ -326,6 +330,8 @@ async def test_infer_model_param_overrides_default(monkeypatch):
     mock_call = AsyncMock(return_value=json.dumps({"content": "#c"}))
     monkeypatch.setattr(selector_inference, "_call_gemini", mock_call)
 
-    await infer_selectors_with_llm("https://example.com", "<html/>", model="gemini-2.5-pro")
+    await infer_selectors_with_llm(
+        "https://example.com", "<html/>", model="gemini-2.5-pro"
+    )
     args = mock_call.await_args.args
     assert args[1] == "gemini-2.5-pro"
