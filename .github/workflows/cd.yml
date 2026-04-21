@@ -101,6 +101,8 @@ jobs:
         with:
           app-id: ${{ vars.CI_APP_ID }}
           private-key: ${{ secrets.CI_APP_KEY }}
+          owner: n24q02m
+          repositories: n24q02m
 
       - name: Dispatch core-update
         env:
