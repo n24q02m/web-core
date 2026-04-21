@@ -2,6 +2,153 @@
 
 <!-- version list -->
 
+## v1.3.0 (2026-04-21)
+
+### Bug Fixes
+
+- [SECURITY] Unsafe domain name validation using regex with missing end anchor
+  ([#158](https://github.com/n24q02m/web-core/pull/158),
+  [`f8c02b9`](https://github.com/n24q02m/web-core/commit/f8c02b9c0e55ae5736eb1c8923b13c49b1bf0a26))
+
+- Add diacritic preservation pre-commit hook ([#164](https://github.com/n24q02m/web-core/pull/164),
+  [`df11645`](https://github.com/n24q02m/web-core/commit/df116459dea7c7efb2085b353c33423e7206fbda))
+
+- Apply ruff format to selector_inference + test
+  ([`2a638c5`](https://github.com/n24q02m/web-core/commit/2a638c58d117efd82bc7f1fc2d63b8ff5b73d214))
+
+- Bump non-major Python deps (lock file maintenance)
+  ([`200a6d0`](https://github.com/n24q02m/web-core/commit/200a6d0e13a3adbbfcc631f33bc57515413e91ff))
+
+- Bump step-security/harden-runner digest to 8d3c67d
+  ([`901583e`](https://github.com/n24q02m/web-core/commit/901583e920ce152cf925194ef839fbc85d0499ca))
+
+- Ignore coverage.xml and htmlcov artifacts
+  ([`b90c24e`](https://github.com/n24q02m/web-core/commit/b90c24e552eedd733138662c0ae8b8427b8b20d5))
+
+- Move safe_httpx_client import to top of google_drive module
+  ([#156](https://github.com/n24q02m/web-core/pull/156),
+  [`98d84f2`](https://github.com/n24q02m/web-core/commit/98d84f28de5276575f12e937b3687a33a3f0c0b2))
+
+- Optimize URL parsing and domain deduplication in search client
+  ([`c074f6c`](https://github.com/n24q02m/web-core/commit/c074f6cc6cf0fa21c0e1cb7ad41c0f938c15d597))
+
+- Pin pillow >=12.2.0 to resolve GHSA-whj4-6x5x-4v2j
+  ([#156](https://github.com/n24q02m/web-core/pull/156),
+  [`98d84f2`](https://github.com/n24q02m/web-core/commit/98d84f28de5276575f12e937b3687a33a3f0c0b2))
+
+- Pin pillow >=12.2.0 to resolve GHSA-whj4-6x5x-4v2j
+  ([`e55d984`](https://github.com/n24q02m/web-core/commit/e55d984b14e6cee1b7399677bb7842f9bd61c6a7))
+
+- Pin pillow >=12.2.0 to resolve GHSA-whj4-6x5x-4v2j FITS GZIP bomb
+  ([`8be31b5`](https://github.com/n24q02m/web-core/commit/8be31b5a3e227fb62925f888f960664c5e0dae12))
+
+- Prevent sys.modules[httpx] pollution in selector_inference tests
+  ([#172](https://github.com/n24q02m/web-core/pull/172),
+  [`c0af4fe`](https://github.com/n24q02m/web-core/commit/c0af4fef8c4b292e5b9e66a8309003acc85d37bb))
+
+- Remove hardcoded LLM model in selector_inference, add multi-provider auto-detect via env vars
+  ([`70088e6`](https://github.com/n24q02m/web-core/commit/70088e6fd903979544e7bf45ff5cbf755c9511b2))
+
+- Remove unused build_page_url helper from mangadex adapter
+  ([`d028e89`](https://github.com/n24q02m/web-core/commit/d028e899c499f8c7f99d731faca55f8c876b7945))
+
+- Resolve ruff lint errors in test_patchright.py
+  ([`8be31b5`](https://github.com/n24q02m/web-core/commit/8be31b5a3e227fb62925f888f960664c5e0dae12))
+
+- Scope CI concurrency group by event_name ([#164](https://github.com/n24q02m/web-core/pull/164),
+  [`df11645`](https://github.com/n24q02m/web-core/commit/df116459dea7c7efb2085b353c33423e7206fbda))
+
+- Silence ty unsupported-operator on subprocess.run(text=True) stdout
+  ([#163](https://github.com/n24q02m/web-core/pull/163),
+  [`4c26a90`](https://github.com/n24q02m/web-core/commit/4c26a90ccf7bfc9589dcbef983ea58cdc58a1710))
+
+- Switch to safe_httpx_client in Google Drive adapter
+  ([#150](https://github.com/n24q02m/web-core/pull/150),
+  [`94c3d44`](https://github.com/n24q02m/web-core/commit/94c3d44a6cfa75e52be46fd1a070fedae994b210))
+
+- Untrack .jules AI traces + gitignore AI-trace dirs
+  ([`c97adbc`](https://github.com/n24q02m/web-core/commit/c97adbc0a51e1373f56bb468f2ad7e13aaae2d2a))
+
+- Use secrets.token_hex(32) for SEARXNG_SECRET instead of hardcoded literal
+  ([`c0474ee`](https://github.com/n24q02m/web-core/commit/c0474eec9c2a4045b453f557ca864bf4e4409d54))
+
+- **deps**: Bump pytest to 9.0.3 [security] ([#142](https://github.com/n24q02m/web-core/pull/142),
+  [`7f2c02e`](https://github.com/n24q02m/web-core/commit/7f2c02ea094bf47ef39ab52351c2f3f7663efbea))
+
+- **deps**: Lock file maintenance ([#138](https://github.com/n24q02m/web-core/pull/138),
+  [`5813715`](https://github.com/n24q02m/web-core/commit/5813715a941363ced25ed575665df619915e2782))
+
+- **deps**: Lock file maintenance (filelock 3.28.0->3.29.0)
+  ([`ad43150`](https://github.com/n24q02m/web-core/commit/ad43150c2139d0e60a655c6b4ad54e5483e4c36c))
+
+- **scraper**: Remove hardcoded Syosetu age bypass cookie
+  ([#160](https://github.com/n24q02m/web-core/pull/160),
+  [`4c71b91`](https://github.com/n24q02m/web-core/commit/4c71b91cef66f58623614c05f8f784f2a5390dde))
+
+- **scraper**: Secure domain wildcard matching regex
+  ([#157](https://github.com/n24q02m/web-core/pull/157),
+  [`e65a751`](https://github.com/n24q02m/web-core/commit/e65a751a4ec8fcb7a27b853a48aea5f9d667b287))
+
+### Chores
+
+- **deps**: Lock file maintenance ([#173](https://github.com/n24q02m/web-core/pull/173),
+  [`d16bbfb`](https://github.com/n24q02m/web-core/commit/d16bbfbbb720e829e4f3f9baebd127d07b8c1a92))
+
+- **deps**: Lock file maintenance ([#171](https://github.com/n24q02m/web-core/pull/171),
+  [`abd6833`](https://github.com/n24q02m/web-core/commit/abd683330475cdef15d5891390c70e70999b0d69))
+
+- **deps**: Lock file maintenance ([#168](https://github.com/n24q02m/web-core/pull/168),
+  [`6d2e369`](https://github.com/n24q02m/web-core/commit/6d2e369db1db7ae5c5da8f244b6456eca8376caf))
+
+- **deps**: Update actions/create-github-app-token digest to 1b10c78
+  ([#137](https://github.com/n24q02m/web-core/pull/137),
+  [`9757b3a`](https://github.com/n24q02m/web-core/commit/9757b3a63565363fe9435d91861762d796010ba6))
+
+- **deps**: Update github/codeql-action digest to 95e58e9
+  ([#166](https://github.com/n24q02m/web-core/pull/166),
+  [`c6d0415`](https://github.com/n24q02m/web-core/commit/c6d04153823195ca15caee8fa98e1abb93d85bd5))
+
+- **deps**: Update step-security/harden-runner digest to 6c3c2f2
+  ([#167](https://github.com/n24q02m/web-core/pull/167),
+  [`e07d3a7`](https://github.com/n24q02m/web-core/commit/e07d3a7c6c1a9ad7e4083f5f550b8c58fbac2b74))
+
+### Features
+
+- Auto-create downstream bump issues on stable release
+  ([`c486017`](https://github.com/n24q02m/web-core/commit/c48601738670af2af7a0c2d501d376154aa2cf5c))
+
+### Performance Improvements
+
+- Lazy load gdown in google_drive adapter ([#156](https://github.com/n24q02m/web-core/pull/156),
+  [`98d84f2`](https://github.com/n24q02m/web-core/commit/98d84f28de5276575f12e937b3687a33a3f0c0b2))
+
+- Replace blocking sleep with asyncio.sleep in search runner
+  ([#163](https://github.com/n24q02m/web-core/pull/163),
+  [`4c26a90`](https://github.com/n24q02m/web-core/commit/4c26a90ccf7bfc9589dcbef983ea58cdc58a1710))
+
+- Replace blocking sleep with asyncio.sleep in search runner (final fix)
+  ([#163](https://github.com/n24q02m/web-core/pull/163),
+  [`4c26a90`](https://github.com/n24q02m/web-core/commit/4c26a90ccf7bfc9589dcbef983ea58cdc58a1710))
+
+- Replace blocking sleep with asyncio.sleep in search runner (fix CI)
+  ([#163](https://github.com/n24q02m/web-core/pull/163),
+  [`4c26a90`](https://github.com/n24q02m/web-core/commit/4c26a90ccf7bfc9589dcbef983ea58cdc58a1710))
+
+- Replace blocking sleep with asyncio.sleep in search runner (fix lint)
+  ([#163](https://github.com/n24q02m/web-core/pull/163),
+  [`4c26a90`](https://github.com/n24q02m/web-core/commit/4c26a90ccf7bfc9589dcbef983ea58cdc58a1710))
+
+- **scraper**: Optimize Turnstile sitekey extraction regex
+  ([#170](https://github.com/n24q02m/web-core/pull/170),
+  [`2a16a74`](https://github.com/n24q02m/web-core/commit/2a16a744c168d0c9d3f582e964657ac5b56e3079))
+
+### Testing
+
+- **scraper**: Add unit tests for merge_selectors utility
+  ([#148](https://github.com/n24q02m/web-core/pull/148),
+  [`9aa0c61`](https://github.com/n24q02m/web-core/commit/9aa0c61eede52131c26ec89ea602ee0301bed795))
+
+
 ## v1.2.0 (2026-04-17)
 
 ### Bug Fixes
