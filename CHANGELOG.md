@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v1.3.1 (2026-04-21)
+
+### Bug Fixes
+
+- Mount settings.yml in Docker SearXNG so JSON format works
+  ([`103c831`](https://github.com/n24q02m/web-core/commit/103c831b195b0620c137fd5ea2ff96b8ba7f2ab2))
+
+- Scope CD notify-downstream app token to n24q02m profile repo
+  ([`0246407`](https://github.com/n24q02m/web-core/commit/0246407470df22483a775df3ca9bdda09631e713))
+
+
 ## v1.3.0 (2026-04-21)
 
 ### Bug Fixes
