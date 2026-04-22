@@ -7,7 +7,7 @@ name = "n24q02m-web-core"
 version = "1.3.5"
 description = "Shared web infrastructure: search, scraping, HTTP security, browsers"
 readme = "README.md"
-requires-python = ">=3.13.13,<3.14"
+requires-python = ">=3.12"
 license = "MIT"
 authors = [{ name = "n24q02m" }]
 keywords = ["web", "scraping", "search", "searxng", "http", "ssrf", "crawl4ai"]
