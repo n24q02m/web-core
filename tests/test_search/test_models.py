@@ -46,6 +46,20 @@ class TestSearchResult:
         assert result.snippet == ""
         assert result.source == ""
 
+    def test_to_dict(self):
+        result = SearchResult(
+            url="https://example.com",
+            title="T",
+            snippet="S",
+            source="google",
+        )
+        assert result.to_dict() == {
+            "url": "https://example.com",
+            "title": "T",
+            "snippet": "S",
+            "source": "google",
+        }
+
 
 # ---------------------------------------------------------------------------
 # SearchError
