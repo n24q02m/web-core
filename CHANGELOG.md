@@ -2,6 +2,32 @@
 
 <!-- version list -->
 
+## v1.3.2 (2026-04-22)
+
+### Bug Fixes
+
+- Restore SearchResult.to_dict (used by wet-mcp MCP tool responses)
+  ([`d5fdb62`](https://github.com/n24q02m/web-core/commit/d5fdb621afe4ee01952610524c8741fc2cad96a3))
+
+- **deps**: Update non-major dependencies ([#183](https://github.com/n24q02m/web-core/pull/183),
+  [`570ee48`](https://github.com/n24q02m/web-core/commit/570ee4820cc4a1a4860bbf1c2155300da9f570d0))
+
+### Chores
+
+- **deps**: Lock file maintenance ([#185](https://github.com/n24q02m/web-core/pull/185),
+  [`2e13da0`](https://github.com/n24q02m/web-core/commit/2e13da0adf3b38e781448d263afa197e70c57f8a))
+
+- **deps**: Update astral-sh/setup-uv action to v8
+  ([#184](https://github.com/n24q02m/web-core/pull/184),
+  [`80744a5`](https://github.com/n24q02m/web-core/commit/80744a59f08da6ab6596ac06e9ea2a3677068252))
+
+### Performance Improvements
+
+- **http**: Fast-path URL query parameter tracking check
+  ([#186](https://github.com/n24q02m/web-core/pull/186),
+  [`58724e0`](https://github.com/n24q02m/web-core/commit/58724e03b44125096a26bcbc6fe70e597ce42876))
+
+
 ## v1.3.1 (2026-04-21)
 
 ### Bug Fixes
