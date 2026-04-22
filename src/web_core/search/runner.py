@@ -823,8 +823,19 @@ async def _start_docker_searxng(start_port: int) -> str | None:
         return None
 
     try:
-        # Avoid docker inside docker issues or daemon socket errors
-        res = await asyncio.to_thread(subprocess.run, [docker_bin, "info"], capture_output=True, check=False, text=True)
+        # Avoid docker inside docker issues or daemon socket errors.
+        # Pass stdin=DEVNULL everywhere -- otherwise the docker CLI inherits
+        # the parent stdin (which is the MCP JSON-RPC stream when this module
+        # runs inside an MCP stdio server) and blocks indefinitely on read.
+        res = await asyncio.to_thread(
+            subprocess.run,
+            [docker_bin, "info"],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=15,
+        )
         if res.returncode != 0:
             msg = "Docker is installed but the Daemon is NOT running. Please open Docker Desktop!"
             logger.warning(msg)
@@ -841,8 +852,10 @@ async def _start_docker_searxng(start_port: int) -> str | None:
         await asyncio.to_thread(
             subprocess.run,
             [docker_bin, "rm", "-f", container_name],
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             check=False,
+            timeout=15,
         )
 
         # Write Docker-specific settings (JSON format + limiter off) so the
@@ -872,7 +885,13 @@ async def _start_docker_searxng(start_port: int) -> str | None:
         ]
 
         logger.info("Starting SearXNG (Docker) on port %d...", port)
-        proc = await asyncio.to_thread(subprocess.Popen, cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        proc = await asyncio.to_thread(
+            subprocess.Popen,
+            cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
         await asyncio.to_thread(proc.wait)
         if proc.returncode != 0:
             return None
@@ -890,8 +909,10 @@ async def _start_docker_searxng(start_port: int) -> str | None:
         await asyncio.to_thread(
             subprocess.run,
             [docker_bin, "rm", "-f", container_name],
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             check=False,
+            timeout=15,
         )
         return None
     except Exception as e:
