@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.3.5 (2026-04-22)
+
+### Bug Fixes
+
+- Stdin=DEVNULL + fast-path for docker inspect in SearXNG runner
+  ([`9181358`](https://github.com/n24q02m/web-core/commit/91813582a16d02619a322dbacb6eae54102486d6))
+
+
 ## v1.3.4 (2026-04-22)
 
 ### Bug Fixes
