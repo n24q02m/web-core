@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.3.4 (2026-04-22)
+
+### Bug Fixes
+
+- Pass stdin=DEVNULL to docker subprocess calls
+  ([`d4347d9`](https://github.com/n24q02m/web-core/commit/d4347d9aab142adf39e71565e000bb9ca0c08750))
+
+
 ## v1.3.3 (2026-04-22)
 
 ### Bug Fixes
