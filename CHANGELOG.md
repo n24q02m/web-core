@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.3.3 (2026-04-22)
+
+### Bug Fixes
+
+- Relax pydantic lower bound to >=2.12.5 for cohere compatibility
+  ([`4a04a45`](https://github.com/n24q02m/web-core/commit/4a04a45f13426f781287297a1d63740a053913b3))
+
+
 ## v1.3.2 (2026-04-22)
 
 ### Bug Fixes
