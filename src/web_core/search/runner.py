@@ -192,6 +192,13 @@ def _read_discovery() -> dict | None:
     return None
 
 
+def _write_secure_text(path: Path, content: str) -> None:
+    """Write text to a file with restrictive permissions (0o600)."""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(content)
+
+
 def _write_discovery(port: int, pid: int) -> None:
     """Write SearXNG discovery file for other instances to find."""
     try:
@@ -843,9 +850,9 @@ async def _start_docker_searxng(start_port: int) -> str | None:
         settings_path = _CONFIG_DIR / f"searxng_docker_{port}.yml"
         await asyncio.to_thread(_CONFIG_DIR.mkdir, parents=True, exist_ok=True)
         await asyncio.to_thread(
-            settings_path.write_text,
+            _write_secure_text,
+            settings_path,
             _DOCKER_SETTINGS_TEMPLATE.format(secret_key=secrets.token_hex(32)),
-            "utf-8",
         )
 
         cmd = [
