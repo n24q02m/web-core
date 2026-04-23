@@ -252,6 +252,10 @@ class TestCheckIpSafe:
     def test_link_local_unsafe(self):
         assert _check_ip_safe("169.254.169.254", "metadata") is False
 
+    def test_cgnat_unsafe(self):
+        """Carrier-Grade NAT (CGNAT) 100.64.0.0/10 must be blocked."""
+        assert _check_ip_safe("100.64.1.1", "cgnat") is False
+
     def test_multicast_unsafe(self):
         assert _check_ip_safe("224.0.0.1", "multicast") is False
 
