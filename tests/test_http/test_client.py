@@ -274,6 +274,14 @@ class TestCheckIpSafe:
     def test_unparseable_ip_blocked(self):
         assert _check_ip_safe("not-an-ip", "unknown") is False
 
+    def test_cgnat_unsafe(self):
+        """100.64.0.0/10 Carrier-Grade NAT must be blocked."""
+        assert _check_ip_safe("100.64.0.1", "cgnat") is False
+
+    def test_unspecified_unsafe(self):
+        """0.0.0.0 unspecified address must be blocked."""
+        assert _check_ip_safe("0.0.0.0", "unspecified") is False
+
 
 # ---------------------------------------------------------------------------
 # _ssrf_event_hook
