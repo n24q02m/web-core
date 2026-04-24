@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v1.3.6 (2026-04-24)
+
+### Bug Fixes
+
+- Block CGNAT (100.64.0.0/10) + unspecified (0.0.0.0) IPs in SSRF guard
+  ([`1b25781`](https://github.com/n24q02m/web-core/commit/1b25781d7469209dd5335f70c5a20fd7bca59473))
+
+- Loosen pydantic pin to accommodate cohere consumers
+  ([`a39cd17`](https://github.com/n24q02m/web-core/commit/a39cd177423ed7594e15c9f0a03885c2efa73226))
+
+- **deps**: Update non-major dependencies ([#188](https://github.com/n24q02m/web-core/pull/188),
+  [`4ad88a0`](https://github.com/n24q02m/web-core/commit/4ad88a0c2907e238b356119e4586f988ac56f716))
+
+### Chores
+
+- **deps**: Lock file maintenance ([#189](https://github.com/n24q02m/web-core/pull/189),
+  [`1af9150`](https://github.com/n24q02m/web-core/commit/1af9150f6ef74b9eb1b6cd70f376261371ef6255))
+
+
 ## v1.3.5 (2026-04-22)
 
 ### Bug Fixes
