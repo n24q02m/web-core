@@ -1087,23 +1087,24 @@ async def _ensure_searxng_locked(*, auto_start: bool, start_port: int) -> str:
     # Fast path: our own SearXNG (subprocess OR docker container) is already
     # running on a known port. Cheaper than re-reading the discovery file
     # and re-running a full health check with retries.
-    if _searxng_port is not None and (
-        _searxng_process is not None or _searxng_docker_container is not None
+    if (
+        _searxng_port is not None
+        and (_searxng_process is not None or _searxng_docker_container is not None)
+        and await asyncio.to_thread(_is_process_alive)
     ):
-        if await asyncio.to_thread(_is_process_alive):
-            url = f"http://127.0.0.1:{_searxng_port}"
-            if await _quick_health_check(url, retries=1):
-                logger.debug("SearXNG already running at %s", url)
-                return url
-            # Process/container alive but not serving -- kill and restart.
-            logger.warning(
-                "SearXNG alive but not healthy at %s, killing and restarting",
-                url,
-            )
-            if _searxng_process is not None:
-                await _force_kill_process(_searxng_process)
-                _searxng_process = None
-            _searxng_port = None
+        url = f"http://127.0.0.1:{_searxng_port}"
+        if await _quick_health_check(url, retries=1):
+            logger.debug("SearXNG already running at %s", url)
+            return url
+        # Process/container alive but not serving -- kill and restart.
+        logger.warning(
+            "SearXNG alive but not healthy at %s, killing and restarting",
+            url,
+        )
+        if _searxng_process is not None:
+            await _force_kill_process(_searxng_process)
+            _searxng_process = None
+        _searxng_port = None
 
     # Try reusing existing SearXNG from another process.
     reused_url = await _try_reuse_existing()
