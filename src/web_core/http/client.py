@@ -76,7 +76,7 @@ def _check_ip_safe(ip_str: str, hostname: str) -> bool:
         if "%" in ip_str:
             ip_str = ip_str.split("%")[0]
         ip = ipaddress.ip_address(ip_str)
-        if not ip.is_global or ip.is_multicast:
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
             logger.warning("Blocked private/unsafe IP: %s for host %s", ip, hostname)
             return False
     except ValueError:
