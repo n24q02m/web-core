@@ -109,13 +109,15 @@ mise run fix       # ruff check --fix + ruff format
 | Commits           | English (Conventional Commits) |
 | Docs, Comments    | Tieng Viet                  |
 
-## Infisical
+## Secrets (skret + AWS SSM)
 
-- Project: `790b3d1e-188f-4ead-bfcc-da5dca110d50`
+- skret SSM namespace: `/web-core/prod` (region `ap-southeast-1`)
+- CI: `skret env -e prod --path=/web-core/prod --format=dotenv >> $GITHUB_ENV`
+- Local dev: `skret run -e prod -- <cmd>` (uses AWS credential chain)
 
 ## Security
 
 - KHONG BAO GIO commit credentials thuc (API keys, tokens, passwords)
 - Luon dung placeholders hoac environment variables
-- Secrets quan ly qua Infisical
+- Secrets quan ly qua skret + AWS SSM Parameter Store
 - TAT CA GitHub Actions pinned to SHA
