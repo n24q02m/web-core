@@ -72,9 +72,11 @@ def extract_turnstile_sitekey(html: str) -> str | None:
 
     Returns the site key string, or None if not found.
     """
-    # Fast path: skip regex execution entirely if "sitekey" is not present in the HTML.
+    # Fast path: skip regex execution entirely if site key variants are not present.
     # Speeds up processing of normal pages significantly.
-    if "sitekey" not in html.lower():
+    # Performance Optimization: Using exact case checks avoids a full `html.lower()`
+    # string allocation which is expensive for large non-challenge pages.
+    if "sitekey" not in html and "siteKey" not in html:
         return None
 
     for pattern in _CF_SITEKEY_PATTERNS:
