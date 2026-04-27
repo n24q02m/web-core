@@ -2,6 +2,28 @@
 
 <!-- version list -->
 
+## v1.3.7 (2026-04-27)
+
+### Bug Fixes
+
+- Collapse nested if statements in SearXNG runner (SIM102)
+  ([`554934c`](https://github.com/n24q02m/web-core/commit/554934c2bb5927e2e4439662d4307d9de863f739))
+
+- Sweep doppler/infisical refs to skret SSM
+  ([`249ec29`](https://github.com/n24q02m/web-core/commit/249ec29a0b558283c2a08f0885465263975ddab4))
+
+- **deps**: Update non-major dependencies ([#193](https://github.com/n24q02m/web-core/pull/193),
+  [`fc428f7`](https://github.com/n24q02m/web-core/commit/fc428f77fa74eed6f2219e82a30f39ccebb452af))
+
+### Chores
+
+- **deps**: Lock file maintenance ([#194](https://github.com/n24q02m/web-core/pull/194),
+  [`0c77c91`](https://github.com/n24q02m/web-core/commit/0c77c916e866af1198d7b413351dfdf3a9f09139))
+
+- **deps**: Lock file maintenance ([#191](https://github.com/n24q02m/web-core/pull/191),
+  [`d6b65be`](https://github.com/n24q02m/web-core/commit/d6b65be7c4433e091d1e58ed8555e8a7fca22986))
+
+
 ## v1.3.6 (2026-04-24)
 
 ### Bug Fixes
