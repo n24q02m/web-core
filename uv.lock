@@ -1113,7 +1113,7 @@ requires-dist = [
     { name = "curl-cffi", specifier = ">=0.15.0" },
     { name = "gdown", specifier = ">=6.0.0" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "langgraph", specifier = ">=1.1.9" },
+    { name = "langgraph", specifier = ">=1.1.10" },
     { name = "patchright", specifier = ">=1.58.2" },
     { name = "pillow", specifier = ">=12.2.0" },
     { name = "pydantic", specifier = ">=2.13.3,<2.14" },
