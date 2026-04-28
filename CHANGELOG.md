@@ -2,6 +2,30 @@
 
 <!-- version list -->
 
+## v1.3.8 (2026-04-28)
+
+### Bug Fixes
+
+- Pin pydantic <2.13 for cohere consumer compatibility
+  ([#199](https://github.com/n24q02m/web-core/pull/199),
+  [`8429e11`](https://github.com/n24q02m/web-core/commit/8429e11e1e2522b29aff9b0f6ddee52080c5a26a))
+
+- **deps**: Update dependency langgraph to >=1.1.10
+  ([#195](https://github.com/n24q02m/web-core/pull/195),
+  [`55e64ad`](https://github.com/n24q02m/web-core/commit/55e64adecdd414c9b766281c7bb63037f1c0c618))
+
+### Chores
+
+- **deps**: Lock file maintenance ([#196](https://github.com/n24q02m/web-core/pull/196),
+  [`87d2d57`](https://github.com/n24q02m/web-core/commit/87d2d57ef3697ba856c2806b7bfbe284e76ee9f3))
+
+### Performance Improvements
+
+- **scraper**: Optimize Turnstile sitekey extraction fast-path
+  ([#197](https://github.com/n24q02m/web-core/pull/197),
+  [`b9dcb2d`](https://github.com/n24q02m/web-core/commit/b9dcb2dac9641a577e1130a17d6a8feea00a1263))
+
+
 ## v1.3.7 (2026-04-27)
 
 ### Bug Fixes
