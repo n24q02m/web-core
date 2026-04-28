@@ -97,6 +97,13 @@
         "python"
       ],
       "enabled": false
+    },
+    {
+      "description": "Pin pydantic <2.13 to keep cohere>=6.1.0 compatibility (cohere requires pydantic-core<2.44.0; pydantic 2.13.x ships pydantic-core 2.46+)",
+      "matchPackageNames": [
+        "pydantic"
+      ],
+      "allowedVersions": "<2.13"
     }
   ]
 }
