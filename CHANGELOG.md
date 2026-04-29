@@ -2,6 +2,24 @@
 
 <!-- version list -->
 
+## v1.3.9 (2026-04-29)
+
+### Bug Fixes
+
+- Pin Python to ==3.13.* for pin parity (D13) ([#203](https://github.com/n24q02m/web-core/pull/203),
+  [`2b5903f`](https://github.com/n24q02m/web-core/commit/2b5903fb51c6c928b673cc1c690206be10973e07))
+
+- **deps**: Lock file maintenance ([#202](https://github.com/n24q02m/web-core/pull/202),
+  [`494338f`](https://github.com/n24q02m/web-core/commit/494338f6534e4589ec1fa2fa46cbc51054d78ee5))
+
+- **deps**: Update dawidd6/action-send-mail action to v17
+  ([#201](https://github.com/n24q02m/web-core/pull/201),
+  [`c19832f`](https://github.com/n24q02m/web-core/commit/c19832f8571d0b87bcc12e4572f116e0be32d768))
+
+- **deps**: Update non-major dependencies ([#200](https://github.com/n24q02m/web-core/pull/200),
+  [`6df620c`](https://github.com/n24q02m/web-core/commit/6df620ca58efe3a84123ddd383ebede18a17843a))
+
+
 ## v1.3.8 (2026-04-28)
 
 ### Bug Fixes
