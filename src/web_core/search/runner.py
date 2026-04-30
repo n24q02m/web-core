@@ -34,9 +34,29 @@ import tempfile
 import time
 from pathlib import Path
 
+import filelock
 import httpx
 
 logger = logging.getLogger(__name__)
+
+# Pinned port for Docker SearXNG container.
+# Random port per-spawn caused one container per wet daemon (--rm only triggers
+# on container stop, but detached -d kept zombies alive after parent exits).
+# Pinned port 41592 + filelock guarantees at most one container across all processes.
+PINNED_SEARXNG_PORT = 41592
+
+# Cross-process filelock preventing concurrent Docker spawn races.
+_DOCKER_LOCK: filelock.FileLock | None = None
+
+
+def _get_docker_lock() -> filelock.FileLock:
+    """Get or create the Docker spawn filelock (lazy init for config dir creation)."""
+    global _DOCKER_LOCK
+    if _DOCKER_LOCK is None:
+        _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        _DOCKER_LOCK = filelock.FileLock(str(_CONFIG_DIR / "searxng_docker.lock"))
+    return _DOCKER_LOCK
+
 
 # Maximum number of restart attempts before giving up.
 _MAX_RESTART_ATTEMPTS = 3
@@ -815,6 +835,12 @@ search:
 async def _start_docker_searxng(start_port: int) -> str | None:
     """Try starting SearXNG via Docker as a fallback.
 
+    Uses a pinned port (PINNED_SEARXNG_PORT) and a cross-process filelock to
+    guarantee at most one searxng-wet container runs at any time.  Previously,
+    random port selection spawned a new container per wet daemon; ``--rm`` only
+    triggers on container stop, but detached ``-d`` kept zombies alive after
+    parent exits.
+
     Mounts a generated settings.yml so that JSON format is enabled and the
     rate limiter is disabled -- otherwise searxng/searxng:latest default
     config returns 403 on ``/search?format=json`` which makes the API
@@ -846,61 +872,81 @@ async def _start_docker_searxng(start_port: int) -> str | None:
             print(f"\n[!] {msg}\n", file=sys.stderr)
             return None
 
-        port = await asyncio.to_thread(_find_available_port, start_port)
-        await _kill_stale_port_process(port)
-        await asyncio.sleep(0.5)
-
+        port = PINNED_SEARXNG_PORT
         container_name = f"searxng-wet-{port}"
-
-        # Kill stale container
-        await asyncio.to_thread(
-            subprocess.run,
-            [docker_bin, "rm", "-f", container_name],
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            check=False,
-            timeout=15,
-        )
-
-        # Write Docker-specific settings (JSON format + limiter off) so the
-        # container exposes a usable /search JSON API.
-        settings_path = _CONFIG_DIR / f"searxng_docker_{port}.yml"
-        await asyncio.to_thread(_CONFIG_DIR.mkdir, parents=True, exist_ok=True)
-        await asyncio.to_thread(
-            _write_secure_text,
-            settings_path,
-            _DOCKER_SETTINGS_TEMPLATE.format(secret_key=secrets.token_hex(32)),
-        )
-
-        cmd = [
-            docker_bin,
-            "run",
-            "--rm",
-            "-d",
-            "--name",
-            container_name,
-            "-p",
-            f"127.0.0.1:{port}:8080",
-            "-e",
-            f"SEARXNG_SECRET={secrets.token_hex(32)}",
-            "-v",
-            f"{settings_path}:/etc/searxng/settings.yml:ro",
-            "searxng/searxng:latest",
-        ]
-
-        logger.info("Starting SearXNG (Docker) on port %d...", port)
-        proc = await asyncio.to_thread(
-            subprocess.Popen,
-            cmd,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        await asyncio.to_thread(proc.wait)
-        if proc.returncode != 0:
-            return None
-
         url = f"http://127.0.0.1:{port}"
+
+        # Acquire cross-process filelock before inspecting/spawning container.
+        # Timeout=10s: if another process holds the lock, we wait briefly.
+        lock = await asyncio.to_thread(_get_docker_lock)
+        with lock.acquire(timeout=10):
+            # Check if container already running -- reuse it.
+            ps_res = await asyncio.to_thread(
+                subprocess.run,
+                [docker_bin, "ps", "-q", "-f", f"name={container_name}"],
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                check=False,
+                timeout=10,
+            )
+            if ps_res.stdout.strip():
+                logger.info("Reusing existing SearXNG Docker container %s at %s", container_name, url)
+                if await _quick_health_check(url):
+                    _searxng_docker_container = container_name
+                    _searxng_port = port
+                    _is_owner = False
+                    return url
+                # Container running but not healthy -- fall through to respawn.
+                logger.warning("Container %s running but unhealthy, respawning", container_name)
+
+            # Remove stale container (if any -- ignore errors).
+            await asyncio.to_thread(
+                subprocess.run,
+                [docker_bin, "rm", "-f", container_name],
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                check=False,
+                timeout=15,
+            )
+
+            # Write Docker-specific settings (JSON format + limiter off) so the
+            # container exposes a usable /search JSON API.
+            settings_path = _CONFIG_DIR / f"searxng_docker_{port}.yml"
+            await asyncio.to_thread(_CONFIG_DIR.mkdir, parents=True, exist_ok=True)
+            await asyncio.to_thread(
+                _write_secure_text,
+                settings_path,
+                _DOCKER_SETTINGS_TEMPLATE.format(secret_key=secrets.token_hex(32)),
+            )
+
+            cmd = [
+                docker_bin,
+                "run",
+                "--rm",
+                "-d",
+                "--name",
+                container_name,
+                "-p",
+                f"127.0.0.1:{port}:8080",
+                "-e",
+                f"SEARXNG_SECRET={secrets.token_hex(32)}",
+                "-v",
+                f"{settings_path}:/etc/searxng/settings.yml:ro",
+                "searxng/searxng:latest",
+            ]
+
+            logger.info("Starting SearXNG (Docker) on port %d...", port)
+            proc = await asyncio.to_thread(
+                subprocess.Popen,
+                cmd,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            await asyncio.to_thread(proc.wait)
+            if proc.returncode != 0:
+                return None
+
         if await _wait_for_service(url, timeout=45.0):
             logger.info("SearXNG (Docker) ready at %s", url)
             _searxng_docker_container = container_name
