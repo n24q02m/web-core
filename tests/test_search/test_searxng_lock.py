@@ -5,6 +5,7 @@ Verifies that _start_docker_searxng:
 2. Spawns exactly one new container (rm -f stale + docker run) when absent.
 
 All Docker/network calls are mocked -- no real Docker daemon required.
+These tests run on CI environments without Docker installed.
 """
 
 from __future__ import annotations
@@ -14,6 +15,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from web_core.search.runner import PINNED_SEARXNG_PORT, _start_docker_searxng
+
+# Fake docker binary path used across tests (avoids shutil.which("docker") returning None on CI).
+_FAKE_DOCKER = "/usr/bin/docker"
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -28,10 +33,12 @@ def _reset_docker_state():
     mod._searxng_docker_container = None
     mod._searxng_port = None
     mod._is_owner = False
+    mod._DOCKER_LOCK = None  # Reset lazy filelock so tmp_path dir is used
     yield
     mod._searxng_docker_container = None
     mod._searxng_port = None
     mod._is_owner = False
+    mod._DOCKER_LOCK = None
 
 
 # ---------------------------------------------------------------------------
@@ -43,15 +50,17 @@ async def test_spawn_docker_searxng_reuses_existing_container(tmp_path, monkeypa
     """When container searxng-wet-{PINNED_PORT} already running, do NOT docker run."""
     import web_core.search.runner as mod
 
-    monkeypatch.setattr(mod, "_CONFIG_DIR", tmp_path / ".web-core")
-    monkeypatch.setattr(mod, "_DISCOVERY_FILE", tmp_path / ".web-core" / "searxng_instance.json")
+    config_dir = tmp_path / ".web-core"
+    config_dir.mkdir()
+    monkeypatch.setattr(mod, "_CONFIG_DIR", config_dir)
+    monkeypatch.setattr(mod, "_DISCOVERY_FILE", config_dir / "searxng_instance.json")
 
     container_name = f"searxng-wet-{PINNED_SEARXNG_PORT}"
 
     call_args_list: list = []
 
     def fake_run(cmd, **kwargs):
-        call_args_list.append(cmd)
+        call_args_list.append(list(cmd))
         result = MagicMock()
         result.returncode = 0
         # docker info succeeds
@@ -66,6 +75,7 @@ async def test_spawn_docker_searxng_reuses_existing_container(tmp_path, monkeypa
         return result
 
     with (
+        patch("web_core.search.runner.shutil.which", return_value=_FAKE_DOCKER),
         patch("web_core.search.runner.subprocess.run", side_effect=fake_run),
         patch("web_core.search.runner._quick_health_check", new=AsyncMock(return_value=True)),
         patch("web_core.search.runner._write_discovery"),
@@ -87,15 +97,17 @@ async def test_spawn_docker_searxng_creates_when_absent(tmp_path, monkeypatch):
     """When no container running on PINNED_PORT, rm stale + docker run must be called."""
     import web_core.search.runner as mod
 
-    monkeypatch.setattr(mod, "_CONFIG_DIR", tmp_path / ".web-core")
-    monkeypatch.setattr(mod, "_DISCOVERY_FILE", tmp_path / ".web-core" / "searxng_instance.json")
+    config_dir = tmp_path / ".web-core"
+    config_dir.mkdir()
+    monkeypatch.setattr(mod, "_CONFIG_DIR", config_dir)
+    monkeypatch.setattr(mod, "_DISCOVERY_FILE", config_dir / "searxng_instance.json")
 
     container_name = f"searxng-wet-{PINNED_SEARXNG_PORT}"
 
     call_args_list: list = []
 
     def fake_run(cmd, **kwargs):
-        call_args_list.append(cmd)
+        call_args_list.append(list(cmd))
         result = MagicMock()
         result.returncode = 0
         # docker info succeeds
@@ -116,6 +128,7 @@ async def test_spawn_docker_searxng_creates_when_absent(tmp_path, monkeypatch):
     mock_popen = MagicMock(return_value=fake_popen)
 
     with (
+        patch("web_core.search.runner.shutil.which", return_value=_FAKE_DOCKER),
         patch("web_core.search.runner.subprocess.run", side_effect=fake_run),
         patch("web_core.search.runner.subprocess.Popen", mock_popen),
         patch("web_core.search.runner._wait_for_service", new=AsyncMock(return_value=True)),
