@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.3.10-beta.1 (2026-04-30)
+
+### Bug Fixes
+
+- Patch shutil.which in searxng lock tests for CI without Docker
+  ([#208](https://github.com/n24q02m/web-core/pull/208),
+  [`f6b2b4a`](https://github.com/n24q02m/web-core/commit/f6b2b4a135eb9f96d18138d4d1fdd466dd9f5988))
+
+- **search**: Pin searxng port + filelock to prevent container leak
+  ([#208](https://github.com/n24q02m/web-core/pull/208),
+  [`f6b2b4a`](https://github.com/n24q02m/web-core/commit/f6b2b4a135eb9f96d18138d4d1fdd466dd9f5988))
+
+
 ## v1.3.9 (2026-04-29)
 
 ### Bug Fixes
