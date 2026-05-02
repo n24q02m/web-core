@@ -144,7 +144,9 @@ class CaptchaStrategy(BaseStrategy):
         scripts = await page.query_selector_all("script")
         for s in scripts:
             text = await s.text_content() or ""
-            if "sitekey" not in text.lower():
+            # Performance Optimization: exact case check avoids full string allocation
+            # which can be expensive for large inline scripts.
+            if "sitekey" not in text and "siteKey" not in text:
                 continue
             m = _RE_SCRIPT_SITEKEY.search(text)
             if m:
