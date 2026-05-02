@@ -1015,13 +1015,16 @@ async def _start_searxng_subprocess(start_port: int) -> str | None:  # pragma: n
                 sys.executable,
                 "-c",
                 (
-                    "from waitress import serve;"
+                    "import sys;"
+                    " port = int(sys.argv[1]);"
+                    " from waitress import serve;"
                     " from searx.webapp import app;"
-                    f" serve(app,"
-                    f" host='127.0.0.1', port={port},"
-                    f" threads=8, channel_timeout=120,"
-                    f" cleanup_interval=30)"
+                    " serve(app,"
+                    " host='127.0.0.1', port=port,"
+                    " threads=8, channel_timeout=120,"
+                    " cleanup_interval=30)"
                 ),
+                str(port),
             ]
         else:
             cmd = [sys.executable, "-m", "searx.webapp"]
