@@ -179,23 +179,28 @@ async def fetch_folder_chapters(
     files.sort(key=lambda f: _natural_sort_key(f.name))
     files = files[:max_chapters]
 
-    chapters: list[DriveChapter] = []
-    for i, f in enumerate(files):
+    # Performance Optimization: Use `asyncio.gather` to parallelize file downloads.
+    # Individual downloads are wrapped in an async helper with a try-except block
+    # so that a single failure doesn't cancel the entire operation, and results
+    # remain deterministically ordered matching the `files` input order.
+    async def _safe_download(f: DriveFile, idx: int) -> DriveChapter | None:
         try:
             text = await download_text_file(f.file_id)
             if text.strip():
-                chapters.append(
-                    DriveChapter(
-                        title=Path(f.name).stem,
-                        text=text,
-                        order=i + 1,
-                        file_id=f.file_id,
-                    )
+                return DriveChapter(
+                    title=Path(f.name).stem,
+                    text=text,
+                    order=idx + 1,
+                    file_id=f.file_id,
                 )
         except Exception as e:
             logger.warning("Failed to download Drive file %s (%s): %s", f.name, f.file_id, e)
+        return None
 
-    return chapters
+    tasks = [_safe_download(f, i) for i, f in enumerate(files)]
+    results = await asyncio.gather(*tasks)
+
+    return [ch for ch in results if ch is not None]
 
 
 def _natural_sort_key(s: str) -> list[int | str]:

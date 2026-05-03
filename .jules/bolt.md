@@ -1,3 +1,6 @@
 ## 2025-03-02 - Optimize sitekey extraction text.lower() call
 **Learning:** Performing `text.lower()` on large strings (such as a full script tag's content) forces a new string allocation, which degrades performance significantly inside a loop.
 **Action:** Replace `text.lower()` with exact substring checks (e.g., `"sitekey" not in text and "siteKey" not in text:`) to bypass script tags quickly without triggering costly string allocations.
+## 2025-05-03 - Parallelize async downloads with asyncio.gather
+**Learning:** In `src/web_core/adapters/google_drive.py`, sequential downloads caused linear execution time. By parallelizing asynchronous tasks using `asyncio.gather`, latency can be reduced to near-constant. When parallelizing, it is necessary to wrap the individual awaited operation inside a helper async function with a `try...except` block to prevent a single failure from cancelling the entire `gather` call and to ensure results remain in their original deterministic order.
+**Action:** When fetching multiple independent remote resources, use `asyncio.gather` combined with an inner error-handling wrapper to improve performance while maintaining robustness and deterministic ordering.
