@@ -928,8 +928,6 @@ async def _start_docker_searxng(start_port: int) -> str | None:
                 container_name,
                 "-p",
                 f"127.0.0.1:{port}:8080",
-                "-e",
-                f"SEARXNG_SECRET={secrets.token_hex(32)}",
                 "-v",
                 f"{settings_path}:/etc/searxng/settings.yml:ro",
                 "searxng/searxng:latest",
