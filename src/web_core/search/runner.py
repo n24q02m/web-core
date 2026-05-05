@@ -84,6 +84,8 @@ _SEARXNG_INSTALL_URL = "https://github.com/searxng/searxng/archive/08ef7a63d7ffd
 
 # Minimal SearXNG settings template.
 _SETTINGS_TEMPLATE = """\
+use_default_settings: true
+
 general:
   debug: false
   instance_name: "web-core SearXNG"
