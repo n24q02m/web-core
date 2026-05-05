@@ -180,20 +180,33 @@ async def fetch_folder_chapters(
     files = files[:max_chapters]
 
     chapters: list[DriveChapter] = []
-    for i, f in enumerate(files):
-        try:
-            text = await download_text_file(f.file_id)
-            if text.strip():
-                chapters.append(
-                    DriveChapter(
+
+    # Performance Optimization: Parallelize chapter downloads
+    # By using a semaphore and asyncio.gather, we reduce latency from O(N) to roughly O(1)
+    # for typical folder sizes, without triggering rate limits from concurrent connections.
+    sem = asyncio.Semaphore(10)
+
+    async def _download_chapter(i: int, f: DriveFile) -> DriveChapter | None:
+        async with sem:
+            try:
+                text = await download_text_file(f.file_id)
+                if text.strip():
+                    return DriveChapter(
                         title=Path(f.name).stem,
                         text=text,
                         order=i + 1,
                         file_id=f.file_id,
                     )
-                )
-        except Exception as e:
-            logger.warning("Failed to download Drive file %s (%s): %s", f.name, f.file_id, e)
+            except Exception as e:
+                logger.warning("Failed to download Drive file %s (%s): %s", f.name, f.file_id, e)
+            return None
+
+    tasks = [_download_chapter(i, f) for i, f in enumerate(files)]
+    results = await asyncio.gather(*tasks)
+
+    for res in results:
+        if res is not None:
+            chapters.append(res)
 
     return chapters
 
