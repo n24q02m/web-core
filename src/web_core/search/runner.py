@@ -96,10 +96,20 @@ server:
   port: {port}
   bind_address: "127.0.0.1"
   secret_key: "{secret_key}"
+  # Disable bot detection / rate limiter so JSON API calls (used by
+  # web-core search clients) are not 403'd. Mirrors the Docker
+  # template which already disables the limiter.
+  limiter: false
+  public_instance: false
 
 search:
   safe_search: 0
   default_lang: ""
+  # Enable JSON format so /search?format=json works for API clients.
+  # SearXNG default settings.yml only enables HTML format.
+  formats:
+    - html
+    - json
 
 enabled_plugins:
   - 'Hash plugin'
