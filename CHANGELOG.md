@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.3.11 (2026-05-05)
+
+### Bug Fixes
+
+- Add use_default_settings to subprocess SearXNG template
+  ([#221](https://github.com/n24q02m/web-core/pull/221),
+  [`2812387`](https://github.com/n24q02m/web-core/commit/28123872d5fdd4f2ec4c8cc858264ac2088d5828))
+
+- Disable SearXNG limiter + enable JSON in subprocess template
+  ([#221](https://github.com/n24q02m/web-core/pull/221),
+  [`2812387`](https://github.com/n24q02m/web-core/commit/28123872d5fdd4f2ec4c8cc858264ac2088d5828))
+
+
 ## v1.3.10 (2026-05-05)
 
 
