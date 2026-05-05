@@ -2,6 +2,30 @@
 
 <!-- version list -->
 
+## v1.3.10-beta.2 (2026-05-05)
+
+### Bug Fixes
+
+- Add use_default_settings to subprocess SearXNG template
+  ([#220](https://github.com/n24q02m/web-core/pull/220),
+  [`f65d58b`](https://github.com/n24q02m/web-core/commit/f65d58b7c8289e907655a4b5749cf953e25f754b))
+
+### Chores
+
+- **deps**: Lock file maintenance ([#205](https://github.com/n24q02m/web-core/pull/205),
+  [`4e1dc0f`](https://github.com/n24q02m/web-core/commit/4e1dc0fc88d33f3ceb2a898fe49bed49fbc7dda7))
+
+- **deps**: Update github/codeql-action digest to e46ed2c
+  ([#210](https://github.com/n24q02m/web-core/pull/210),
+  [`910a833`](https://github.com/n24q02m/web-core/commit/910a8335a015c1dc888ad44b99bca13d0ef2646d))
+
+### Performance Improvements
+
+- **scraper**: Avoid string allocation in captcha sitekey extraction
+  ([#207](https://github.com/n24q02m/web-core/pull/207),
+  [`fd27ab7`](https://github.com/n24q02m/web-core/commit/fd27ab790a6a7c033af68a1320e281bd4e53da40))
+
+
 ## v1.3.10-beta.1 (2026-04-30)
 
 ### Bug Fixes
