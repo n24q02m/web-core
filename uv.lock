@@ -1114,7 +1114,7 @@ requires-dist = [
     { name = "gdown", specifier = ">=6.0.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "langgraph", specifier = ">=1.1.10" },
-    { name = "patchright", specifier = ">=1.58.2" },
+    { name = "patchright", specifier = ">=1.59.1" },
     { name = "pillow", specifier = ">=12.2.0" },
     { name = "pydantic", specifier = ">=2.12.5,<2.13" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.3" },
@@ -1122,7 +1122,7 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=7.1.0" },
     { name = "pytest-timeout", marker = "extra == 'dev'", specifier = ">=2.4.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15.12" },
-    { name = "ty", marker = "extra == 'dev'", specifier = ">=0.0.33" },
+    { name = "ty", marker = "extra == 'dev'", specifier = ">=0.0.34" },
 ]
 provides-extras = ["dev"]
 
