@@ -2,6 +2,23 @@
 
 <!-- version list -->
 
+## v1.3.12-beta.1 (2026-05-06)
+
+### Chores
+
+- **deps**: Lock file maintenance ([#214](https://github.com/n24q02m/web-core/pull/214),
+  [`fe6400d`](https://github.com/n24q02m/web-core/commit/fe6400d18ed732fcbef12803f5c7e43142b2cd84))
+
+- **deps**: Update step-security/harden-runner digest to a5ad31d
+  ([#212](https://github.com/n24q02m/web-core/pull/212),
+  [`ef14310`](https://github.com/n24q02m/web-core/commit/ef143109ff2d92bdb252b8dc0e4cc49c5bdb34b4))
+
+### Performance Improvements
+
+- Parallelize google drive chapter downloads ([#222](https://github.com/n24q02m/web-core/pull/222),
+  [`cb467da`](https://github.com/n24q02m/web-core/commit/cb467da9f2e2b766df6de0ccd806366bf4d3e66f))
+
+
 ## v1.3.11 (2026-05-05)
 
 ### Bug Fixes
