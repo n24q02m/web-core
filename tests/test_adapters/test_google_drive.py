@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import asyncio
 import pytest
 
 from web_core.adapters.google_drive import (
@@ -330,8 +330,6 @@ async def test_fetch_folder_chapters_max_chapters():
 
 async def test_fetch_folder_chapters_is_concurrent():
     """Verify that fetch_folder_chapters downloads files concurrently."""
-    import time
-    from unittest.mock import AsyncMock
 
     files = [
         DriveFile(file_id="f1", name="ch1.txt"),
