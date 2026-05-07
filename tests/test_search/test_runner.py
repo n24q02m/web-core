@@ -896,11 +896,11 @@ class TestSettingsTemplate:
         """Template renders without errors."""
         rendered = _SETTINGS_TEMPLATE.format(
             port=18888,
-            secret_key="placeholder_for_tests",
+            secret_key="test-key-123",
             enable_http2="true",
         )
         assert "port: 18888" in rendered
-        assert 'secret_key: "placeholder_for_tests"' in rendered
+        assert 'secret_key: "test-key-123"' in rendered
         assert "enable_http2: true" in rendered
 
 
