@@ -162,12 +162,14 @@ class TestDiscovery:
             f.write(json.dumps({"port": 8080}))  # Missing pid
         assert _read_discovery() is None
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions not supported on Windows")
     def test_read_discovery_insecure_permissions(self, tmp_discovery):
         """Returns None when discovery file has insecure permissions."""
         _write_discovery(18888, 12345)
         os.chmod(tmp_discovery, 0o644)
         assert _read_discovery() is None
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions not supported on Windows")
     def test_write_discovery_secure_permissions(self, tmp_discovery):
         """Discovery file is created with 0o600 permissions."""
         _write_discovery(18888, 12345)
@@ -488,7 +490,7 @@ class TestGetSettingsPath:
 class TestGetProcessKwargs:
     def test_unix_uses_start_new_session(self):
         """On Unix, uses start_new_session=True for process group management."""
-        with patch("sys.platform", "linux"), patch("os.getuid", return_value=1000):
+        with patch("sys.platform", "linux"), patch("os.getuid", return_value=1000, create=True):
             kwargs = _get_process_kwargs()
             assert kwargs.get("start_new_session") is True
             assert "preexec_fn" not in kwargs
@@ -500,8 +502,8 @@ class TestGetProcessKwargs:
         mock_pw.pw_gid = 65534
         with (
             patch("sys.platform", "linux"),
-            patch("os.getuid", return_value=0),
-            patch("pwd.getpwnam", return_value=mock_pw),
+            patch("os.getuid", return_value=0, create=True),
+            patch("pwd.getpwnam", return_value=mock_pw, create=True),
         ):
             kwargs = _get_process_kwargs()
             assert kwargs["user"] == 65534

@@ -219,7 +219,7 @@ def _read_discovery() -> dict | None:
             return None
 
         # Check permissions of the discovery file (should be 0o600).
-        if (os.stat(_DISCOVERY_FILE).st_mode & 0o777) != 0o600:
+        if sys.platform != "win32" and (os.stat(_DISCOVERY_FILE).st_mode & 0o777) != 0o600:
             logger.warning("Discovery file has insecure permissions, ignoring")
             return None
 
