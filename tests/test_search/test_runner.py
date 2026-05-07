@@ -531,11 +531,11 @@ class TestGetSecureEnv:
         from web_core.search.runner import _get_secure_env
 
         settings_path = Path("/tmp/settings.yml")
-        with patch.dict("os.environ", {"PATH": "/bin", "SECRET": "hidden", "PYTHONPATH": "src"}):
+        with patch.dict("os.environ", {"PATH": "/bin", "MY_VAR": "discarded_value", "PYTHONPATH": "src"}):
             env = _get_secure_env(settings_path)
             assert env["PATH"] == "/bin"
             assert env["PYTHONPATH"] == "src"
-            assert "SECRET" not in env
+            assert "MY_VAR" not in env
             assert env["SEARXNG_SETTINGS_PATH"] == str(settings_path)
 
 
@@ -896,11 +896,11 @@ class TestSettingsTemplate:
         """Template renders without errors."""
         rendered = _SETTINGS_TEMPLATE.format(
             port=18888,
-            secret_key="test_secret",
+            secret_key="placeholder_for_tests",
             enable_http2="true",
         )
         assert "port: 18888" in rendered
-        assert 'secret_key: "test_secret"' in rendered
+        assert 'secret_key: "placeholder_for_tests"' in rendered
         assert "enable_http2: true" in rendered
 
 

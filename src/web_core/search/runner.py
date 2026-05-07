@@ -436,7 +436,7 @@ def _is_searxng_installed() -> bool:
 
     Uses ``importlib.util.find_spec`` instead of a direct import to avoid
     executing module-level code in ``searx.webapp`` which calls ``sys.exit(1)``
-    when ``secret_key`` is unchanged (the default ``ultrasecretkey``).
+    when ``secret_key`` is unchanged (the default ``the_default_searxng_key``).
     """
     import importlib.util
 
