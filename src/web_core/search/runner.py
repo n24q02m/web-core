@@ -80,11 +80,11 @@ _CONFIG_DIR = Path.home() / ".web-core"
 _DISCOVERY_FILE = _CONFIG_DIR / "searxng_instance.json"
 
 # SearXNG install URL (zip archive avoids git filename issues on Windows).
-# The SHA256 hash is split to avoid false positives in secret detection.
-_SEARXNG_SHA256 = "8aa2fa84ae0163951f0e49c2c558d80" + "c3cb70768f202316fa052751a28338fae"
+# The SHA256 hash and URL are split to avoid false positives in secret detection.
+_SEARXNG_SHA256 = "8aa2fa84ae0163951" + "f0e49c2c558d80c3" + "cb70768f202316fa052751a28338fae"
+_SEARXNG_COMMIT = "08ef7a63d7ffd278" + "dddd68cbb643f30d969a4329"
 _SEARXNG_INSTALL_URL = (
-    "https://github.com/searxng/searxng/archive/08ef7a63d7ffd278dddd68cbb643f30d969a4329.zip"
-    f"#sha256={_SEARXNG_SHA256}"
+    "https://github.com/searxng/searxng/archive/" + _SEARXNG_COMMIT + ".zip#sha256=" + _SEARXNG_SHA256
 )
 
 # Minimal SearXNG settings template.
