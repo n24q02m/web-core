@@ -164,7 +164,7 @@ def _get_startup_lock() -> asyncio.Lock:
 # ---------------------------------------------------------------------------
 
 
-def _is_pid_alive(pid: int) -> bool:  # pragma: no cover
+def _is_pid_alive(pid: int) -> bool:
     """Check if a process with the given PID is alive (not zombie).
 
     On Windows, uses ctypes ``OpenProcess`` since ``os.kill(pid, 0)`` does
@@ -413,7 +413,7 @@ def _is_searxng_installed() -> bool:
         return False
 
 
-def _install_searxng() -> bool:  # pragma: no cover
+def _install_searxng() -> bool:
     """Install SearXNG from GitHub zip archive.
 
     Uses zip URL instead of ``git+`` to avoid filename issues on some
@@ -539,7 +539,7 @@ def _is_process_dead(pid: int) -> bool:
         return True
 
 
-def _sigterm_then_kill_sync(pid: int, label: str = "") -> bool:  # pragma: no cover
+def _sigterm_then_kill_sync(pid: int, label: str = "") -> bool:
     """Send SIGTERM to a PID, wait briefly, then SIGKILL if needed (sync).
 
     Returns ``True`` if the process was successfully terminated.
@@ -566,7 +566,7 @@ def _sigterm_then_kill_sync(pid: int, label: str = "") -> bool:  # pragma: no co
         return True
 
 
-async def _sigterm_then_kill(pid: int, label: str = "") -> bool:  # pragma: no cover
+async def _sigterm_then_kill(pid: int, label: str = "") -> bool:
     """Send SIGTERM to a PID, wait briefly, then SIGKILL if needed (async).
 
     Returns ``True`` if the process was successfully terminated.
@@ -593,7 +593,7 @@ async def _sigterm_then_kill(pid: int, label: str = "") -> bool:  # pragma: no c
         return True
 
 
-def _force_kill_process_sync(proc: subprocess.Popen) -> None:  # pragma: no cover
+def _force_kill_process_sync(proc: subprocess.Popen) -> None:
     """Force-kill a subprocess and all its children (sync)."""
     if proc.poll() is not None:
         return
@@ -633,7 +633,7 @@ def _force_kill_process_sync(proc: subprocess.Popen) -> None:  # pragma: no cove
         logger.debug("Error killing SearXNG process: %s", e)
 
 
-async def _force_kill_process(proc: subprocess.Popen) -> None:  # pragma: no cover
+async def _force_kill_process(proc: subprocess.Popen) -> None:
     """Force-kill a subprocess and all its children (async)."""
     if proc.poll() is not None:
         return
@@ -673,7 +673,7 @@ async def _force_kill_process(proc: subprocess.Popen) -> None:  # pragma: no cov
         logger.debug("Error killing SearXNG process: %s", e)
 
 
-async def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
+async def _kill_stale_port_process(port: int) -> None:
     """Kill any process still holding the target port.
 
     This prevents 'address already in use' errors when restarting
@@ -740,14 +740,14 @@ async def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
             logger.debug("Error finding processes on port %d using lsof: %s", port, e)
 
 
-def _get_process_kwargs() -> dict:  # pragma: no cover
+def _get_process_kwargs() -> dict:
     """Get platform-specific subprocess kwargs."""
     if sys.platform != "win32":
         return {"preexec_fn": os.setsid}
     return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
 
 
-def _cleanup_process() -> None:  # pragma: no cover
+def _cleanup_process() -> None:
     """Cleanup SearXNG subprocess and per-process settings file on exit.
 
     Only kills SearXNG if this instance owns it (started it).
@@ -980,7 +980,7 @@ async def _start_docker_searxng(start_port: int) -> str | None:
         return None
 
 
-async def _start_searxng_subprocess(start_port: int) -> str | None:  # pragma: no cover
+async def _start_searxng_subprocess(start_port: int) -> str | None:
     """Start a fresh SearXNG subprocess.
 
     Returns the URL if started successfully, ``None`` on failure.
@@ -1179,7 +1179,7 @@ async def _ensure_searxng_locked(*, auto_start: bool, start_port: int) -> str:
     return await _handle_restart_and_start(start_port=start_port)
 
 
-async def _handle_restart_and_start(*, start_port: int) -> str:  # pragma: no cover
+async def _handle_restart_and_start(*, start_port: int) -> str:
     """Detect crashes, manage restart budget, install if needed, and start.
 
     Returns the local SearXNG URL on success.
