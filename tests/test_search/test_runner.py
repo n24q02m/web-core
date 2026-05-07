@@ -940,6 +940,7 @@ class TestSigtermThenKillSync:
 
     def test_force_kill(self):
         with (
+            patch("sys.platform", "linux"),
             patch("os.kill") as mock_kill,
             patch("web_core.search.runner._is_process_dead") as mock_dead,
             patch("time.sleep"),
@@ -948,7 +949,7 @@ class TestSigtermThenKillSync:
             assert _sigterm_then_kill_sync(123) is True
             assert mock_kill.call_count == 2
             mock_kill.assert_any_call(123, signal.SIGTERM)
-            mock_kill.assert_any_call(123, signal.SIGKILL)
+            mock_kill.assert_any_call(123, getattr(signal, "SIGKILL", signal.SIGTERM))
             assert mock_dead.call_count == 30
 
 
@@ -961,6 +962,7 @@ class TestSigtermThenKill:
     @pytest.mark.asyncio
     async def test_graceful_exit_async(self):
         with (
+            patch("sys.platform", "linux"),
             patch("os.kill") as mock_kill,
             patch("web_core.search.runner._is_process_dead") as mock_dead,
             patch("asyncio.sleep", new_callable=AsyncMock),
@@ -1009,7 +1011,7 @@ class TestForceKillProcessSync:
         with patch("sys.platform", "linux"), patch("os.getpgid", return_value=456), patch("os.killpg") as mock_killpg:
             _force_kill_process_sync(proc)
             mock_killpg.assert_any_call(456, signal.SIGTERM)
-            mock_killpg.assert_any_call(456, signal.SIGKILL)
+            mock_killpg.assert_any_call(456, getattr(signal, "SIGKILL", signal.SIGTERM))
             assert proc.wait.call_count == 2
 
     def test_windows_path(self):
@@ -1082,7 +1084,7 @@ class TestForceKillProcessMore:
             mock_thread.side_effect = [subprocess.TimeoutExpired(cmd="kill", timeout=3), None]
             await _force_kill_process(proc)
             mock_killpg.assert_any_call(456, signal.SIGTERM)
-            mock_killpg.assert_any_call(456, signal.SIGKILL)
+            mock_killpg.assert_any_call(456, getattr(signal, "SIGKILL", signal.SIGTERM))
             assert mock_thread.call_count == 2
 
     @pytest.mark.asyncio

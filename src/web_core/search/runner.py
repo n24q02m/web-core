@@ -39,6 +39,8 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+_SIGKILL = getattr(signal, "SIGKILL", signal.SIGTERM)
+
 # Pinned port for Docker SearXNG container.
 # Random port per-spawn caused one container per wet daemon (--rm only triggers
 # on container stop, but detached -d kept zombies alive after parent exits).
@@ -559,7 +561,10 @@ def _sigterm_then_kill_sync(pid: int, label: str = "") -> bool:
 
     # Force kill.
     try:
-        os.kill(pid, signal.SIGKILL)
+        if sys.platform != "win32":
+            os.kill(pid, _SIGKILL)
+        else:
+            os.kill(pid, signal.SIGTERM)  # Windows fallback
         logger.debug("Process PID=%d%s force-killed", pid, tag)
         return True
     except (ProcessLookupError, PermissionError):
@@ -586,7 +591,10 @@ async def _sigterm_then_kill(pid: int, label: str = "") -> bool:
 
     # Force kill.
     try:
-        os.kill(pid, signal.SIGKILL)
+        if sys.platform != "win32":
+            os.kill(pid, _SIGKILL)
+        else:
+            os.kill(pid, signal.SIGTERM)  # Windows fallback
         logger.debug("Process PID=%d%s force-killed", pid, tag)
         return True
     except (ProcessLookupError, PermissionError):
@@ -616,7 +624,7 @@ def _force_kill_process_sync(proc: subprocess.Popen) -> None:
                 pass
 
             try:
-                os.killpg(os.getpgid(pid), signal.SIGKILL)
+                os.killpg(os.getpgid(pid), _SIGKILL)
             except (ProcessLookupError, PermissionError):
                 proc.kill()
             try:
@@ -656,7 +664,7 @@ async def _force_kill_process(proc: subprocess.Popen) -> None:
                 pass
 
             try:
-                os.killpg(os.getpgid(pid), signal.SIGKILL)
+                os.killpg(os.getpgid(pid), _SIGKILL)
             except (ProcessLookupError, PermissionError):
                 proc.kill()
             try:
