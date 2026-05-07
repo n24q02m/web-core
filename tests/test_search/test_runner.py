@@ -500,10 +500,12 @@ class TestGetProcessKwargs:
         mock_pw = MagicMock()
         mock_pw.pw_uid = 65534
         mock_pw.pw_gid = 65534
+        mock_pwd = MagicMock()
+        mock_pwd.getpwnam.return_value = mock_pw
         with (
             patch("sys.platform", "linux"),
             patch("os.getuid", return_value=0, create=True),
-            patch("pwd.getpwnam", return_value=mock_pw, create=True),
+            patch.dict("sys.modules", {"pwd": mock_pwd}),
         ):
             kwargs = _get_process_kwargs()
             assert kwargs["user"] == 65534

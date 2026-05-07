@@ -778,18 +778,19 @@ def _get_process_kwargs() -> dict:  # pragma: no cover
     if sys.platform != "win32":
         kwargs: dict = {"start_new_session": True}
         # Drop privileges if running as root
-        if os.getuid() == 0:
-            import pwd
+        try:
+            # Use getattr to be safe if os.getuid is missing (e.g. on some Windows environments)
+            if getattr(os, "getuid", lambda: -1)() == 0:
+                import pwd
 
-            try:
                 # Try to drop to 'nobody' or SEARXNG_USER env var
                 user = os.environ.get("SEARXNG_USER", "nobody")
                 pw = pwd.getpwnam(user)
                 kwargs["user"] = pw.pw_uid
                 kwargs["group"] = pw.pw_gid
                 logger.info("Dropping privileges to user '%s' (uid=%d, gid=%d)", user, pw.pw_uid, pw.pw_gid)
-            except (KeyError, ImportError):
-                logger.warning("Could not drop privileges: user 'nobody' not found")
+        except (KeyError, ImportError, AttributeError):
+            logger.warning("Could not drop privileges")
         return kwargs
     return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
 
