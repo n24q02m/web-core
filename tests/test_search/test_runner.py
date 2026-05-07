@@ -8,9 +8,9 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import signal
 import socket
 import subprocess
-import signal
 import sys
 import time
 from pathlib import Path
@@ -24,23 +24,23 @@ from web_core.search.runner import (
     _SETTINGS_TEMPLATE,
     _cleanup_process,
     _find_available_port,
+    _force_kill_process,
+    _force_kill_process_sync,
     _get_pip_command,
     _get_process_kwargs,
     _get_settings_path,
     _get_startup_lock,
     _install_searxng,
     _is_pid_alive,
-    _is_process_dead,
-    _force_kill_process,
-    _force_kill_process_sync,
-    _sigterm_then_kill,
-    _sigterm_then_kill_sync,
     _is_process_alive,
+    _is_process_dead,
     _is_searxng_installed,
     _kill_stale_port_process,
     _quick_health_check,
     _read_discovery,
     _remove_discovery,
+    _sigterm_then_kill,
+    _sigterm_then_kill_sync,
     _try_reuse_existing,
     _wait_for_service,
     _write_discovery,
