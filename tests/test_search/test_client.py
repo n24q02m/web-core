@@ -182,10 +182,59 @@ class TestApplyDomainCap:
         # Empty netloc is still a "domain" — should not crash
         assert len(result) == 2
 
+    def test_protocol_relative_url(self):
+        items = [
+            {"url": "//example.com/1"},
+            {"url": "//example.com/2"},
+            {"url": "//example.com/3"},
+            {"url": "//example.com/4"},
+        ]
+        result = _apply_domain_cap(items)
+        assert len(result) == _MAX_PER_DOMAIN
 
-# ---------------------------------------------------------------------------
-# search()
-# ---------------------------------------------------------------------------
+    def test_url_with_port(self):
+        items = [
+            {"url": "http://example.com:8080/1"},
+            {"url": "http://example.com:8080/2"},
+            {"url": "http://example.com:8080/3"},
+            {"url": "http://example.com:8080/4"},
+        ]
+        result = _apply_domain_cap(items)
+        assert len(result) == _MAX_PER_DOMAIN
+
+    def test_url_with_query_and_fragment(self):
+        items = [
+            {"url": "https://example.com/path?q=1#f1"},
+            {"url": "https://example.com/path?q=2#f2"},
+            {"url": "https://example.com/path?q=3#f3"},
+            {"url": "https://example.com/path?q=4#f4"},
+        ]
+        result = _apply_domain_cap(items)
+        assert len(result) == _MAX_PER_DOMAIN
+
+    def test_domain_case_sensitivity(self):
+        """Domains are case-sensitive for capping."""
+        items = [
+            {"url": "https://Example.com/1"},
+            {"url": "https://Example.com/2"},
+            {"url": "https://Example.com/3"},
+            {"url": "https://example.com/1"},
+            {"url": "https://example.com/2"},
+            {"url": "https://example.com/3"},
+        ]
+        result = _apply_domain_cap(items)
+        # Should have 3 for Example.com and 3 for example.com
+        assert len(result) == 6
+
+    def test_url_without_protocol(self):
+        items = [
+            {"url": "example.com/1"},
+            {"url": "example.com/2"},
+            {"url": "example.com/3"},
+            {"url": "example.com/4"},
+        ]
+        result = _apply_domain_cap(items)
+        assert len(result) == _MAX_PER_DOMAIN
 
 
 class TestSearch:
