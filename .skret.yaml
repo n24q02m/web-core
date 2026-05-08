@@ -1,0 +1,8 @@
+version: "1"
+default_env: prod
+project: n24q02m-web-core
+environments:
+  prod:
+    provider: aws
+    region: ap-southeast-1
+    path: /n24q02m-web-core/prod
