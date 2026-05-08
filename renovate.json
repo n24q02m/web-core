@@ -105,5 +105,16 @@
       ],
       "allowedVersions": "<2.13"
     }
-  ]
+  ],
+  "semanticCommits": "enabled",
+  "commitMessagePrefix": "fix(deps):",
+  "commitMessageAction": "update",
+  "commitMessageTopic": "{{depName}}",
+  "semanticCommitType": "fix",
+  "semanticCommitScope": "deps",
+  "golang": {
+    "postUpdateOptions": [
+      "gomodTidy"
+    ]
+  }
 }
