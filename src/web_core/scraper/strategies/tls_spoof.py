@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from web_core.http.client import is_safe_url
 from web_core.scraper.base import BaseStrategy, ScrapingResult
 
 
@@ -27,6 +28,9 @@ class TLSSpoofStrategy(BaseStrategy):
 
         Supports optional cookies via selectors["cookies"] (dict[str, str]).
         """
+        if not is_safe_url(url):
+            raise ValueError(f"SSRF blocked: {url}")
+
         cookies: dict[str, str] = {}
         if selectors and isinstance(selectors.get("cookies"), dict):
             cookies = selectors["cookies"]
