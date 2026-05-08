@@ -24,6 +24,15 @@
 </details>
 <!-- END: AUTO-GENERATED-CROSS-PROMO -->
 
+## Table of contents
+
+- [Installation](#installation)
+- [Quick Usage](#quick-usage)
+- [Architecture](#architecture)
+- [Development](#development)
+- [License](#license)
+
+
 
 Shared web infrastructure package for search, scraping, HTTP security, and stealth browsers. Used by [knowledge-core](https://github.com/n24q02m/knowledge-core) and downstream applications.
 
