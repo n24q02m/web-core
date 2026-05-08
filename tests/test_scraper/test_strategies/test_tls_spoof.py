@@ -103,9 +103,11 @@ class TestTLSSpoofStrategy:
         """fetch should block SSRF attempts by raising ValueError for unsafe URLs."""
         strategy = TLSSpoofStrategy()
 
-        with patch("web_core.scraper.strategies.tls_spoof.is_safe_url", return_value=False):
-            with pytest.raises(ValueError, match="SSRF blocked: http://169.254.169.254/latest/meta-data/"):
-                await strategy.fetch("http://169.254.169.254/latest/meta-data/")
+        with (
+            patch("web_core.scraper.strategies.tls_spoof.is_safe_url", return_value=False),
+            pytest.raises(ValueError, match=r"SSRF blocked: http://169\.254\.169\.254/latest/meta-data/"),
+        ):
+            await strategy.fetch("http://169.254.169.254/latest/meta-data/")
 
     async def test_fetch_uses_curl_cffi_when_no_factory(self):
         """When no session_factory is provided, fetch should import and use curl-cffi."""
