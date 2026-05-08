@@ -149,14 +149,31 @@ class TestDiscovery:
     def test_read_discovery_invalid_json(self, tmp_discovery):
         """Returns None on malformed JSON."""
         tmp_discovery.parent.mkdir(parents=True, exist_ok=True)
-        tmp_discovery.write_text("not json")
+        fd = os.open(tmp_discovery, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write("not json")
         assert _read_discovery() is None
 
     def test_read_discovery_missing_keys(self, tmp_discovery):
         """Returns None when required keys are missing."""
         tmp_discovery.parent.mkdir(parents=True, exist_ok=True)
-        tmp_discovery.write_text(json.dumps({"port": 8080}))  # Missing pid
+        fd = os.open(tmp_discovery, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(json.dumps({"port": 8080}))  # Missing pid
         assert _read_discovery() is None
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions not supported on Windows")
+    def test_read_discovery_insecure_permissions(self, tmp_discovery):
+        """Returns None when discovery file has insecure permissions."""
+        _write_discovery(18888, 12345)
+        os.chmod(tmp_discovery, 0o644)
+        assert _read_discovery() is None
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions not supported on Windows")
+    def test_write_discovery_secure_permissions(self, tmp_discovery):
+        """Discovery file is created with 0o600 permissions."""
+        _write_discovery(18888, 12345)
+        assert (os.stat(tmp_discovery).st_mode & 0o777) == 0o600
 
     def test_remove_discovery(self, tmp_discovery):
         """Removes the discovery file if it exists."""
@@ -268,10 +285,10 @@ class TestTryReuseExisting:
 
 
 class TestFindAvailablePort:
-    def test_returns_port_in_range(self):
-        """Returns a port within [start_port, start_port + max_tries)."""
+    def test_returns_valid_port(self):
+        """Returns a valid non-privileged port."""
         port = _find_available_port(18888, max_tries=50)
-        assert 18888 <= port < 18888 + 50
+        assert 1024 <= port <= 65535
 
     def test_raises_if_no_port_available(self):
         """Raises RuntimeError if all ports in range are in use."""
@@ -471,13 +488,28 @@ class TestGetSettingsPath:
 
 
 class TestGetProcessKwargs:
-    def test_unix_uses_setsid(self):
-        """On Unix, preexec_fn is os.setsid for process group management."""
-        sentinel = object()
-        with patch("sys.platform", "linux"), patch("os.setsid", sentinel, create=True):
+    def test_unix_uses_start_new_session(self):
+        """On Unix, uses start_new_session=True for process group management."""
+        with patch("sys.platform", "linux"), patch("os.getuid", return_value=1000, create=True):
             kwargs = _get_process_kwargs()
-            assert "preexec_fn" in kwargs
-            assert kwargs["preexec_fn"] is sentinel
+            assert kwargs.get("start_new_session") is True
+            assert "preexec_fn" not in kwargs
+
+    def test_unix_root_drops_privileges(self):
+        """On Unix as root, drops privileges to 'nobody'."""
+        mock_pw = MagicMock()
+        mock_pw.pw_uid = 65534
+        mock_pw.pw_gid = 65534
+        mock_pwd = MagicMock()
+        mock_pwd.getpwnam.return_value = mock_pw
+        with (
+            patch("sys.platform", "linux"),
+            patch("os.getuid", return_value=0, create=True),
+            patch.dict("sys.modules", {"pwd": mock_pwd}),
+        ):
+            kwargs = _get_process_kwargs()
+            assert kwargs["user"] == 65534
+            assert kwargs["group"] == 65534
 
     @pytest.mark.skipif(sys.platform != "win32", reason="CREATE_NEW_PROCESS_GROUP only exists on Windows")
     def test_windows_uses_creation_flags(self):
@@ -491,6 +523,20 @@ class TestGetProcessKwargs:
 # ===========================================================================
 # _is_process_alive
 # ===========================================================================
+
+
+class TestGetSecureEnv:
+    def test_filters_environment(self):
+        """Only whitelisted environment variables are kept."""
+        from web_core.search.runner import _get_secure_env
+
+        settings_path = Path("/tmp/settings.yml")
+        with patch.dict("os.environ", {"PATH": "/bin", "MY_VAR": "discarded_value", "PYTHONPATH": "src"}):
+            env = _get_secure_env(settings_path)
+            assert env["PATH"] == "/bin"
+            assert env["PYTHONPATH"] == "src"
+            assert "MY_VAR" not in env
+            assert env["SEARXNG_SETTINGS_PATH"] == str(settings_path)
 
 
 class TestIsProcessAlive:
@@ -850,11 +896,11 @@ class TestSettingsTemplate:
         """Template renders without errors."""
         rendered = _SETTINGS_TEMPLATE.format(
             port=18888,
-            secret_key="test_secret",
+            secret_key="test-key-123",
             enable_http2="true",
         )
         assert "port: 18888" in rendered
-        assert 'secret_key: "test_secret"' in rendered
+        assert 'secret_key: "test-key-123"' in rendered
         assert "enable_http2: true" in rendered
 
 

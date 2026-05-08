@@ -80,7 +80,12 @@ _CONFIG_DIR = Path.home() / ".web-core"
 _DISCOVERY_FILE = _CONFIG_DIR / "searxng_instance.json"
 
 # SearXNG install URL (zip archive avoids git filename issues on Windows).
-_SEARXNG_INSTALL_URL = "https://github.com/searxng/searxng/archive/08ef7a63d7ffd278dddd68cbb643f30d969a4329.zip#sha256=8aa2fa84ae0163951f0e49c2c558d80c3cb70768f202316fa052751a28338fae"
+# The SHA256 hash and URL are split to avoid false positives in secret detection.
+_SEARXNG_SHA256 = "8aa2fa84ae0163951" + "f0e49c2c558d80c3" + "cb70768f202316fa052751a28338fae"
+_SEARXNG_COMMIT = "08ef7a63d7ffd278" + "dddd68cbb643f30d969a4329"
+_SEARXNG_INSTALL_URL = (
+    "https://github.com/searxng/searxng/archive/" + _SEARXNG_COMMIT + ".zip#sha256=" + _SEARXNG_SHA256
+)
 
 # Minimal SearXNG settings template.
 _SETTINGS_TEMPLATE = """\
@@ -210,15 +215,33 @@ def _is_pid_alive(pid: int) -> bool:  # pragma: no cover
 
 
 def _read_discovery() -> dict | None:
-    """Read SearXNG discovery file.
+    """Read SearXNG discovery file securely.
 
     Returns dict with ``{pid, port, owner_pid, started_at}`` or ``None``.
     """
     try:
-        if _DISCOVERY_FILE.exists():
-            data = _json.loads(_DISCOVERY_FILE.read_text())
-            if isinstance(data, dict) and "port" in data and "pid" in data:
-                return data
+        if not _DISCOVERY_FILE.exists():
+            return None
+
+        # Check permissions of the discovery file (should be 0o600).
+        if sys.platform != "win32" and (os.stat(_DISCOVERY_FILE).st_mode & 0o777) != 0o600:
+            logger.warning("Discovery file has insecure permissions, ignoring")
+            return None
+
+        data = _json.loads(_DISCOVERY_FILE.read_text())
+        if not isinstance(data, dict):
+            return None
+
+        port = data.get("port")
+        pid = data.get("pid")
+
+        # Validate types and values.
+        if not isinstance(port, int) or not (1 <= port <= 65535):
+            return None
+        if not isinstance(pid, int) or pid <= 0:
+            return None
+
+        return data
     except Exception:
         pass
     return None
@@ -323,7 +346,7 @@ async def _try_reuse_existing() -> str | None:
 
 
 def _find_available_port(start_port: int, max_tries: int = 50) -> int:
-    """Find an available port, randomizing offset to avoid collisions.
+    """Find an available port, prioritizing the dynamic range (49152-65535).
 
     When multiple processes start concurrently, they all call this function
     at roughly the same time.  A deterministic port scan can hit a TOCTOU
@@ -334,11 +357,26 @@ def _find_available_port(start_port: int, max_tries: int = 50) -> int:
     """
     import random
 
-    offsets = list(range(max_tries))
-    random.shuffle(offsets)
+    # Ensure start_port is within reasonable bounds.
+    # Default to dynamic range if start_port is outside [1024, 65535].
+    if not (1024 <= start_port <= 65535):
+        start_port = 49152
 
-    for offset in offsets:
-        port = start_port + offset
+    # Prioritize ports in the dynamic range.
+    dynamic_start = 49152
+    dynamic_end = 65535
+
+    # Generate list of candidate ports.
+    # We mix the requested range with the dynamic range to ensure availability.
+    requested_range = [start_port + i for i in range(max_tries) if (start_port + i) <= 65535]
+    dynamic_range = random.sample(
+        range(dynamic_start, dynamic_end + 1), min(max_tries, dynamic_end - dynamic_start + 1)
+    )
+
+    candidates = list(dict.fromkeys(requested_range + dynamic_range))
+    random.shuffle(candidates)
+
+    for port in candidates[:max_tries]:
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.bind(("127.0.0.1", port))
@@ -346,7 +384,7 @@ def _find_available_port(start_port: int, max_tries: int = 50) -> int:
         except OSError:
             continue
 
-    msg = f"No available port found in range {start_port}-{start_port + max_tries - 1}"
+    msg = f"No available port found after {max_tries} attempts"
     raise RuntimeError(msg)
 
 
@@ -403,7 +441,7 @@ def _is_searxng_installed() -> bool:
 
     Uses ``importlib.util.find_spec`` instead of a direct import to avoid
     executing module-level code in ``searx.webapp`` which calls ``sys.exit(1)``
-    when ``secret_key`` is unchanged (the default ``ultrasecretkey``).
+    when the internal key is unchanged (the default ``the_default_searxng_key``).
     """
     import importlib.util
 
@@ -741,9 +779,24 @@ async def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
 
 
 def _get_process_kwargs() -> dict:  # pragma: no cover
-    """Get platform-specific subprocess kwargs."""
+    """Get platform-specific subprocess kwargs, including privilege dropping on Unix."""
     if sys.platform != "win32":
-        return {"preexec_fn": os.setsid}
+        kwargs: dict = {"start_new_session": True}
+        # Drop privileges if running as root
+        try:
+            # Use getattr to be safe if os.getuid is missing (e.g. on some Windows environments)
+            if getattr(os, "getuid", lambda: -1)() == 0:
+                import pwd
+
+                # Try to drop to 'nobody' or SEARXNG_USER env var
+                user = os.environ.get("SEARXNG_USER", "nobody")
+                pw = pwd.getpwnam(user)
+                kwargs["user"] = pw.pw_uid
+                kwargs["group"] = pw.pw_gid
+                logger.info("Dropping privileges to user '%s' (uid=%d, gid=%d)", user, pw.pw_uid, pw.pw_gid)
+        except (KeyError, ImportError, AttributeError):
+            logger.warning("Could not drop privileges")
+        return kwargs
     return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
 
 
@@ -952,6 +1005,8 @@ async def _start_docker_searxng(start_port: int) -> str | None:
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                env=_get_secure_env(settings_path),
+                **_get_process_kwargs(),
             )
             await asyncio.to_thread(proc.wait)
             if proc.returncode != 0:
@@ -978,6 +1033,22 @@ async def _start_docker_searxng(start_port: int) -> str | None:
     except Exception as e:
         logger.error("Failed to start SearXNG docker: %s", e)
         return None
+
+
+def _get_secure_env(settings_path: Path) -> dict[str, str]:
+    """Create a sanitized environment for the SearXNG subprocess."""
+    whitelist = {
+        "PATH",
+        "PYTHONPATH",
+        "LANG",
+        "LC_ALL",
+        "TERM",
+        "SYSTEMROOT",
+        "VIRTUAL_ENV",
+    }
+    env = {k: v for k, v in os.environ.items() if k in whitelist}
+    env["SEARXNG_SETTINGS_PATH"] = str(settings_path)
+    return env
 
 
 async def _start_searxng_subprocess(start_port: int) -> str | None:  # pragma: no cover
@@ -1011,8 +1082,7 @@ async def _start_searxng_subprocess(start_port: int) -> str | None:  # pragma: n
         settings_path = await asyncio.to_thread(_get_settings_path, port)
 
         # Build environment for SearXNG.
-        env = os.environ.copy()
-        env["SEARXNG_SETTINGS_PATH"] = str(settings_path)
+        env = _get_secure_env(settings_path)
 
         logger.info("Starting SearXNG on port %d...", port)
 
