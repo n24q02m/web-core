@@ -41,6 +41,21 @@ def test_extract_folder_id_none_for_file():
     assert extract_folder_id("https://drive.google.com/file/d/1abc/view") is None
 
 
+@pytest.mark.parametrize(
+    "url, expected",
+    [
+        ("https://drive.google.com/drive/folders/1Abc123XYZ?usp=sharing", "1Abc123XYZ"),
+        ("https://drive.google.com/drive/folders/1Abc123XYZ#settings", "1Abc123XYZ"),
+        ("https://drive.google.com/drive/folders/1Abc123XYZ/", "1Abc123XYZ"),
+        ("http://drive.google.com/drive/folders/1Abc123XYZ", "1Abc123XYZ"),
+        ("drive.google.com/drive/folders/1Abc123XYZ", "1Abc123XYZ"),
+        ("https://drive.google.com/drive/u/5/folders/1-abc_123", "1-abc_123"),
+    ],
+)
+def test_extract_folder_id_edge_cases(url, expected):
+    assert extract_folder_id(url) == expected
+
+
 # ---------------------------------------------------------------------------
 # _natural_sort_key
 # ---------------------------------------------------------------------------
