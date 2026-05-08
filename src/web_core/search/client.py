@@ -59,22 +59,38 @@ def _build_filtered_query(
 ) -> str:
     """Build a SearXNG query with site: include/exclude operators.
 
-    - ``include_domains``: up to 5 domains joined with ``OR site:``
-    - ``exclude_domains``: up to 10 domains prepended with ``-site:``
+    - ``include_domains``: up to 5 unique domains joined with ``OR site:``
+    - ``exclude_domains``: up to 10 unique domains prepended with ``-site:``
 
     Invalid domains (per ``is_valid_domain``) are silently skipped to
     prevent search operator injection.
     """
     parts = [query]
+
     if include_domains:
-        safe = [d for d in include_domains[:5] if is_valid_domain(d)]
-        if safe:
-            site_filter = " OR ".join(f"site:{d}" for d in safe)
+        seen_include = set()
+        safe_include = []
+        for d in include_domains:
+            if d not in seen_include and is_valid_domain(d):
+                seen_include.add(d)
+                safe_include.append(d)
+                if len(safe_include) >= 5:
+                    break
+        if safe_include:
+            site_filter = " OR ".join(f"site:{d}" for d in safe_include)
             parts = [f"({site_filter}) {query}"]
+
     if exclude_domains:
-        for domain in exclude_domains[:10]:
-            if is_valid_domain(domain):
-                parts.append(f"-site:{domain}")
+        seen_exclude = set()
+        count_exclude = 0
+        for d in exclude_domains:
+            if d not in seen_exclude and is_valid_domain(d):
+                seen_exclude.add(d)
+                parts.append(f"-site:{d}")
+                count_exclude += 1
+                if count_exclude >= 10:
+                    break
+
     return " ".join(parts)
 
 
