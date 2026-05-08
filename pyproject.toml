@@ -24,7 +24,7 @@ dependencies = [
     "curl-cffi>=0.15.0",
     "crawl4ai>=0.8.6",
     "langgraph>=1.1.10",
-    "patchright>=1.58.2",
+    "patchright>=1.59.1",
     "browserforge>=1.2.4",
     "capsolver>=1.0.7",
     "pydantic>=2.12.5,<2.13",
@@ -39,7 +39,7 @@ dev = [
     "pytest-cov>=7.1.0",
     "pytest-timeout>=2.4.0",
     "ruff>=0.15.12",
-    "ty>=0.0.33",
+    "ty>=0.0.34",
 ]
 
 [project.urls]
