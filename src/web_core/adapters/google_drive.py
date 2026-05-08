@@ -20,24 +20,31 @@ from typing import Any
 from web_core.http import safe_httpx_client
 
 _gdown_mod: Any = None
+_gdown_lock: asyncio.Lock | None = None
 
 
 async def _get_gdown() -> Any:
     """Lazy load gdown module with thread offloading."""
-    global _gdown_mod
-    if _gdown_mod is None:
-        try:
-            import importlib
+    global _gdown_mod, _gdown_lock
+    if _gdown_lock is None:
+        _gdown_lock = asyncio.Lock()
 
-            _gdown_mod = await asyncio.to_thread(importlib.import_module, "gdown")
-        except ImportError as e:
-            raise RuntimeError("gdown not installed.") from e
+    async with _gdown_lock:
+        if _gdown_mod is None:
+            try:
+                import importlib
+
+                _gdown_mod = await asyncio.to_thread(importlib.import_module, "gdown")
+            except ImportError as e:
+                raise RuntimeError("gdown not installed.") from e
     return _gdown_mod
 
 
 logger = logging.getLogger(__name__)
 
 FOLDER_URL_PATTERN = re.compile(r"drive\.google\.com/drive/(?:u/\d+/)?folders/([A-Za-z0-9_-]+)")
+_ID_NAME_RE = re.compile(r'"([A-Za-z0-9_-]{28,44})","([^"]+\.(txt|epub|pdf|md|html?|docx?))"')
+_NATURAL_SORT_RE = re.compile(r"(\d+)")
 
 
 @dataclass
@@ -122,8 +129,7 @@ async def _list_folder_via_html(folder_id: str) -> list[DriveFile]:
     files: list[DriveFile] = []
     seen: set[str] = set()
 
-    id_name_pattern = re.compile(r'"([A-Za-z0-9_-]{28,44})","([^"]+\.(txt|epub|pdf|md|html?|docx?))"')
-    for m in id_name_pattern.finditer(html):
+    for m in _ID_NAME_RE.finditer(html):
         file_id, name = m.group(1), m.group(2)
         if file_id not in seen:
             seen.add(file_id)
@@ -179,38 +185,39 @@ async def fetch_folder_chapters(
     files.sort(key=lambda f: _natural_sort_key(f.name))
     files = files[:max_chapters]
 
-    chapters: list[DriveChapter] = []
-
     # Performance Optimization: Parallelize chapter downloads
-    # By using a semaphore and asyncio.gather, we reduce latency from O(N) to roughly O(1)
+    # By using a semaphore and asyncio.TaskGroup, we reduce latency from O(N) to roughly O(1)
     # for typical folder sizes, without triggering rate limits from concurrent connections.
     sem = asyncio.Semaphore(10)
+    results: list[DriveChapter | None] = [None] * len(files)
 
-    async def _download_chapter(i: int, f: DriveFile) -> DriveChapter | None:
+    async def _download_chapter(i: int, f: DriveFile) -> None:
         async with sem:
             try:
                 text = await download_text_file(f.file_id)
                 if text.strip():
-                    return DriveChapter(
+                    results[i] = DriveChapter(
                         title=Path(f.name).stem,
                         text=text,
                         order=i + 1,
                         file_id=f.file_id,
                     )
             except Exception as e:
-                logger.warning("Failed to download Drive file %s (%s): %s", f.name, f.file_id, e)
-            return None
+                # Security: Sanitize log by using type(e).__name__ to avoid leaking sensitive data
+                logger.warning(
+                    "Failed to download Drive file %s (%s): %s",
+                    f.name,
+                    f.file_id,
+                    type(e).__name__,
+                )
 
-    tasks = [_download_chapter(i, f) for i, f in enumerate(files)]
-    results = await asyncio.gather(*tasks)
+    async with asyncio.TaskGroup() as tg:
+        for i, f in enumerate(files):
+            tg.create_task(_download_chapter(i, f))
 
-    for res in results:
-        if res is not None:
-            chapters.append(res)
-
-    return chapters
+    return [res for res in results if res is not None]
 
 
 def _natural_sort_key(s: str) -> list[int | str]:
     """Natural sort key: '2.txt' sorts before '10.txt'."""
-    return [int(c) if c.isdigit() else c.lower() for c in re.split(r"(\d+)", s)]
+    return [int(c) if c.isdigit() else c.lower() for c in _NATURAL_SORT_RE.split(s)]
