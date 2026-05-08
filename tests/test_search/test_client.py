@@ -362,7 +362,7 @@ class TestSearch:
         ):
             await search(SEARXNG_URL, "test", max_retries=2)
 
-        assert "Connection refused" in exc_info.value.reason
+        assert "ConnectError" in exc_info.value.reason
 
     async def test_passes_time_range_param(self, mock_httpx_client):
         """time_range should be included in the SearXNG query params."""

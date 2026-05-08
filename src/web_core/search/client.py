@@ -217,24 +217,26 @@ async def search(
                     max_retries,
                 )
             except httpx.RequestError as exc:
-                last_error = f"Request error: {exc}"
+                exc_name = type(exc).__name__
+                last_error = f"Request error: {exc_name}"
                 logger.warning(
                     "Request error for query '%s' (attempt %d/%d): %s",
                     query,
                     attempt,
                     max_retries,
-                    exc,
+                    exc_name,
                 )
             except SearchError:
                 raise
             except Exception as exc:
-                last_error = str(exc)
+                exc_name = type(exc).__name__
+                last_error = f"Unexpected error: {exc_name}"
                 logger.warning(
                     "Unexpected error for query '%s' (attempt %d/%d): %s",
                     query,
                     attempt,
                     max_retries,
-                    exc,
+                    exc_name,
                 )
 
             if attempt < max_retries:
