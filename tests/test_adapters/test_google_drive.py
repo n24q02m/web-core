@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -275,7 +276,6 @@ async def test_fetch_folder_chapters_success():
 
 async def test_fetch_folder_chapters_invalid_url():
     """fetch_folder_chapters raises ValueError for non-Drive URL."""
-    import pytest
 
     with pytest.raises(ValueError, match="Cannot extract folder ID"):
         await fetch_folder_chapters("https://example.com/not-a-drive-url")
@@ -283,7 +283,6 @@ async def test_fetch_folder_chapters_invalid_url():
 
 async def test_fetch_folder_chapters_no_files():
     """fetch_folder_chapters raises ValueError when folder is empty."""
-    import pytest
 
     with (
         patch("web_core.adapters.google_drive.list_folder_files", return_value=[]),
@@ -342,3 +341,30 @@ async def test_fetch_folder_chapters_max_chapters():
         )
 
     assert len(chapters) == 3
+
+
+async def test_fetch_folder_chapters_is_concurrent():
+    """Verify that fetch_folder_chapters downloads files concurrently."""
+
+    files = [
+        DriveFile(file_id="f1", name="ch1.txt"),
+        DriveFile(file_id="f2", name="ch2.txt"),
+        DriveFile(file_id="f3", name="ch3.txt"),
+    ]
+
+    async def slow_download(file_id):
+        await asyncio.sleep(0.1)
+        return f"Content of {file_id}"
+
+    with (
+        patch("web_core.adapters.google_drive.list_folder_files", return_value=files),
+        patch("web_core.adapters.google_drive.download_text_file", side_effect=slow_download),
+    ):
+        start_time = asyncio.get_event_loop().time()
+        chapters = await fetch_folder_chapters("https://drive.google.com/drive/folders/1Abc123XYZ")
+        end_time = asyncio.get_event_loop().time()
+
+    duration = end_time - start_time
+    assert len(chapters) == 3
+    # If sequential, it would take at least 0.3s. If concurrent, ~0.1s.
+    assert duration < 0.2
