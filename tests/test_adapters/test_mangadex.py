@@ -622,3 +622,43 @@ class TestSsrfSafety:
             client = MangaDexClient()
             await client.download_image("https://s.example.com", "h", "f.png")
             mock_factory.assert_called_once_with(timeout=60.0)
+
+    async def test_pagination_parallel_fetching(self):
+        """Verify that multiple pages are fetched when total > batch size."""
+        # Total 300, limit 300.
+        # First page returns 100.
+        # We expect 2 more pages of 100.
+
+        def make_page(start_id, count, total):
+            return {
+                "data": [
+                    {"id": f"ch-{i}", "attributes": {"chapter": str(i), "translatedLanguage": "en", "pages": 10}}
+                    for i in range(start_id, start_id + count)
+                ],
+                "total": total,
+            }
+
+        call_count = 0
+        offsets_called = []
+
+        async def mock_get(url, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            params = kwargs.get("params", {})
+            offset = params.get("offset", 0)
+            limit = params.get("limit", 100)
+            offsets_called.append(offset)
+            return _make_mock_response(make_page(offset + 1, limit, 300))
+
+        mock_client = AsyncMock()
+        mock_client.get = mock_get
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+            client = MangaDexClient()
+            chapters = await client.get_chapter_feed("manga-001", limit=300)
+
+        assert len(chapters) == 300
+        assert call_count == 3
+        assert sorted(offsets_called) == [0, 100, 200]
