@@ -110,9 +110,8 @@ class PatchrightStrategy(BaseStrategy):
                         # Now wait for networkidle safely
                         await page.wait_for_load_state("networkidle", timeout=self.timeout * 1000)
                         content = await page.content()
-                    except Exception:
-                        # May timeout if site has active websockets etc, that's fine
-                        pass
+                    except TimeoutError:
+                        logger.debug("Optional networkidle wait timed out for %s", url)
                     cf_challenge_type = detect_cloudflare_challenge(content)
 
                 if cf_challenge_type == "js_challenge":
@@ -124,8 +123,8 @@ class PatchrightStrategy(BaseStrategy):
                         try:
                             await page.wait_for_load_state("networkidle", timeout=15000)
                             content = await page.content()
-                        except Exception:
-                            pass
+                        except TimeoutError:
+                            logger.debug("Optional networkidle wait timed out for %s after JS challenge", url)
                 elif cf_challenge_type == "turnstile":
                     logger.info("CF Turnstile detected for %s, cannot solve here", url)
                     # Return the challenge HTML — CaptchaStrategy will handle
@@ -145,15 +144,15 @@ class PatchrightStrategy(BaseStrategy):
                             await page.wait_for_load_state("domcontentloaded", timeout=15000)
                             content = await page.content()
                             cf_challenge_type = detect_cloudflare_challenge(content)
-                        except Exception:
-                            pass
+                        except TimeoutError:
+                            logger.debug("Optional domcontentloaded wait timed out for %s after managed challenge", url)
 
                     if cf_challenge_type is None:
                         try:
                             await page.wait_for_load_state("networkidle", timeout=15000)
                             content = await page.content()
-                        except Exception:
-                            pass
+                        except TimeoutError:
+                            logger.debug("Optional networkidle wait timed out for %s after managed challenge", url)
 
                 status_code = response.status if response else 200
                 final_url = page.url
