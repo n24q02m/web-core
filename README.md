@@ -34,7 +34,9 @@
 
 
 
-Shared web infrastructure package for search, scraping, HTTP security, and stealth browsers. Used by [knowledge-core](https://github.com/n24q02m/knowledge-core) and downstream applications.
+Shared web infrastructure package: SearXNG search, multi-strategy scraping (basic, TLS spoof, Patchright stealth, Cloudflare CAPTCHA), SSRF-safe HTTP client, and stealth browser primitives. Used by [knowledge-core](https://github.com/n24q02m/knowledge-core) and downstream applications.
+
+**Site-specific selectors moved to consumer applications.** This package provides generic infrastructure only. Consumers bring their own per-domain selectors via the `WEB_CORE_DOMAIN_COOKIES` env-var pattern documented below.
 
 ## Installation
 
@@ -42,8 +44,8 @@ Shared web infrastructure package for search, scraping, HTTP security, and steal
 # From PyPI
 uv add n24q02m-web-core
 
-# Or pin to a specific version
-uv add "n24q02m-web-core>=1.0.0"
+# Or pin to v2.x (current stable line)
+uv add "n24q02m-web-core>=2.0.0"
 ```
 
 ## Quick Usage
