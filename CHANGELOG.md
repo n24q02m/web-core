@@ -2,6 +2,128 @@
 
 <!-- version list -->
 
+## v2.0.0-beta.1 (2026-05-09)
+
+### Bug Fixes
+
+- Combine nested with statements in test_client.py for SIM117 ruff check
+  ([`72d39e7`](https://github.com/n24q02m/web-core/commit/72d39e7fe550c4c6fef55d774abaca20a600d2c8))
+
+- Dedupe domains via set+early break in _build_filtered_query
+  ([`1a5e260`](https://github.com/n24q02m/web-core/commit/1a5e260b55b8c640755da3271808c2a6c40baa23))
+
+- Parallelize async chapter fetching in google_drive adapter
+  ([`23f60c5`](https://github.com/n24q02m/web-core/commit/23f60c5027ccc04070fc0310e49cf3f9f17b644c))
+
+- Parallelize sequential pagination I/O in mangadex adapter
+  ([`b1e8d9c`](https://github.com/n24q02m/web-core/commit/b1e8d9c78ddf9a54856613fb915113c4371a4dd8))
+
+- Remove bot rewrite artifact ([#243](https://github.com/n24q02m/web-core/pull/243),
+  [`fc976fd`](https://github.com/n24q02m/web-core/commit/fc976fdd3b30f7d0cb8acd9f275a81f362b48178))
+
+- Remove site-specific selectors (Plan A Task 2)
+  ([`67d9cd1`](https://github.com/n24q02m/web-core/commit/67d9cd1af1a11d05d9dd5eb2f8504079c71aa9e8))
+
+- Remove tracked bot memory files (per .gitignore policy)
+  ([`b92fe12`](https://github.com/n24q02m/web-core/commit/b92fe12b50d15b0dbd939376b6e9e5a64153d771))
+
+- Replace bare except Exception with TimeoutError + debug log in patchright
+  ([`51fe2e7`](https://github.com/n24q02m/web-core/commit/51fe2e71a0f04025e7c6ad52b15e8af6abe8e8c9))
+
+- Sanitize exception logging via type(exc).__name__ to prevent info leak
+  ([`f4b3dab`](https://github.com/n24q02m/web-core/commit/f4b3dab25fafcce728e4b44975732216b68549ba))
+
+- Validate _read_discovery file perms + types in runner
+  ([`da831a2`](https://github.com/n24q02m/web-core/commit/da831a2b67bbadc11457bdf49a822477c4d5823c))
+
+- **deps**: Bump non-major dependencies
+  ([`ba0adc8`](https://github.com/n24q02m/web-core/commit/ba0adc8d72a5c2339c545b969a0375c4c2c85001))
+
+- **deps**: Lock file maintenance ([#247](https://github.com/n24q02m/web-core/pull/247),
+  [`7cb9fe9`](https://github.com/n24q02m/web-core/commit/7cb9fe9be346c41baaca8b688f12c49c43109f86))
+
+- **deps**: Refresh uv.lock maintenance
+  ([`5650332`](https://github.com/n24q02m/web-core/commit/5650332980fdf1e527883a5e49a5a66d444f72cc))
+
+- **deps**: Update actions/dependency-review-action action to v5
+  ([#248](https://github.com/n24q02m/web-core/pull/248),
+  [`668fa2b`](https://github.com/n24q02m/web-core/commit/668fa2b9786c250067c9a5da689c7433128fd21c))
+
+- **deps**: Update ghcr.io/astral-sh/uv:latest Docker digest to 3a59a3c
+  ([#245](https://github.com/n24q02m/web-core/pull/245),
+  [`3406b1d`](https://github.com/n24q02m/web-core/commit/3406b1df606cdeb034925e1721f9d0179aa5f547))
+
+- **deps**: Update github/codeql-action digest to 68bde55
+  ([#246](https://github.com/n24q02m/web-core/pull/246),
+  [`834d0a1`](https://github.com/n24q02m/web-core/commit/834d0a133b055c62f6af5f3dc764cefb1b836b73))
+
+- **search**: Address lint and secret detection CI failures
+  ([`da831a2`](https://github.com/n24q02m/web-core/commit/da831a2b67bbadc11457bdf49a822477c4d5823c))
+
+- **search**: Ensure windows compatibility for secure subprocess runner
+  ([`da831a2`](https://github.com/n24q02m/web-core/commit/da831a2b67bbadc11457bdf49a822477c4d5823c))
+
+- **search**: Harden subprocess execution and discovery file security
+  ([`da831a2`](https://github.com/n24q02m/web-core/commit/da831a2b67bbadc11457bdf49a822477c4d5823c))
+
+- **search**: Harden subprocess runner and fix windows ci failures
+  ([`da831a2`](https://github.com/n24q02m/web-core/commit/da831a2b67bbadc11457bdf49a822477c4d5823c))
+
+- **search**: Sanitize placeholders and split hashes to bypass secret detection
+  ([`da831a2`](https://github.com/n24q02m/web-core/commit/da831a2b67bbadc11457bdf49a822477c4d5823c))
+
+- **search**: Sanitize placeholders to satisfy secret detection
+  ([`da831a2`](https://github.com/n24q02m/web-core/commit/da831a2b67bbadc11457bdf49a822477c4d5823c))
+
+### Features
+
+- Add edge case tests for _apply_domain_cap
+  ([`78072a4`](https://github.com/n24q02m/web-core/commit/78072a4c473362870aa67ca1d84e04b652358e37))
+
+- Add edge case tests for Google Drive folder ID extraction
+  ([`04667f3`](https://github.com/n24q02m/web-core/commit/04667f3ba6980e8c56fc5f7c880ef1f3ff62a31a))
+
+- Add error path test for _pinned_getaddrinfo
+  ([`526c33a`](https://github.com/n24q02m/web-core/commit/526c33abe3a995d309887655918304423baabcaa))
+
+- Add Table of contents heading + auto-generated link list (Spec E Wave 2)
+  ([`c3d4231`](https://github.com/n24q02m/web-core/commit/c3d42313830b591d14b8507cb51dc2374ae27924))
+
+- Add tests for Cloudflare resolution wait in patchright strategy
+  ([`c8ee31c`](https://github.com/n24q02m/web-core/commit/c8ee31c8b5ba8b09ac6d19f81f39f6826676f939))
+
+- Retrofit Tier 1 governance files via repo-bootstrap apply (Spec E Wave 4)
+  ([`0979c94`](https://github.com/n24q02m/web-core/commit/0979c9408c9b47c9b9b3dd49b486a9e7d9cf2ad9))
+
+- Scope refinement — remove site-specific selectors
+  ([`82b8f40`](https://github.com/n24q02m/web-core/commit/82b8f402a8f683356bb8b3529ee99aca8b7d1ee8))
+
+- Sync cross-promo section ([#242](https://github.com/n24q02m/web-core/pull/242),
+  [`ee65e92`](https://github.com/n24q02m/web-core/commit/ee65e92f95f80e15c8460cdf02e2907ab652b8e8))
+
+### Performance Improvements
+
+- **google-drive**: Parallelize chapter downloads with TaskGroup
+  ([`23f60c5`](https://github.com/n24q02m/web-core/commit/23f60c5027ccc04070fc0310e49cf3f9f17b644c))
+
+- **scraper**: Batch Turnstile sitekey extraction to reduce IPC latency
+  ([#249](https://github.com/n24q02m/web-core/pull/249),
+  [`9b0106d`](https://github.com/n24q02m/web-core/commit/9b0106d033563783e4744f73b009b326ffc197d4))
+
+### Refactoring
+
+- Optimize domain extraction in selector inference
+  ([#243](https://github.com/n24q02m/web-core/pull/243),
+  [`fc976fd`](https://github.com/n24q02m/web-core/commit/fc976fdd3b30f7d0cb8acd9f275a81f362b48178))
+
+### Breaking Changes
+
+- Site-specific domain selectors (Newtoki, Syosetu R-18) and their wildcard configs are removed from
+  web-core's built-in DOMAIN_CONFIGS. These were experimental scope creep — site-specific behaviors
+  (which authority owns the content, what cookies to send, age-gate flows) belong in the consuming
+  application, not in shared infrastructure.
+
+
 ## v1.3.12 (2026-05-06)
 
 
