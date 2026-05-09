@@ -240,16 +240,24 @@ class TestPinnedGetaddrinfo:
             _dns_cache.pop(hostname, None)
 
         # Test socket.gaierror
-        with patch(
-            "web_core.http.client._original_getaddrinfo", side_effect=socket.gaierror(-2, "Name or service not known")
+        with (
+            patch(
+                "web_core.http.client._original_getaddrinfo",
+                side_effect=socket.gaierror(-2, "Name or service not known"),
+            ),
+            pytest.raises(socket.gaierror),
         ):
-            with pytest.raises(socket.gaierror):
-                _pinned_getaddrinfo(hostname, 80)
+            _pinned_getaddrinfo(hostname, 80)
 
         # Test generic exception
-        with patch("web_core.http.client._original_getaddrinfo", side_effect=RuntimeError("DNS failure")):
-            with pytest.raises(RuntimeError, match="DNS failure"):
-                _pinned_getaddrinfo(hostname, 80)
+        with (
+            patch(
+                "web_core.http.client._original_getaddrinfo",
+                side_effect=RuntimeError("DNS failure"),
+            ),
+            pytest.raises(RuntimeError, match="DNS failure"),
+        ):
+            _pinned_getaddrinfo(hostname, 80)
 
 
 # ---------------------------------------------------------------------------

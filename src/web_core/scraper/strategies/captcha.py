@@ -129,9 +129,8 @@ class CaptchaStrategy(BaseStrategy):
 
         # Strategy 2: Extract 0x-prefix key from CF Turnstile iframe src
         # e.g. /cdn-cgi/.../0x4AAAAAAADnPIDROrmt1Wwj/light/...
-        iframes = await page.query_selector_all("iframe")
-        for f in iframes:
-            src = await f.get_attribute("src") or ""
+        iframe_srcs = await page.evaluate("() => Array.from(document.querySelectorAll('iframe')).map(f => f.src || '')")
+        for src in iframe_srcs:
             if "/0x" in src:
                 m = _RE_CF_IFRAME_0X.search(src)
                 if m:
@@ -141,9 +140,10 @@ class CaptchaStrategy(BaseStrategy):
                 return m2.group(1)
 
         # Strategy 3: Inline script sitekey
-        scripts = await page.query_selector_all("script")
-        for s in scripts:
-            text = await s.text_content() or ""
+        script_texts = await page.evaluate(
+            "() => Array.from(document.querySelectorAll('script')).map(s => s.textContent || '')"
+        )
+        for text in script_texts:
             # Performance Optimization: exact case check avoids full string allocation
             # which can be expensive for large inline scripts.
             if "sitekey" not in text and "siteKey" not in text:
