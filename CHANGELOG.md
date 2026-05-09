@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v2.0.1-beta.1 (2026-05-09)
+
+### Bug Fixes
+
+- **deps**: Drop pydantic <2.13 cap; move cap to wet-mcp where cohere lives
+  ([`aa51e70`](https://github.com/n24q02m/web-core/commit/aa51e70e1c3b75d4c3512371deacb9b4a6eabb51))
+
+
 ## v2.0.0 (2026-05-09)
 
 
