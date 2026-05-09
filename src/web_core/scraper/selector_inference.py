@@ -77,11 +77,6 @@ DOMAIN_CONFIGS: dict[str, dict[str, str]] = {
         "title": ".novel_title, .novel_subtitle",
         "next_chapter": "a.novelview_pager-next",
     },
-    "NOVEL_PLATFORM_R18.syosetu.com": {
-        "content": "#novel_honbun",
-        "title": ".novel_title, .novel_subtitle",
-        "next_chapter": "a.novelview_pager-next",
-    },
     "kakuyomu.jp": {
         "content": ".widget-episodeBody",
         "title": ".widget-episodeTitle",
@@ -90,11 +85,6 @@ DOMAIN_CONFIGS: dict[str, dict[str, str]] = {
     "www.pixiv.net": {
         "content": ".novel-content",
         "title": ".work-info__title",
-    },
-    "SITE_REDACTED*.com": {
-        "content": "#manga-reading-nav-head + div img, .view-content img",
-        "title": ".toon-title",
-        "next_chapter": "a.btn-next",
     },
     "mangadex.org": {
         "content": ".md-chapter-page img",
@@ -138,7 +128,8 @@ def get_domain_selectors(url: str) -> dict[str, str] | None:
     """Return built-in selectors for a known domain, or None.
 
     Also injects domain-specific cookies into selectors["cookies"]
-    if the domain requires them (e.g., Syosetu R18 age verification).
+    if the domain requires them (session tokens supplied via env per
+    DOMAIN_COOKIES — caller responsible for obtaining user consent).
 
     Logs domain usage for analytics — enabling the Tiered Scraping
     feedback loop (track unknown domains → hardcode popular ones).
@@ -161,7 +152,7 @@ def get_domain_selectors(url: str) -> dict[str, str] | None:
             extra={"domain": domain, "tier": "hardcoded", "url": url},
         )
     else:
-        # Wildcard match (e.g. SITE_REDACTED*.com)
+        # Wildcard match (e.g. example*.com pattern in DOMAIN_CONFIGS)
         for pattern_re, config in _WILDCARD_CONFIGS:
             if pattern_re.match(domain):
                 selectors = config.copy()

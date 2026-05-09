@@ -90,8 +90,8 @@ def test_detect_jschl_answer():
     assert detect_cloudflare_challenge(html) == "js_challenge"
 
 
-def test_detect_SITE_REDACTED_security_verification():
-    """Site Redacted-style CF managed challenge."""
+def test_detect_cf_managed_security_verification():
+    """Generic Cloudflare-managed challenge fingerprint detection."""
     html = """<html><body>
     <p>This website uses a security service to protect against malicious bots.</p>
     <p>This page is displayed while the website verifies you are not a bot.</p>

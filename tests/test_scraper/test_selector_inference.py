@@ -59,26 +59,45 @@ def test_merge_selectors_no_existing():
 
 
 def test_get_domain_selectors_wildcard(monkeypatch):
-    # Mock heavy dependencies imported at module level in src/web_core/__init__.py.
-    # Use monkeypatch so sys.modules is restored after the test — otherwise the
-    # MagicMock for httpx leaks into later tests and breaks patch("httpx.AsyncClient").
+    # Verify wildcard-pattern matching infrastructure works correctly + does not
+    # leak via subdomain-bypass (e.g. attacker spoofs `attacker.com.<wildcard>.evil.com`).
+    # Uses a generic test-fixture wildcard pattern injected via monkeypatch — the
+    # built-in DOMAIN_CONFIGS no longer ships site-specific wildcard configs.
     monkeypatch.setitem(sys.modules, "httpx", MagicMock())
     monkeypatch.setitem(sys.modules, "langgraph", MagicMock())
     monkeypatch.setitem(sys.modules, "langgraph.graph", MagicMock())
     monkeypatch.setitem(sys.modules, "google.genai", MagicMock())
 
+    import re as _re
+
+    from web_core.scraper import selector_inference
+
+    fixture_pattern = "testsite*.com"
+    fixture_config = {"content": "#main", "title": ".title"}
+    monkeypatch.setitem(selector_inference.DOMAIN_CONFIGS, fixture_pattern, fixture_config)
+    monkeypatch.setattr(
+        selector_inference,
+        "_WILDCARD_CONFIGS",
+        [
+            (
+                _re.compile(_re.escape(fixture_pattern).replace(r"\*", r"[^.]*") + r"\Z"),
+                fixture_config,
+            )
+        ],
+    )
+
     from web_core.scraper.selector_inference import get_domain_selectors
 
-    # Valid matches
-    assert get_domain_selectors("https://SITE_REDACTED123.com") is not None
-    assert get_domain_selectors("https://SITE_REDACTED.com") is not None
+    # Valid matches against the generic wildcard
+    assert get_domain_selectors("https://testsite123.com") is not None
+    assert get_domain_selectors("https://testsite.com") is not None
 
-    # Invalid matches (fixed wildcard-bypass vulnerabilities)
-    assert get_domain_selectors("https://SITE_REDACTED.com.evil.com") is None
-    assert get_domain_selectors("https://evilSITE_REDACTED.com") is None
-    assert get_domain_selectors("https://SITE_REDACTED.com.co") is None
+    # Invalid matches (verify wildcard-bypass guards still hold)
+    assert get_domain_selectors("https://testsite.com.evil.com") is None
+    assert get_domain_selectors("https://eviltestsite.com") is None
+    assert get_domain_selectors("https://testsite.com.co") is None
 
-    # Non-wildcard exact matches
+    # Non-wildcard exact matches via existing config (ncode.syosetu.com general novels)
     assert get_domain_selectors("https://ncode.syosetu.com") is not None
     assert get_domain_selectors("https://ncode.syosetu.com.evil.com") is None
 
@@ -92,7 +111,7 @@ def test_load_domain_cookies_from_env(monkeypatch):
     importlib.reload(selector_inference)
 
     assert selector_inference.DOMAIN_COOKIES["test.com"] == {"cookie_name": "cookie_value"}
-    assert "NOVEL_PLATFORM_R18.syosetu.com" not in selector_inference.DOMAIN_COOKIES
+    assert "other.example.com" not in selector_inference.DOMAIN_COOKIES
 
 
 def test_load_domain_cookies_empty_env(monkeypatch):
@@ -107,15 +126,18 @@ def test_load_domain_cookies_empty_env(monkeypatch):
 
 
 def test_get_domain_selectors_injects_cookies(monkeypatch):
-    custom_cookies = {"NOVEL_PLATFORM_R18.syosetu.com": {"over18": "yes"}}
+    # Test demonstrates generic env-var injection API: any domain can supply
+    # cookies via WEB_CORE_DOMAIN_COOKIES. Caller is responsible for obtaining
+    # user consent before passing R-18 / age-gated cookies.
+    custom_cookies = {"ncode.syosetu.com": {"session": "abc123"}}
     monkeypatch.setenv("WEB_CORE_DOMAIN_COOKIES", json.dumps(custom_cookies))
     importlib.reload(selector_inference)
 
-    url = "https://NOVEL_PLATFORM_R18.syosetu.com/n1234abc/"
+    url = "https://ncode.syosetu.com/n1234abc/"
     selectors = selector_inference.get_domain_selectors(url)
 
     assert selectors is not None
-    assert selectors["cookies"] == {"over18": "yes"}
+    assert selectors["cookies"] == {"session": "abc123"}
 
 
 def test_load_domain_cookies_invalid_json(monkeypatch):
