@@ -4,3 +4,6 @@
 ## 2025-05-05 - Optimize parallel async downloads with Semaphore
 **Learning:** Sequential await calls in loops (e.g. `await download()`) cause O(N) latency.
 **Action:** Use `asyncio.gather` with an `asyncio.Semaphore` to parallelize downloads while avoiding rate limits. Ensure the `try...except` block is inside the helper async function so a single failure doesn't cancel the entire `gather` call.
+## 2025-05-08 - Optimize Playwright IPC latency with page.evaluate batching
+**Learning:** Calling `page.query_selector_all()` and subsequently awaiting properties like `await el.get_attribute()` or `await el.text_content()` sequentially inside a loop creates O(N) IPC (Inter-Process Communication) round-trips to the Playwright browser context, causing multi-second latency for large numbers of elements (e.g. hundreds of scripts or iframes).
+**Action:** Replace sequential element property extractions with batch execution via `page.evaluate()`, mapping over elements directly inside the browser context (e.g. `await page.evaluate("() => Array.from(document.querySelectorAll('script')).map(s => s.textContent || '')")`). This executes in a single O(1) IPC round-trip.
