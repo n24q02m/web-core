@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urljoin
 
 from web_core.http.client import is_safe_url
 from web_core.scraper.base import BaseStrategy, ScrapingResult
@@ -18,34 +19,59 @@ class TLSSpoofStrategy(BaseStrategy):
         impersonate: str = "chrome131",
         timeout: float = 30.0,
         session_factory: Any = None,
+        max_redirects: int = 5,
     ):
         self.impersonate = impersonate
         self.timeout = timeout
         self._session_factory = session_factory
+        self.max_redirects = max_redirects
+
+    async def _fetch_with_session(self, session: Any, url: str, cookies: dict[str, str] | None) -> Any:
+        current_url = url
+        redirects = 0
+
+        while True:
+            if not is_safe_url(current_url):
+                raise ValueError(f"SSRF blocked: {current_url}")
+
+            response = await session.get(
+                current_url,
+                impersonate=self.impersonate,
+                timeout=self.timeout,
+                cookies=cookies,
+                allow_redirects=False,
+            )
+
+            if response.status_code in (301, 302, 303, 307, 308) and redirects < self.max_redirects:
+                location = response.headers.get("Location") or response.headers.get("location")
+                if not location:
+                    break
+                current_url = urljoin(current_url, location)
+                redirects += 1
+            else:
+                break
+
+        return response
 
     async def fetch(self, url: str, selectors: dict[str, str] | None = None) -> ScrapingResult:
         """Fetch *url* using a TLS-spoofed session via curl-cffi.
 
         Supports optional cookies via selectors["cookies"] (dict[str, str]).
         """
-        if not is_safe_url(url):
-            raise ValueError(f"SSRF blocked: {url}")
-
         cookies: dict[str, str] = {}
         if selectors and isinstance(selectors.get("cookies"), dict):
             cookies = selectors["cookies"]
 
         req_cookies = cookies or None
+
         if self._session_factory is not None:
             session = self._session_factory()
-            response = await session.get(url, impersonate=self.impersonate, timeout=self.timeout, cookies=req_cookies)
+            response = await self._fetch_with_session(session, url, req_cookies)
         else:
             from curl_cffi.requests import AsyncSession
 
             async with AsyncSession() as session:
-                response = await session.get(
-                    url, impersonate=self.impersonate, timeout=self.timeout, cookies=req_cookies
-                )
+                response = await self._fetch_with_session(session, url, req_cookies)
 
         return ScrapingResult(
             content=response.text,
