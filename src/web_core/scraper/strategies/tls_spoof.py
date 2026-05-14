@@ -36,16 +36,37 @@ class TLSSpoofStrategy(BaseStrategy):
             cookies = selectors["cookies"]
 
         req_cookies = cookies or None
+
+        async def _fetch_with_redirects(session: Any, start_url: str) -> Any:
+            current_url = start_url
+            for i in range(5):
+                if i > 0 and not is_safe_url(current_url):
+                    raise ValueError(f"SSRF blocked: {current_url}")
+
+                resp = await session.get(
+                    current_url,
+                    impersonate=self.impersonate,
+                    timeout=self.timeout,
+                    cookies=req_cookies,
+                    allow_redirects=False,
+                )
+
+                if resp.status_code in (301, 302, 303, 307, 308) and "Location" in resp.headers:
+                    from urllib.parse import urljoin
+
+                    current_url = urljoin(current_url, resp.headers["Location"])
+                    continue
+                return resp
+            raise ValueError(f"Too many redirects: {start_url}")
+
         if self._session_factory is not None:
             session = self._session_factory()
-            response = await session.get(url, impersonate=self.impersonate, timeout=self.timeout, cookies=req_cookies)
+            response = await _fetch_with_redirects(session, url)
         else:
             from curl_cffi.requests import AsyncSession
 
             async with AsyncSession() as session:
-                response = await session.get(
-                    url, impersonate=self.impersonate, timeout=self.timeout, cookies=req_cookies
-                )
+                response = await _fetch_with_redirects(session, url)
 
         return ScrapingResult(
             content=response.text,
