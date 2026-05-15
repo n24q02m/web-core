@@ -88,6 +88,7 @@ class TestTLSSpoofStrategy:
             impersonate="firefox120",
             timeout=15.0,
             cookies=None,
+            allow_redirects=False,
         )
 
     async def test_fetch_failure_propagates(self):
@@ -108,6 +109,74 @@ class TestTLSSpoofStrategy:
             pytest.raises(ValueError, match=r"SSRF blocked: http://169\.254\.169\.254/latest/meta-data/"),
         ):
             await strategy.fetch("http://169.254.169.254/latest/meta-data/")
+
+    async def test_fetch_follows_redirects(self):
+        """fetch should follow safe redirects up to the limit."""
+        mock_response1 = MagicMock()
+        mock_response1.status_code = 302
+        mock_response1.headers = {"Location": "/target"}
+
+        mock_response2 = MagicMock()
+        mock_response2.text = "success"
+        mock_response2.url = "https://example.com/target"
+        mock_response2.status_code = 200
+        mock_response2.headers = {}
+
+        mock_session = AsyncMock()
+        mock_session.get = AsyncMock(side_effect=[mock_response1, mock_response2])
+
+        strategy = TLSSpoofStrategy(session_factory=lambda: mock_session)
+        result = await strategy.fetch("https://example.com/initial")
+
+        assert result.content == "success"
+        assert result.url == "https://example.com/target"
+        assert mock_session.get.call_count == 2
+
+        # Verify first call
+        mock_session.get.assert_any_call(
+            "https://example.com/initial",
+            impersonate="chrome131",
+            timeout=30.0,
+            cookies=None,
+            allow_redirects=False,
+        )
+
+        # Verify second call
+        mock_session.get.assert_any_call(
+            "https://example.com/target",
+            impersonate="chrome131",
+            timeout=30.0,
+            cookies=None,
+            allow_redirects=False,
+        )
+
+    async def test_fetch_blocks_ssrf_on_redirect(self):
+        """fetch should raise ValueError if a redirect resolves to an unsafe URL."""
+        mock_response1 = MagicMock()
+        mock_response1.status_code = 302
+        mock_response1.headers = {"Location": "http://127.0.0.1/admin"}
+
+        mock_session = AsyncMock()
+        mock_session.get = AsyncMock(return_value=mock_response1)
+
+        strategy = TLSSpoofStrategy(session_factory=lambda: mock_session)
+
+        with pytest.raises(ValueError, match=r"SSRF blocked: http://127\.0\.0\.1/admin"):
+            await strategy.fetch("https://example.com")
+
+    async def test_fetch_too_many_redirects(self):
+        """fetch should raise ValueError if the maximum number of redirects is exceeded."""
+        mock_response = MagicMock()
+        mock_response.status_code = 302
+        mock_response.headers = {"Location": "/loop"}
+
+        mock_session = AsyncMock()
+        mock_session.get = AsyncMock(return_value=mock_response)
+
+        strategy = TLSSpoofStrategy(session_factory=lambda: mock_session)
+
+        with pytest.raises(ValueError, match=r"Too many redirects: https://example\.com/loop"):
+            await strategy.fetch("https://example.com/loop")
 
     async def test_fetch_uses_curl_cffi_when_no_factory(self):
         """When no session_factory is provided, fetch should import and use curl-cffi."""
