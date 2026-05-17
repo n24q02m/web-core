@@ -597,6 +597,30 @@ class TestRateLimit:
 class TestSsrfSafety:
     """Verify the adapter uses safe_httpx_client, not raw httpx.AsyncClient."""
 
+    async def test_uses_context_manager_client(self):
+        """Verify the client uses the shared context manager client when available."""
+        mock_resp = _make_mock_response({"data": []})
+        mock_shared_client = AsyncMock()
+        mock_shared_client.get = AsyncMock(return_value=mock_resp)
+        mock_shared_client.__aenter__ = AsyncMock(return_value=mock_shared_client)
+        mock_shared_client.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_shared_client) as mock_factory:
+            async with MangaDexClient() as client:
+                await client._get("/test")
+
+            # The factory should be called once in __aenter__
+            mock_factory.assert_called_once_with(timeout=60.0)
+            mock_shared_client.__aenter__.assert_called_once()
+
+            # The get method should be called on the shared client
+            mock_shared_client.get.assert_called_once()
+            call_args = mock_shared_client.get.call_args
+            assert call_args.args[0] == "https://api.mangadex.org/test"
+
+            # Client should be closed on exit
+            mock_shared_client.__aexit__.assert_called_once()
+
     async def test_get_uses_safe_client(self):
         """The internal _get method must call safe_httpx_client."""
         mock_resp = _make_mock_response({"data": []})

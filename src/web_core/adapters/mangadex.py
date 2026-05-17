@@ -13,6 +13,7 @@ import asyncio
 import logging
 import time
 
+import httpx
 from pydantic import BaseModel
 
 from web_core.http import safe_httpx_client
@@ -76,10 +77,14 @@ class MangaDexClient:
 
     Usage::
 
+        # Standalone usage (creates a new HTTP connection per request)
         client = MangaDexClient()
         results = await client.search_manga("One Piece")
-        chapters = await client.get_chapter_feed(results[0].id)
-        images = await client.get_chapter_images(chapters[0].id)
+
+        # Context manager usage (reuses HTTP connections, recommended for bulk operations)
+        async with MangaDexClient() as client:
+            chapters = await client.get_chapter_feed(results[0].id)
+            images = await client.get_chapter_images(chapters[0].id)
     """
 
     BASE_URL = "https://api.mangadex.org"
@@ -94,6 +99,19 @@ class MangaDexClient:
         self._last_at_home_time = 0.0
         self._lock = asyncio.Lock()
         self._at_home_lock = asyncio.Lock()
+        self._client: httpx.AsyncClient | None = None
+
+    async def __aenter__(self) -> MangaDexClient:
+        if self._client is None:
+            # We use 60.0 here since download_image needs 60.0, and sharing client means sharing the timeout
+            self._client = safe_httpx_client(timeout=60.0)
+            await self._client.__aenter__()
+        return self
+
+    async def __aexit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
+        if self._client is not None:
+            await self._client.__aexit__(exc_type, exc_val, exc_tb)
+            self._client = None
 
     # -- internal helpers ---------------------------------------------------
 
@@ -113,6 +131,17 @@ class MangaDexClient:
         Raises ``httpx.HTTPStatusError`` on 4xx/5xx responses.
         """
         await self._rate_limit()
+
+        # Performance Optimization: Reuse HTTP client if available
+        if self._client is not None:
+            resp = await self._client.get(
+                f"{self.BASE_URL}{path}",
+                params=params,
+                headers={"User-Agent": self._user_agent},
+            )
+            resp.raise_for_status()
+            return resp.json()
+
         async with safe_httpx_client(timeout=30.0) as client:
             resp = await client.get(
                 f"{self.BASE_URL}{path}",
@@ -295,6 +324,13 @@ class MangaDexClient:
         quality = "data-saver" if saver else "data"
         url = f"{base_url}/{quality}/{hash}/{filename}"
         await self._rate_limit()
+
+        # Performance Optimization: Reuse HTTP client if available
+        if self._client is not None:
+            resp = await self._client.get(url, headers={"User-Agent": self._user_agent})
+            resp.raise_for_status()
+            return resp.content
+
         async with safe_httpx_client(timeout=60.0) as client:
             resp = await client.get(url, headers={"User-Agent": self._user_agent})
             resp.raise_for_status()
