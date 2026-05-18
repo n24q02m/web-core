@@ -35,17 +35,39 @@ class TLSSpoofStrategy(BaseStrategy):
         if selectors and isinstance(selectors.get("cookies"), dict):
             cookies = selectors["cookies"]
 
+        from urllib.parse import urljoin
+
         req_cookies = cookies or None
+
+        async def _run_request(session: Any) -> Any:
+            current_url = url
+            send_cookies = req_cookies
+            for _ in range(10):  # Max 10 redirects
+                response = await session.get(
+                    current_url,
+                    impersonate=self.impersonate,
+                    timeout=self.timeout,
+                    cookies=send_cookies,
+                    allow_redirects=False,
+                )
+                if response.status_code in (301, 302, 303, 307, 308) and "Location" in response.headers:
+                    next_url = urljoin(current_url, response.headers["Location"])
+                    if not is_safe_url(next_url):
+                        raise ValueError(f"SSRF blocked: {next_url}")
+                    current_url = next_url
+                    send_cookies = None  # Subsequent requests use session cookies
+                else:
+                    return response
+            raise RuntimeError("Too many redirects")
+
         if self._session_factory is not None:
             session = self._session_factory()
-            response = await session.get(url, impersonate=self.impersonate, timeout=self.timeout, cookies=req_cookies)
+            response = await _run_request(session)
         else:
             from curl_cffi.requests import AsyncSession
 
             async with AsyncSession() as session:
-                response = await session.get(
-                    url, impersonate=self.impersonate, timeout=self.timeout, cookies=req_cookies
-                )
+                response = await _run_request(session)
 
         return ScrapingResult(
             content=response.text,
