@@ -7,7 +7,7 @@ comparison, and for validating domain names to prevent injection attacks.
 from __future__ import annotations
 
 import re
-from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+from urllib.parse import unquote, urlparse, urlunparse
 
 # ---------------------------------------------------------------------------
 # Tracking parameters to strip
@@ -84,9 +84,20 @@ def normalize_url(url: str) -> str:
         if not _TRACKING_RE.search(parsed.query):
             query = parsed.query
         else:
-            params = parse_qs(parsed.query, keep_blank_values=True)
-            cleaned = {k: v for k, v in params.items() if k not in _TRACKING_PARAMS}
-            query = urlencode(cleaned, doseq=True)
+            # Performance Optimization: Avoid parse_qs and urlencode dict/list overhead
+            parts = []
+            for part in parsed.query.split("&"):
+                if not part:
+                    continue
+                # Split at most once to get the key
+                key_str = part.split("=", 1)[0]
+
+                # Fast path unquoting: only unquote if we see percent or plus
+                key = unquote(key_str.replace("+", " ")) if "%" in key_str or "+" in key_str else key_str
+
+                if key not in _TRACKING_PARAMS:
+                    parts.append(part)
+            query = "&".join(parts)
     else:
         query = ""
 
