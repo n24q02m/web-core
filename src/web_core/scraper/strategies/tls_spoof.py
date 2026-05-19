@@ -53,6 +53,7 @@ class TLSSpoofStrategy(BaseStrategy):
 
                 if resp.status_code in (301, 302, 303, 307, 308) and "Location" in resp.headers:
                     from urllib.parse import urljoin
+
                     url = urljoin(url, resp.headers["Location"])
                     continue
                 return resp
