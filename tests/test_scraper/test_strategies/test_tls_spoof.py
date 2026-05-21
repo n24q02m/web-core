@@ -190,4 +190,4 @@ class TestTLSSpoofStrategy:
             patch("web_core.scraper.strategies.tls_spoof.is_safe_url", side_effect=mock_is_safe_url),
             pytest.raises(ValueError, match=r"SSRF blocked: http://127\.0\.0\.1/admin"),
         ):
-                await strategy.fetch("https://example.com/safe")
+            await strategy.fetch("https://example.com/safe")
