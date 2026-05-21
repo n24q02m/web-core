@@ -88,6 +88,7 @@ class TestTLSSpoofStrategy:
             impersonate="firefox120",
             timeout=15.0,
             cookies=None,
+            allow_redirects=False,
         )
 
     async def test_fetch_failure_propagates(self):
@@ -129,3 +130,62 @@ class TestTLSSpoofStrategy:
 
             mock_cls.assert_called_once()
             assert result.content == "<html>cffi</html>"
+
+    async def test_fetch_handles_redirects(self):
+        """fetch should follow redirects manually up to max_redirects."""
+        mock_response_1 = MagicMock()
+        mock_response_1.status_code = 302
+        mock_response_1.headers = {"Location": "/page2"}
+
+        mock_response_2 = MagicMock()
+        mock_response_2.status_code = 200
+        mock_response_2.text = "success"
+        mock_response_2.url = "https://example.com/page2"
+
+        mock_session = AsyncMock()
+        mock_session.get = AsyncMock(side_effect=[mock_response_1, mock_response_2])
+
+        strategy = TLSSpoofStrategy(session_factory=lambda: mock_session)
+        result = await strategy.fetch("https://example.com/page1")
+
+        assert result.content == "success"
+        assert result.url == "https://example.com/page2"
+        assert mock_session.get.call_count == 2
+
+        # First call with initial URL and cookies (if any)
+        mock_session.get.assert_any_call(
+            "https://example.com/page1",
+            impersonate="chrome131",
+            timeout=30.0,
+            cookies=None,
+            allow_redirects=False,
+        )
+
+        # Second call with joined redirect URL and NO cookies
+        mock_session.get.assert_any_call(
+            "https://example.com/page2",
+            impersonate="chrome131",
+            timeout=30.0,
+            cookies=None,
+            allow_redirects=False,
+        )
+
+    async def test_fetch_blocks_ssrf_on_redirect(self):
+        """fetch should block SSRF if a redirect points to an unsafe URL."""
+        mock_response_1 = MagicMock()
+        mock_response_1.status_code = 302
+        mock_response_1.headers = {"Location": "http://127.0.0.1/admin"}
+
+        mock_session = AsyncMock()
+        mock_session.get = AsyncMock(return_value=mock_response_1)
+
+        strategy = TLSSpoofStrategy(session_factory=lambda: mock_session)
+
+        # We need to ensure `is_safe_url` returns True for the first URL,
+        # and False for the redirected URL.
+        def mock_is_safe_url(url):
+            return not ("127.0.0.1" in url or "169.254" in url)
+
+        with patch("web_core.scraper.strategies.tls_spoof.is_safe_url", side_effect=mock_is_safe_url):
+            with pytest.raises(ValueError, match=r"SSRF blocked: http://127\.0\.0\.1/admin"):
+                await strategy.fetch("https://example.com/safe")
