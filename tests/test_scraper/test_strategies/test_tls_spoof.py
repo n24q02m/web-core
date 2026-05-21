@@ -186,6 +186,8 @@ class TestTLSSpoofStrategy:
         def mock_is_safe_url(url):
             return not ("127.0.0.1" in url or "169.254" in url)
 
-        with patch("web_core.scraper.strategies.tls_spoof.is_safe_url", side_effect=mock_is_safe_url):
-            with pytest.raises(ValueError, match=r"SSRF blocked: http://127\.0\.0\.1/admin"):
+        with (
+            patch("web_core.scraper.strategies.tls_spoof.is_safe_url", side_effect=mock_is_safe_url),
+            pytest.raises(ValueError, match=r"SSRF blocked: http://127\.0\.0\.1/admin"),
+        ):
                 await strategy.fetch("https://example.com/safe")
