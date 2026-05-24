@@ -2,6 +2,74 @@
 
 <!-- version list -->
 
+## v2.1.0-beta.1 (2026-05-24)
+
+### Bug Fixes
+
+- **deps**: Bump idna from 3.13 to 3.15 ([#271](https://github.com/n24q02m/web-core/pull/271),
+  [`bccf938`](https://github.com/n24q02m/web-core/commit/bccf938529962cbba70c79d4c1a9586a4682f9a2))
+
+- **deps**: Lock file maintenance ([#278](https://github.com/n24q02m/web-core/pull/278),
+  [`b3f000d`](https://github.com/n24q02m/web-core/commit/b3f000dce05653e8b8f6eaf4936ad17bb054d485))
+
+- **deps**: Refresh uv lock file maintenance ([#251](https://github.com/n24q02m/web-core/pull/251),
+  [`c62998f`](https://github.com/n24q02m/web-core/commit/c62998f680755be475f9ef003d583aefbe62b42f))
+
+- **deps**: Update actions/create-github-app-token digest to bcd2ba4
+  ([#259](https://github.com/n24q02m/web-core/pull/259),
+  [`1bbe4c9`](https://github.com/n24q02m/web-core/commit/1bbe4c93a8c4880f83a34e7a840ce7a90a358c80))
+
+- **deps**: Update codecov/codecov-action digest to e79a696
+  ([#274](https://github.com/n24q02m/web-core/pull/274),
+  [`a571034`](https://github.com/n24q02m/web-core/commit/a571034500457dde3b3cc1706d467e780c1a54ba))
+
+- **deps**: Update ghcr.io/astral-sh/uv:latest Docker digest to 440fd64
+  ([#275](https://github.com/n24q02m/web-core/pull/275),
+  [`d6cfd37`](https://github.com/n24q02m/web-core/commit/d6cfd379b37cca8d17d5e71dad70730445d6f233))
+
+- **deps**: Update ghcr.io/astral-sh/uv:latest Docker digest to e590846
+  ([#255](https://github.com/n24q02m/web-core/pull/255),
+  [`8c187de`](https://github.com/n24q02m/web-core/commit/8c187debc1c80b7932c00751b6bbbe0eda5d0ea0))
+
+- **deps**: Update github/codeql-action digest to 7211b7c
+  ([#276](https://github.com/n24q02m/web-core/pull/276),
+  [`adaeb21`](https://github.com/n24q02m/web-core/commit/adaeb21688507ee2f8bb22f5319d86a34ec1d29c))
+
+- **deps**: Update non-major dependencies ([#277](https://github.com/n24q02m/web-core/pull/277),
+  [`52f48cd`](https://github.com/n24q02m/web-core/commit/52f48cd7b5b8356d68ee9f6dc91e4a8491934666))
+
+- **deps**: Update non-major dependencies ([#253](https://github.com/n24q02m/web-core/pull/253),
+  [`50d19cc`](https://github.com/n24q02m/web-core/commit/50d19cc36aac1c3cd9800f92e3ac8ee080a88859))
+
+- **deps**: Update python:3.13-slim-bookworm Docker digest
+  ([#250](https://github.com/n24q02m/web-core/pull/250),
+  [`d357a3e`](https://github.com/n24q02m/web-core/commit/d357a3e40d88978eee09b56cf0a75e5b6965515e))
+
+- **security**: Block SSRF via curl_cffi redirects in TLSSpoofStrategy
+  ([#273](https://github.com/n24q02m/web-core/pull/273),
+  [`9fae899`](https://github.com/n24q02m/web-core/commit/9fae899282e7a6955b8f2618901b1b115ba64f8e))
+
+- **security**: Prevent SSRF bypass in curl-cffi by disabling auto-redirects
+  ([#273](https://github.com/n24q02m/web-core/pull/273),
+  [`9fae899`](https://github.com/n24q02m/web-core/commit/9fae899282e7a6955b8f2618901b1b115ba64f8e))
+
+- **tests**: Resolve ruff SIM117 linting error in test_tls_spoof.py
+  ([#273](https://github.com/n24q02m/web-core/pull/273),
+  [`9fae899`](https://github.com/n24q02m/web-core/commit/9fae899282e7a6955b8f2618901b1b115ba64f8e))
+
+### Code Style
+
+- Run ruff format on tests/test_scraper/test_strategies/test_tls_spoof.py
+  ([#273](https://github.com/n24q02m/web-core/pull/273),
+  [`9fae899`](https://github.com/n24q02m/web-core/commit/9fae899282e7a6955b8f2618901b1b115ba64f8e))
+
+### Features
+
+- **mangadex**: Reuse HTTP connections via async context manager
+  ([#267](https://github.com/n24q02m/web-core/pull/267),
+  [`0d61bb2`](https://github.com/n24q02m/web-core/commit/0d61bb2610c32972cf92f0fc5bcd6fb9a47109d3))
+
+
 ## v2.0.1 (2026-05-09)
 
 
