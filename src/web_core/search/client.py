@@ -23,6 +23,20 @@ logger = logging.getLogger(__name__)
 _BASE_DELAY = 1.0
 _MAX_PER_DOMAIN = 3
 
+_shared_client: httpx.AsyncClient | None = None
+
+
+def _get_shared_client() -> httpx.AsyncClient:
+    """Lazy initialization of a shared httpx.AsyncClient.
+
+    Performance Optimization: Reusing the client connection pool avoids the overhead
+    of establishing new TCP/TLS connections for every search request.
+    """
+    global _shared_client
+    if _shared_client is None or getattr(_shared_client, "is_closed", False):
+        _shared_client = httpx.AsyncClient(timeout=15.0)
+    return _shared_client
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -160,103 +174,103 @@ async def search(
     # SearXNG is a trusted local service — bypass SSRF protection.
     # SSRF-safe client blocks localhost/private IPs by design, but SearXNG
     # runs on localhost. External URL fetching still uses safe_httpx_client.
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        for attempt in range(1, max_retries + 1):
-            try:
-                response = await client.get(
-                    f"{searxng_url}/search",
-                    params=params,
-                    headers={"X-Real-IP": "127.0.0.1", "X-Forwarded-For": "127.0.0.1"},
+    client = _get_shared_client()
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = await client.get(
+                f"{searxng_url}/search",
+                params=params,
+                headers={"X-Real-IP": "127.0.0.1", "X-Forwarded-For": "127.0.0.1"},
+            )
+            response.raise_for_status()
+            data = response.json()
+            results = data.get("results", [])[: max_results * 2]
+
+            # Deduplicate directly from raw results: merge sources, keep longest snippet
+            # Performance Optimization: Combining extraction and deduplication loops
+            # avoids creating an intermediate list of formatted dicts, saving ~25%
+            # processing time for large result sets.
+            seen: dict[str, dict[str, Any]] = {}
+            for r in results:
+                url = r.get("url", "")
+                norm_url = normalize_url(url)
+
+                source = r.get("engine", "")
+                snippet = r.get("content", "")
+                title = r.get("title", "")
+
+                if norm_url in seen:
+                    existing = seen[norm_url]
+                    if source:
+                        existing["source"].add(source)
+                    if len(snippet) > len(existing["snippet"]):
+                        existing["snippet"] = snippet
+                        if title:
+                            existing["title"] = title
+                else:
+                    seen[norm_url] = {
+                        "url": url,
+                        "title": title,
+                        "snippet": snippet,
+                        "source": {source} if source else set(),
+                    }
+
+            # Convert sets back to sorted strings
+            for value in seen.values():
+                value["source"] = ", ".join(sorted(value["source"]))
+
+            # Domain cap + final limit
+            capped = _apply_domain_cap(list(seen.values()))[:max_results]
+
+            return [
+                SearchResult(
+                    url=r["url"],
+                    title=r["title"],
+                    snippet=r["snippet"],
+                    source=r["source"],
                 )
-                response.raise_for_status()
-                data = response.json()
-                results = data.get("results", [])[: max_results * 2]
+                for r in capped
+            ]
 
-                # Deduplicate directly from raw results: merge sources, keep longest snippet
-                # Performance Optimization: Combining extraction and deduplication loops
-                # avoids creating an intermediate list of formatted dicts, saving ~25%
-                # processing time for large result sets.
-                seen: dict[str, dict[str, Any]] = {}
-                for r in results:
-                    url = r.get("url", "")
-                    norm_url = normalize_url(url)
+        except httpx.HTTPStatusError as e:
+            status = e.response.status_code
+            last_error = f"HTTP {status}"
+            if status < 500:
+                # 4xx errors are non-retryable
+                logger.warning("Non-retryable HTTP %d for query '%s'", status, query)
+                raise SearchError(query, last_error) from e
+            logger.warning(
+                "Retryable HTTP %d for query '%s' (attempt %d/%d)",
+                status,
+                query,
+                attempt,
+                max_retries,
+            )
+        except httpx.RequestError as exc:
+            exc_name = type(exc).__name__
+            last_error = f"Request error: {exc_name}"
+            logger.warning(
+                "Request error for query '%s' (attempt %d/%d): %s",
+                query,
+                attempt,
+                max_retries,
+                exc_name,
+            )
+        except SearchError:
+            raise
+        except Exception as exc:
+            exc_name = type(exc).__name__
+            last_error = f"Unexpected error: {exc_name}"
+            logger.warning(
+                "Unexpected error for query '%s' (attempt %d/%d): %s",
+                query,
+                attempt,
+                max_retries,
+                exc_name,
+            )
 
-                    source = r.get("engine", "")
-                    snippet = r.get("content", "")
-                    title = r.get("title", "")
-
-                    if norm_url in seen:
-                        existing = seen[norm_url]
-                        if source:
-                            existing["source"].add(source)
-                        if len(snippet) > len(existing["snippet"]):
-                            existing["snippet"] = snippet
-                            if title:
-                                existing["title"] = title
-                    else:
-                        seen[norm_url] = {
-                            "url": url,
-                            "title": title,
-                            "snippet": snippet,
-                            "source": {source} if source else set(),
-                        }
-
-                # Convert sets back to sorted strings
-                for value in seen.values():
-                    value["source"] = ", ".join(sorted(value["source"]))
-
-                # Domain cap + final limit
-                capped = _apply_domain_cap(list(seen.values()))[:max_results]
-
-                return [
-                    SearchResult(
-                        url=r["url"],
-                        title=r["title"],
-                        snippet=r["snippet"],
-                        source=r["source"],
-                    )
-                    for r in capped
-                ]
-
-            except httpx.HTTPStatusError as e:
-                status = e.response.status_code
-                last_error = f"HTTP {status}"
-                if status < 500:
-                    # 4xx errors are non-retryable
-                    logger.warning("Non-retryable HTTP %d for query '%s'", status, query)
-                    raise SearchError(query, last_error) from e
-                logger.warning(
-                    "Retryable HTTP %d for query '%s' (attempt %d/%d)",
-                    status,
-                    query,
-                    attempt,
-                    max_retries,
-                )
-            except httpx.RequestError as exc:
-                exc_name = type(exc).__name__
-                last_error = f"Request error: {exc_name}"
-                logger.warning(
-                    "Request error for query '%s' (attempt %d/%d): %s",
-                    query,
-                    attempt,
-                    max_retries,
-                    exc_name,
-                )
-            except SearchError:
-                raise
-            except Exception as exc:
-                exc_name = type(exc).__name__
-                last_error = f"Unexpected error: {exc_name}"
-                logger.warning(
-                    "Unexpected error for query '%s' (attempt %d/%d): %s",
-                    query,
-                    attempt,
-                    max_retries,
-                    exc_name,
-                )
-
-            if attempt < max_retries:
-                delay = _BASE_DELAY * (2 ** (attempt - 1))
-                await asyncio.sleep(delay)
+        if attempt < max_retries:
+            delay = _BASE_DELAY * (2 ** (attempt - 1))
+            await asyncio.sleep(delay)
 
     raise SearchError(query, last_error or "All attempts failed")
