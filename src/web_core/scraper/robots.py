@@ -11,9 +11,25 @@ import time
 from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
 
+import httpx
+
 from web_core.http import safe_httpx_client
 
 logger = logging.getLogger(__name__)
+
+_shared_client: httpx.AsyncClient | None = None
+
+
+def _get_shared_client() -> httpx.AsyncClient:
+    """Lazy initialization of a shared httpx.AsyncClient.
+
+    Performance Optimization: Reusing the client connection pool avoids the overhead
+    of establishing new TCP/TLS connections for every robots.txt request.
+    """
+    global _shared_client
+    if _shared_client is None or getattr(_shared_client, "is_closed", False):
+        _shared_client = safe_httpx_client(timeout=10.0)
+    return _shared_client
 
 
 class RobotsDisallowedError(Exception):
@@ -81,11 +97,11 @@ class RobotsCache:
     async def _fetch_robots_txt(self, url: str) -> str | None:
         """Fetch robots.txt content. Returns None on any error."""
         try:
-            async with safe_httpx_client(timeout=10.0) as client:
-                resp = await client.get(url, follow_redirects=True)
-                if resp.status_code == 200:
-                    return resp.text
-                return None
+            client = _get_shared_client()
+            resp = await client.get(url, follow_redirects=True)
+            if resp.status_code == 200:
+                return resp.text
+            return None
         except Exception:
             logger.debug("Failed to fetch %s, defaulting to allow", url, exc_info=True)
             return None
