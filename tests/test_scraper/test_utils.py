@@ -122,6 +122,12 @@ def test_extract_sitekey_none_on_empty():
     assert extract_turnstile_sitekey("") is None
 
 
+def test_extract_sitekey_no_match():
+    """Test when 'sitekey' is present but doesn't match patterns."""
+    html = '<html><body><div id="not-a-sitekey">sitekey=too_short</div></body></html>'
+    assert extract_turnstile_sitekey(html) is None
+
+
 # ---------------------------------------------------------------------------
 # is_cloudflare_challenge
 # ---------------------------------------------------------------------------
@@ -136,3 +142,7 @@ def test_is_cf_challenge_true():
 def test_is_cf_challenge_false():
     assert is_cloudflare_challenge(NORMAL_HTML) is False
     assert is_cloudflare_challenge("") is False
+
+
+def test_is_cf_challenge_short():
+    assert is_cloudflare_challenge(SHORT_HTML) is False
