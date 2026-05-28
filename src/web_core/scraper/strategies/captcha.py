@@ -194,7 +194,6 @@ class CaptchaStrategy(BaseStrategy):
             token,
         )
 
-
         # Wait for navigation to actual page
         with contextlib.suppress(Exception):
             await page.wait_for_load_state("networkidle", timeout=15000)
