@@ -351,3 +351,253 @@ async def test_infer_model_param_overrides_default(monkeypatch):
     await infer_selectors_with_llm("https://example.com", "<html/>", model="gemini-2.5-pro")
     args = mock_call.await_args.args
     assert args[1] == "gemini-2.5-pro"
+
+
+@pytest.mark.asyncio
+async def test_infer_no_provider_warns_once(monkeypatch, caplog):
+    _clear_llm_env(monkeypatch)
+    monkeypatch.setattr(selector_inference, "_NO_PROVIDER_WARNED", False)
+
+    with caplog.at_level("WARNING"):
+        # First call should warn
+        await infer_selectors_with_llm("https://example.com", "<html/>")
+        assert "no LLM provider configured" in caplog.text
+
+        caplog.clear()
+        # Second call should not warn
+        await infer_selectors_with_llm("https://example.com", "<html/>")
+        assert "no LLM provider configured" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_infer_llm_caller_returns_invalid_json(monkeypatch):
+    _clear_llm_env(monkeypatch)
+
+    async def fake_caller(_prompt, _html):
+        return "not-json"
+
+    result = await infer_selectors_with_llm(
+        "https://example.com",
+        "<html/>",
+        llm_caller=fake_caller,
+    )
+    assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_infer_llm_caller_returns_unexpected_type(monkeypatch):
+    _clear_llm_env(monkeypatch)
+
+    async def fake_caller(_prompt, _html):
+        return 123  # Unexpected type
+
+    result = await infer_selectors_with_llm(
+        "https://example.com",
+        "<html/>",
+        llm_caller=fake_caller,
+    )
+    assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_infer_domain_extraction_double_slash(monkeypatch):
+    _clear_llm_env(monkeypatch)
+
+    async def fake_caller(_prompt, _html):
+        return {"content": "#c"}
+
+    # Test domain extraction for // URL
+    result = await infer_selectors_with_llm(
+        "//example.com/path",
+        "<html/>",
+        llm_caller=fake_caller,
+    )
+    assert result == {"content": "#c"}
+
+
+@pytest.mark.asyncio
+async def test_call_gemini_api_key(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy")
+
+    mock_google = MagicMock()
+    mock_genai = mock_google.genai
+    monkeypatch.setitem(sys.modules, "google", mock_google)
+    monkeypatch.setitem(sys.modules, "google.genai", mock_genai)
+
+    mock_client = MagicMock()
+    mock_genai.Client.return_value = mock_client
+    mock_response = MagicMock()
+    mock_response.text = '{"content": "#g"}'
+    mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
+
+    from web_core.scraper.selector_inference import _call_gemini
+
+    result = await _call_gemini("prompt", "model")
+
+    assert result == '{"content": "#g"}'
+    mock_genai.Client.assert_called_once_with(api_key="dummy")
+
+
+@pytest.mark.asyncio
+async def test_call_gemini_vertex(monkeypatch):
+    _clear_llm_env(monkeypatch)
+
+    mock_google = MagicMock()
+    mock_genai = mock_google.genai
+    monkeypatch.setitem(sys.modules, "google", mock_google)
+    monkeypatch.setitem(sys.modules, "google.genai", mock_genai)
+
+    mock_client = MagicMock()
+    mock_genai.Client.return_value = mock_client
+    mock_response = MagicMock()
+    mock_response.text = '{"content": "#v"}'
+    mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
+
+    from web_core.scraper.selector_inference import _call_gemini
+
+    result = await _call_gemini("prompt", "model")
+
+    assert result == '{"content": "#v"}'
+    mock_genai.Client.assert_called_once_with(vertexai=True, project="klprism", location="global")
+
+
+@pytest.mark.asyncio
+async def test_call_openai_compatible(monkeypatch):
+    mock_openai = MagicMock()
+    monkeypatch.setitem(sys.modules, "openai", mock_openai)
+
+    mock_client_instance = MagicMock()
+    mock_openai.AsyncOpenAI.return_value = mock_client_instance
+
+    mock_choice = MagicMock()
+    mock_choice.message.content = '{"content": "#o"}'
+    mock_response = MagicMock()
+    mock_response.choices = [mock_choice]
+    mock_client_instance.chat.completions.create = AsyncMock(return_value=mock_response)
+
+    from web_core.scraper.selector_inference import _call_openai_compatible
+
+    result = await _call_openai_compatible("prompt", "model", base_url="https://api.o.com", api_key="key")
+
+    assert result == '{"content": "#o"}'
+    mock_openai.AsyncOpenAI.assert_called_once_with(api_key="key", base_url="https://api.o.com")
+
+
+@pytest.mark.asyncio
+async def test_call_anthropic(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "dummy")
+    mock_anthropic = MagicMock()
+    monkeypatch.setitem(sys.modules, "anthropic", mock_anthropic)
+
+    mock_client_instance = MagicMock()
+    mock_anthropic.AsyncAnthropic.return_value = mock_client_instance
+
+    mock_block = MagicMock()
+    mock_block.text = '{"content": "#a"}'
+    mock_response = MagicMock()
+    mock_response.content = [mock_block]
+    mock_client_instance.messages.create = AsyncMock(return_value=mock_response)
+
+    from web_core.scraper.selector_inference import _call_anthropic
+
+    result = await _call_anthropic("prompt", "model")
+
+    assert result == '{"content": "#a"}'
+    mock_anthropic.AsyncAnthropic.assert_called_once_with(api_key="dummy")
+
+def test_load_domain_cookies_not_dict(monkeypatch):
+    monkeypatch.setenv("WEB_CORE_DOMAIN_COOKIES", json.dumps(["not", "a", "dict"]))
+    importlib.reload(selector_inference)
+    assert selector_inference.DOMAIN_COOKIES == {}
+
+
+def test_load_domain_cookies_invalid_domain_value(monkeypatch):
+    monkeypatch.setenv("WEB_CORE_DOMAIN_COOKIES", json.dumps({"example.com": "not-a-dict"}))
+    importlib.reload(selector_inference)
+    assert "example.com" not in selector_inference.DOMAIN_COOKIES
+
+
+def test_get_domain_selectors_double_slash():
+    # Test line 139
+    url = "//ncode.syosetu.com/n1234abc/"
+    selectors = selector_inference.get_domain_selectors(url)
+    assert selectors is not None
+
+
+def test_parse_selector_json_not_dict():
+    # Test line 196->201 branch
+    from web_core.scraper.selector_inference import _parse_selector_json
+    assert _parse_selector_json(json.dumps(["not", "a", "dict"])) == {}
+
+
+def test_resolve_provider_unknown_fallback(monkeypatch):
+    # Test lines 233-239
+    _clear_llm_env(monkeypatch)
+    monkeypatch.setenv("OPENAI_API_KEY", "dummy")
+    # provider "unknown" should fallback to env detection which finds "openai"
+    resolved = _resolve_provider_and_model("unknown", None)
+    assert resolved == ("openai", selector_inference._PROVIDER_DEFAULT_MODEL["openai"])
+
+
+def test_resolve_provider_unknown_fallback_fails(monkeypatch):
+    # Test lines 233-239 where fallback also fails
+    _clear_llm_env(monkeypatch)
+    resolved = _resolve_provider_and_model("unknown", None)
+    assert resolved is None
+
+
+@pytest.mark.asyncio
+async def test_call_openai_compatible_no_base_url(monkeypatch):
+    # Test lines 281->283 branch (base_url=None)
+    mock_openai = MagicMock()
+    monkeypatch.setitem(sys.modules, "openai", mock_openai)
+    mock_client = MagicMock()
+    mock_openai.AsyncOpenAI.return_value = mock_client
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = "{}"
+    mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+    from web_core.scraper.selector_inference import _call_openai_compatible
+    await _call_openai_compatible("p", "m", base_url=None, api_key="k")
+    mock_openai.AsyncOpenAI.assert_called_once_with(api_key="k")
+
+
+@pytest.mark.asyncio
+async def test_call_anthropic_non_text_block(monkeypatch):
+    # Test line 313->311 branch
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "dummy")
+    mock_anthropic = MagicMock()
+    monkeypatch.setitem(sys.modules, "anthropic", mock_anthropic)
+    mock_client = MagicMock()
+    mock_anthropic.AsyncAnthropic.return_value = mock_client
+
+    mock_block = MagicMock(spec=[]) # No 'text' attribute
+    mock_response = MagicMock()
+    mock_response.content = [mock_block]
+    mock_client.messages.create = AsyncMock(return_value=mock_response)
+
+    from web_core.scraper.selector_inference import _call_anthropic
+    result = await _call_anthropic("p", "m")
+    assert result == ""
+
+
+@pytest.mark.asyncio
+async def test_infer_dispatches_to_anthropic(monkeypatch):
+    # Test lines 346-347 in _build_default_caller
+    _clear_llm_env(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "dummy")
+
+    mock_call = AsyncMock(return_value='{"content": "#a"}')
+    monkeypatch.setattr(selector_inference, "_call_anthropic", mock_call)
+
+    result = await infer_selectors_with_llm("https://example.com", "<html/>")
+    assert result == {"content": "#a"}
+    mock_call.assert_awaited_once()
+
+def test_load_domain_cookies_unexpected_error(monkeypatch):
+    monkeypatch.setenv("WEB_CORE_DOMAIN_COOKIES", "{}")
+    # Mock json.loads to raise an unexpected error
+    monkeypatch.setattr(json, "loads", MagicMock(side_effect=RuntimeError("boom")))
+    importlib.reload(selector_inference)
+    assert selector_inference.DOMAIN_COOKIES == {}
