@@ -122,6 +122,34 @@ def test_extract_sitekey_none_on_empty():
     assert extract_turnstile_sitekey("") is None
 
 
+def test_extract_sitekey_from_javascript_config():
+    html = 'window._cf_chl_opt = { turnstileSiteKey: "0x4CCCCCCtest_sitekey_7654321" };'
+    assert extract_turnstile_sitekey(html) == "0x4CCCCCCtest_sitekey_7654321"
+
+
+def test_extract_sitekey_variations():
+    # Single quotes
+    html = "data-sitekey='0x4DDDDDtest_sitekey_9876543'"
+    assert extract_turnstile_sitekey(html) == "0x4DDDDDtest_sitekey_9876543"
+
+    # turnstileSiteKey with different spacing/quotes
+    html = 'turnstileSiteKey : "0x4EEEEEEtest_sitekey_1111111"'
+    assert extract_turnstile_sitekey(html) == "0x4EEEEEEtest_sitekey_1111111"
+
+    # sitekey in URL without query param syntax (unlikely but test regex)
+    html = "sitekey=0x4FFFFFFtest_sitekey_2222222"
+    assert extract_turnstile_sitekey(html) == "0x4FFFFFFtest_sitekey_2222222"
+
+
+def test_extract_sitekey_fast_path_miss():
+    """Test when 'sitekey' is present but doesn't match any pattern."""
+    html = "This page has the word sitekey but no actual key pattern."
+    assert extract_turnstile_sitekey(html) is None
+
+    html = "This page has the word siteKey but no actual key pattern."
+    assert extract_turnstile_sitekey(html) is None
+
+
 # ---------------------------------------------------------------------------
 # is_cloudflare_challenge
 # ---------------------------------------------------------------------------
