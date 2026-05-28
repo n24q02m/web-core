@@ -34,6 +34,8 @@ import tempfile
 import time
 from pathlib import Path
 
+import aiofiles
+import aiofiles.os
 import filelock
 import httpx
 
@@ -214,21 +216,24 @@ def _is_pid_alive(pid: int) -> bool:  # pragma: no cover
     return True
 
 
-def _read_discovery() -> dict | None:
+async def _read_discovery() -> dict | None:
     """Read SearXNG discovery file securely.
 
     Returns dict with ``{pid, port, owner_pid, started_at}`` or ``None``.
     """
     try:
-        if not _DISCOVERY_FILE.exists():
+        if not await aiofiles.os.path.exists(_DISCOVERY_FILE):
             return None
 
         # Check permissions of the discovery file (should be 0o600).
-        if sys.platform != "win32" and (os.stat(_DISCOVERY_FILE).st_mode & 0o777) != 0o600:
-            logger.warning("Discovery file has insecure permissions, ignoring")
-            return None
+        if sys.platform != "win32":
+            stat = await aiofiles.os.stat(_DISCOVERY_FILE)
+            if (stat.st_mode & 0o777) != 0o600:
+                logger.warning("Discovery file has insecure permissions, ignoring")
+                return None
 
-        data = _json.loads(_DISCOVERY_FILE.read_text())
+        async with aiofiles.open(_DISCOVERY_FILE, encoding="utf-8") as f:
+            data = _json.loads(await f.read())
         if not isinstance(data, dict):
             return None
 
@@ -247,17 +252,17 @@ def _read_discovery() -> dict | None:
     return None
 
 
-def _write_secure_text(path: Path, content: str) -> None:
+async def _write_secure_text(path: Path, content: str) -> None:
     """Write text to a file with restrictive permissions (0o600)."""
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        f.write(content)
+    fd = await asyncio.to_thread(os.open, path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    async with aiofiles.open(fd, mode="w", encoding="utf-8") as f:
+        await f.write(content)
 
 
-def _write_discovery(port: int, pid: int) -> None:
+async def _write_discovery(port: int, pid: int) -> None:
     """Write SearXNG discovery file for other instances to find."""
     try:
-        _DISCOVERY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        await aiofiles.os.makedirs(_DISCOVERY_FILE.parent, exist_ok=True)
         content = _json.dumps(
             {
                 "pid": pid,
@@ -266,9 +271,7 @@ def _write_discovery(port: int, pid: int) -> None:
                 "started_at": time.time(),
             }
         )
-        fd = os.open(_DISCOVERY_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w") as f:
-            f.write(content)
+        await _write_secure_text(_DISCOVERY_FILE, content)
     except Exception as e:
         logger.debug("Failed to write discovery file: %s", e)
 
@@ -315,7 +318,7 @@ async def _try_reuse_existing() -> str | None:
     Reads the discovery file, verifies the process is alive and healthy,
     and returns the URL if reusable.
     """
-    data = await asyncio.to_thread(_read_discovery)
+    data = await _read_discovery()
     if not data:
         return None
 
@@ -977,9 +980,8 @@ async def _start_docker_searxng(start_port: int) -> str | None:
             # Write Docker-specific settings (JSON format + limiter off) so the
             # container exposes a usable /search JSON API.
             settings_path = _CONFIG_DIR / f"searxng_docker_{port}.yml"
-            await asyncio.to_thread(_CONFIG_DIR.mkdir, parents=True, exist_ok=True)
-            await asyncio.to_thread(
-                _write_secure_text,
+            await aiofiles.os.makedirs(_CONFIG_DIR, exist_ok=True)
+            await _write_secure_text(
                 settings_path,
                 _DOCKER_SETTINGS_TEMPLATE.format(secret_key=secrets.token_hex(32)),
             )
@@ -1017,7 +1019,7 @@ async def _start_docker_searxng(start_port: int) -> str | None:
             _searxng_docker_container = container_name
             _searxng_port = port
             _is_owner = True
-            await asyncio.to_thread(_write_discovery, port, os.getpid())
+            await _write_discovery(port, os.getpid())
             return url
 
         # Cleanup on fail
@@ -1128,7 +1130,7 @@ async def _start_searxng_subprocess(start_port: int) -> str | None:  # pragma: n
         # Wait for SearXNG to be healthy.
         if await _wait_for_service(url, timeout=_STARTUP_HEALTH_TIMEOUT):
             logger.info("SearXNG ready at %s", url)
-            await asyncio.to_thread(_write_discovery, port, _searxng_process.pid)
+            await _write_discovery(port, _searxng_process.pid)
             _is_owner = True
             return url
 
