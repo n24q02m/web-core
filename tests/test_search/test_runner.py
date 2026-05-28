@@ -13,7 +13,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -588,6 +588,51 @@ class TestKillStalePortProcess:
         ):
             await _kill_stale_port_process(18888)
             mock_kill.assert_called_once_with(99999, "stale port 18888")
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
+    async def test_unix_lsof_not_found_falls_back_to_fuser(self):
+        """On Unix, if lsof is not found, falls back to fuser."""
+        mock_fuser_result = MagicMock()
+        mock_fuser_result.returncode = 0
+
+        def side_effect(args, **kwargs):
+            if args[0] == "lsof":
+                raise FileNotFoundError("lsof not found")
+            return mock_fuser_result
+
+        with (
+            patch("subprocess.run", side_effect=side_effect) as mock_run,
+            patch("web_core.search.runner._sigterm_then_kill", new_callable=AsyncMock) as mock_kill,
+        ):
+            await _kill_stale_port_process(18888)
+            # Verify both lsof and fuser were tried
+            assert mock_run.call_count == 2
+            mock_run.assert_any_call(
+                ["lsof", "-ti", ":18888"],
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            mock_run.assert_any_call(
+                ["fuser", "-k", "18888/tcp"],
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                timeout=5,
+            )
+            # fuser -k handles killing, so _sigterm_then_kill shouldn't be called by us
+            mock_kill.assert_not_called()
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
+    async def test_unix_lsof_and_fuser_not_found(self):
+        """On Unix, handles cases where both lsof and fuser are missing."""
+        with (
+            patch("subprocess.run", side_effect=FileNotFoundError("not found")),
+            patch("web_core.search.runner.logger") as mock_logger,
+        ):
+            await _kill_stale_port_process(18888)
+            # Should log debug message for fuser failure
+            mock_logger.debug.assert_any_call("Could not free port %d using fuser: %s", 18888, ANY)
 
     @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
     async def test_unix_lsof(self):
