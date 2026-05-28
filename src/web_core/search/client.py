@@ -191,9 +191,18 @@ async def search(
             # avoids creating an intermediate list of formatted dicts, saving ~25%
             # processing time for large result sets.
             seen: dict[str, dict[str, Any]] = {}
+            norm_cache: dict[str, str] = {}
+            _norm = normalize_url
             for r in results:
                 url = r.get("url", "")
-                norm_url = normalize_url(url)
+
+                # Performance Optimization: Local cache for normalized URLs avoids
+                # redundant parsing/regex overhead for identical input URLs.
+                if url in norm_cache:
+                    norm_url = norm_cache[url]
+                else:
+                    norm_url = _norm(url)
+                    norm_cache[url] = norm_url
 
                 source = r.get("engine", "")
                 snippet = r.get("content", "")
