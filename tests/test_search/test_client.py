@@ -1,10 +1,9 @@
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch, ANY
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
 
-from web_core.search.client import search, _client_cache
+from web_core.search.client import _client_cache, search
 from web_core.search.models import SearchError, SearchResult
 
 SEARXNG_URL = "http://localhost:8888"
