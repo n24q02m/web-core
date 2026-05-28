@@ -570,3 +570,110 @@ class TestSearch:
             await search(SEARXNG_URL, "test")
 
         mock_factory.assert_called_once_with(timeout=15.0)
+
+    async def test_retries_on_generic_request_error(self, mock_httpx_client):
+        """Generic httpx.RequestError should trigger retry."""
+        request = MagicMock()
+        request_error = httpx.RequestError("Request failed", request=request)
+        ok_resp = _make_searxng_response([_raw_result("https://example.com/1", "T", "S")])
+
+        mock_httpx_client.get = AsyncMock(side_effect=[request_error, ok_resp])
+
+        with (
+            patch("httpx.AsyncClient", return_value=mock_httpx_client),
+            patch("web_core.search.client.asyncio.sleep", new_callable=AsyncMock),
+        ):
+            results = await search(SEARXNG_URL, "test", max_retries=3)
+
+        assert len(results) == 1
+        assert mock_httpx_client.get.call_count == 2
+
+    async def test_search_error_re_raised(self, mock_httpx_client):
+        """SearchError should be caught and re-raised."""
+        ok_resp = _make_searxng_response([_raw_result("https://example.com/1", "T", "S")])
+        mock_httpx_client.get = AsyncMock(return_value=ok_resp)
+
+        with (
+            patch("httpx.AsyncClient", return_value=mock_httpx_client),
+            patch("web_core.search.client.normalize_url", side_effect=SearchError("test", "test")),
+            pytest.raises(SearchError),
+        ):
+            await search(SEARXNG_URL, "test")
+
+    async def test_results_missing_fields_dedup(self, mock_httpx_client):
+        """Verify branch coverage in deduplication loop when fields are missing."""
+        raw_results = [
+            _raw_result("https://example.com/1", "T1", "Snippet1", "source1"),
+            # Same URL, longer snippet, but no title and no source
+            {"url": "https://example.com/1", "title": "", "content": "Longer Snippet than Snippet1", "engine": ""},
+        ]
+        mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response(raw_results))
+
+        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
+            results = await search(SEARXNG_URL, "test")
+
+        assert len(results) == 1
+        assert results[0].snippet == "Longer Snippet than Snippet1"
+        assert results[0].title == "T1"  # Title should NOT be updated to empty
+        assert results[0].source == "source1"
+
+    async def test_search_retryable_http_500(self, mock_httpx_client):
+        """HTTP 500 should be retryable."""
+        fail_resp = _make_searxng_response([], status_code=500)
+        ok_resp = _make_searxng_response([_raw_result("https://example.com/1", "T", "S")])
+        mock_httpx_client.get = AsyncMock(side_effect=[fail_resp, ok_resp])
+
+        with (
+            patch("httpx.AsyncClient", return_value=mock_httpx_client),
+            patch("web_core.search.client.asyncio.sleep", new_callable=AsyncMock),
+        ):
+            results = await search(SEARXNG_URL, "test", max_retries=2)
+
+        assert len(results) == 1
+        assert mock_httpx_client.get.call_count == 2
+
+    async def test_get_shared_client_reinitializes_if_closed(self):
+        """_get_shared_client should reinitialize if the client is closed."""
+        import web_core.search.client as client_mod
+        from web_core.search.client import _get_shared_client
+
+        # Ensure client is closed
+        if client_mod._shared_client is not None:
+            await client_mod._shared_client.aclose()
+
+        client1 = _get_shared_client()
+        assert not client1.is_closed
+
+        await client1.aclose()
+        assert client1.is_closed
+
+        client2 = _get_shared_client()
+        assert client2 is not client1
+        assert not client2.is_closed
+
+        # Cleanup
+        await client2.aclose()
+
+    async def test_search_unexpected_exception_reaches_exhaustion(self, mock_httpx_client):
+        """Unexpected Exception should retry and eventually raise SearchError."""
+        mock_httpx_client.get = AsyncMock(side_effect=Exception("Unexpected"))
+
+        with (
+            patch("httpx.AsyncClient", return_value=mock_httpx_client),
+            patch("web_core.search.client.asyncio.sleep", new_callable=AsyncMock),
+            pytest.raises(SearchError) as exc_info,
+        ):
+            await search(SEARXNG_URL, "test", max_retries=2)
+
+        assert "Unexpected error: Exception" in str(exc_info.value.reason)
+        assert mock_httpx_client.get.call_count == 2
+
+    async def test_get_shared_client_reuses_client(self):
+        """_get_shared_client should reuse the client if it's open."""
+        from web_core.search.client import _get_shared_client
+
+        client1 = _get_shared_client()
+        client2 = _get_shared_client()
+
+        assert client1 is client2
+        assert not client1.is_closed
