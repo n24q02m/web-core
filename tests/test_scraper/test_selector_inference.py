@@ -505,6 +505,7 @@ async def test_call_anthropic(monkeypatch):
     assert result == '{"content": "#a"}'
     mock_anthropic.AsyncAnthropic.assert_called_once_with(api_key="dummy")
 
+
 def test_load_domain_cookies_not_dict(monkeypatch):
     monkeypatch.setenv("WEB_CORE_DOMAIN_COOKIES", json.dumps(["not", "a", "dict"]))
     importlib.reload(selector_inference)
@@ -527,6 +528,7 @@ def test_get_domain_selectors_double_slash():
 def test_parse_selector_json_not_dict():
     # Test line 196->201 branch
     from web_core.scraper.selector_inference import _parse_selector_json
+
     assert _parse_selector_json(json.dumps(["not", "a", "dict"])) == {}
 
 
@@ -559,6 +561,7 @@ async def test_call_openai_compatible_no_base_url(monkeypatch):
     mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
     from web_core.scraper.selector_inference import _call_openai_compatible
+
     await _call_openai_compatible("p", "m", base_url=None, api_key="k")
     mock_openai.AsyncOpenAI.assert_called_once_with(api_key="k")
 
@@ -572,12 +575,13 @@ async def test_call_anthropic_non_text_block(monkeypatch):
     mock_client = MagicMock()
     mock_anthropic.AsyncAnthropic.return_value = mock_client
 
-    mock_block = MagicMock(spec=[]) # No 'text' attribute
+    mock_block = MagicMock(spec=[])  # No 'text' attribute
     mock_response = MagicMock()
     mock_response.content = [mock_block]
     mock_client.messages.create = AsyncMock(return_value=mock_response)
 
     from web_core.scraper.selector_inference import _call_anthropic
+
     result = await _call_anthropic("p", "m")
     assert result == ""
 
@@ -594,6 +598,7 @@ async def test_infer_dispatches_to_anthropic(monkeypatch):
     result = await infer_selectors_with_llm("https://example.com", "<html/>")
     assert result == {"content": "#a"}
     mock_call.assert_awaited_once()
+
 
 def test_load_domain_cookies_unexpected_error(monkeypatch):
     monkeypatch.setenv("WEB_CORE_DOMAIN_COOKIES", "{}")
