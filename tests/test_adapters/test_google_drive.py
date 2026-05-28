@@ -10,6 +10,7 @@ import pytest
 from web_core.adapters.google_drive import (
     DriveChapter,
     DriveFile,
+    _get_gdown,
     _list_folder_via_gdown,
     _list_folder_via_html,
     _natural_sort_key,
@@ -368,3 +369,21 @@ async def test_fetch_folder_chapters_is_concurrent():
     assert len(chapters) == 3
     # If sequential, it would take at least 0.3s. If concurrent, ~0.1s.
     assert duration < 0.2
+
+
+async def test_get_gdown_import_error():
+    """_get_gdown raises RuntimeError when gdown is not installed."""
+    import sys
+
+    # Ensure gdown is not in sys.modules to trigger ImportError
+    original_modules = sys.modules.copy()
+    if "gdown" in sys.modules:
+        del sys.modules["gdown"]
+    try:
+        with (
+            patch.dict("sys.modules", {"gdown": None}),
+            pytest.raises(RuntimeError, match=r"gdown not installed\."),
+        ):
+            await _get_gdown()
+    finally:
+        sys.modules.update(original_modules)
