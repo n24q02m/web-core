@@ -2,6 +2,23 @@
 
 <!-- version list -->
 
+## v2.1.1 (2026-05-28)
+
+### Bug Fixes
+
+- **deps**: Lock file maintenance ([#284](https://github.com/n24q02m/web-core/pull/284),
+  [`ce38db3`](https://github.com/n24q02m/web-core/commit/ce38db34c4b3907fc7ef0507a663c05b96346981))
+
+- **deps**: Update non-major dependencies ([#283](https://github.com/n24q02m/web-core/pull/283),
+  [`ccdb094`](https://github.com/n24q02m/web-core/commit/ccdb0947e2ff1d3dd573916926fdd3fdbef154b2))
+
+### Performance Improvements
+
+- Use connection pooling for robots.txt fetching
+  ([#285](https://github.com/n24q02m/web-core/pull/285),
+  [`5060c5f`](https://github.com/n24q02m/web-core/commit/5060c5f406dee1c5be5b2c1f83ea8c92721d2dfa))
+
+
 ## v2.1.0 (2026-05-26)
 
 
