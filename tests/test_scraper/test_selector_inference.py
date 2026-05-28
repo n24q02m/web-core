@@ -351,3 +351,89 @@ async def test_infer_model_param_overrides_default(monkeypatch):
     await infer_selectors_with_llm("https://example.com", "<html/>", model="gemini-2.5-pro")
     args = mock_call.await_args.args
     assert args[1] == "gemini-2.5-pro"
+
+
+def test_load_domain_cookies_not_a_dict(monkeypatch):
+    monkeypatch.setenv("WEB_CORE_DOMAIN_COOKIES", "[]")
+    importlib.reload(selector_inference)
+    assert selector_inference.DOMAIN_COOKIES == {}
+
+
+def test_load_domain_cookies_item_not_a_dict(monkeypatch):
+    monkeypatch.setenv("WEB_CORE_DOMAIN_COOKIES", '{"test.com": "not-a-dict"}')
+    importlib.reload(selector_inference)
+    assert selector_inference.DOMAIN_COOKIES == {}
+
+
+def test_load_domain_cookies_unexpected_exception(monkeypatch):
+    from unittest.mock import patch
+
+    with patch("json.loads", side_effect=RuntimeError("boom")):
+        monkeypatch.setenv("WEB_CORE_DOMAIN_COOKIES", "{}")
+        importlib.reload(selector_inference)
+        assert selector_inference.DOMAIN_COOKIES == {}
+
+
+def test_get_domain_selectors_protocol_relative():
+    from web_core.scraper.selector_inference import get_domain_selectors
+
+    # Use a domain that is in DOMAIN_CONFIGS
+    assert get_domain_selectors("//mangadex.org") is not None
+
+
+def test_parse_selector_json_not_a_dict():
+    from web_core.scraper.selector_inference import _parse_selector_json
+
+    assert _parse_selector_json("[]") == {}
+
+
+@pytest.mark.asyncio
+async def test_infer_selectors_invalid_json_from_llm(monkeypatch):
+    async def bad_json_caller(_prompt, _html):
+        return "invalid-json"
+
+    result = await infer_selectors_with_llm("https://example.com", "<html/>", llm_caller=bad_json_caller)
+    assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_infer_selectors_unexpected_type_from_llm(monkeypatch):
+    async def bad_type_caller(_prompt, _html):
+        return 123  # type: ignore
+
+    result = await infer_selectors_with_llm("https://example.com", "<html/>", llm_caller=bad_type_caller)
+    assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_infer_selectors_protocol_relative(monkeypatch):
+    async def dummy_caller(_prompt, _html):
+        return {"content": "#c"}
+
+    result = await infer_selectors_with_llm("//example.com", "<html/>", llm_caller=dummy_caller)
+    assert result == {"content": "#c"}
+
+
+def test_resolve_provider_unknown_fallback_none(monkeypatch):
+    _clear_llm_env(monkeypatch)
+    from web_core.scraper.selector_inference import _resolve_provider_and_model
+
+    assert _resolve_provider_and_model("unknown", None) is None
+
+
+def test_resolve_provider_unknown_fallback_success(monkeypatch):
+    _clear_llm_env(monkeypatch)
+    monkeypatch.setenv("OPENAI_API_KEY", "dummy")
+    from web_core.scraper.selector_inference import _resolve_provider_and_model
+
+    resolved = _resolve_provider_and_model("unknown", None)
+    assert resolved is not None
+    assert resolved[0] == "openai"
+
+
+@pytest.mark.asyncio
+async def test_infer_no_provider_already_warned(monkeypatch):
+    _clear_llm_env(monkeypatch)
+    monkeypatch.setattr(selector_inference, "_NO_PROVIDER_WARNED", True)
+    result = await infer_selectors_with_llm("https://example.com", "<html/>")
+    assert result == {}
