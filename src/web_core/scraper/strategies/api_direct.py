@@ -47,23 +47,23 @@ class APIDirectStrategy(BaseStrategy):
                 if not discovered:
                     return ScrapingResult(
                         content=page_response.text,
-                        url=url,
+                        url=str(page_response.url),
                         strategy=self.name,
                         status_code=page_response.status_code,
                         metadata={"apis_found": 0, "fallback": "page_source"},
                     )
                 api_url = discovered[0]
-                if api_url.startswith("/"):
-                    api_url = urljoin(url, api_url)
 
+            # Always resolve API URL against the base page URL
+            api_url = urljoin(url, api_url)
             api_response = await client.get(api_url, headers={"Accept": "application/json"}, follow_redirects=True)
             return ScrapingResult(
                 content=api_response.text,
-                url=api_url,
+                url=str(api_response.url),
                 strategy=self.name,
                 status_code=api_response.status_code,
                 metadata={
-                    "api_url": api_url,
+                    "api_url": str(api_response.url),
                     "content_type": api_response.headers.get("content-type", ""),
                 },
             )

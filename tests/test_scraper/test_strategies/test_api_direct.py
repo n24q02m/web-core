@@ -232,3 +232,42 @@ class TestAPIDirectStrategy:
         await strategy.fetch("https://example.com")
 
         client.aclose.assert_not_called()
+
+    async def test_fetch_relative_url_no_slash(self):
+        """Relative API paths without leading slash should be resolved correctly."""
+        page_html = '<script>fetch("api/v1/data")</script>'
+        page_resp = _make_response(200, page_html, url="https://example.com/subdir/")
+        api_resp = _make_response(
+            200,
+            '{"data": []}',
+            url="https://example.com/subdir/api/v1/data",
+        )
+        client = _make_client(page_resp, api_resp)
+
+        strategy = APIDirectStrategy(http_client=client)
+        await strategy.fetch("https://example.com/subdir/")
+
+        second_call = client.get.call_args_list[1]
+        assert second_call.args[0] == "https://example.com/subdir/api/v1/data"
+
+    async def test_fetch_relative_selector_url(self):
+        """API URLs provided in selectors should also be resolved via urljoin."""
+        api_resp = _make_response(200, "{}", url="https://example.com/api/direct")
+        client = _make_client(api_resp)
+
+        strategy = APIDirectStrategy(http_client=client)
+        await strategy.fetch("https://example.com/page", selectors={"api_url": "/api/direct"})
+
+        first_call = client.get.call_args_list[0]
+        assert first_call.args[0] == "https://example.com/api/direct"
+
+    async def test_fetch_api_redirect(self):
+        """Result URL should capture the final URL after an API redirect."""
+        api_resp = _make_response(200, "{}", url="https://api.example.com/v2/data")
+        client = _make_client(api_resp)
+
+        strategy = APIDirectStrategy(http_client=client)
+        result = await strategy.fetch("https://example.com", selectors={"api_url": "https://api.example.com/v1/data"})
+
+        assert result.url == "https://api.example.com/v2/data"
+        assert result.metadata["api_url"] == "https://api.example.com/v2/data"
