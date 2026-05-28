@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -569,4 +569,4 @@ class TestSearch:
         with patch("httpx.AsyncClient", return_value=mock_httpx_client) as mock_factory:
             await search(SEARXNG_URL, "test")
 
-        mock_factory.assert_called_once_with(timeout=15.0)
+        mock_factory.assert_called_once_with(event_hooks=ANY, timeout=15.0)

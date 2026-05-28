@@ -198,7 +198,7 @@ class TestQuickHealthCheck:
         mock_response = MagicMock()
         mock_response.status_code = 200
 
-        with patch("web_core.search.runner.httpx.AsyncClient") as mock_client_cls:
+        with patch("web_core.search.runner.safe_httpx_client") as mock_client_cls:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
             mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
@@ -209,7 +209,7 @@ class TestQuickHealthCheck:
 
     async def test_unhealthy_instance(self):
         """Returns False when all retries fail."""
-        with patch("web_core.search.runner.httpx.AsyncClient") as mock_client_cls:
+        with patch("web_core.search.runner.safe_httpx_client") as mock_client_cls:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(side_effect=httpx.ConnectError("refused"))
             mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
@@ -225,7 +225,7 @@ class TestQuickHealthCheck:
         mock_ok = MagicMock()
         mock_ok.status_code = 200
 
-        with patch("web_core.search.runner.httpx.AsyncClient") as mock_client_cls:
+        with patch("web_core.search.runner.safe_httpx_client") as mock_client_cls:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(side_effect=[mock_fail, mock_ok])
             mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
@@ -326,7 +326,7 @@ class TestWaitForService:
         mock_response = MagicMock()
         mock_response.status_code = 200
 
-        with patch("web_core.search.runner.httpx.AsyncClient") as mock_client_cls:
+        with patch("web_core.search.runner.safe_httpx_client") as mock_client_cls:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
             mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
@@ -337,7 +337,7 @@ class TestWaitForService:
 
     async def test_returns_false_on_timeout(self):
         """Returns False when service never becomes healthy."""
-        with patch("web_core.search.runner.httpx.AsyncClient") as mock_client_cls:
+        with patch("web_core.search.runner.safe_httpx_client") as mock_client_cls:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(side_effect=httpx.ConnectError("refused"))
             mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
