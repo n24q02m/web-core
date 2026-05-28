@@ -92,14 +92,14 @@ def _check_ip_safe(ip_str: str, hostname: str) -> bool:
 _BLOCKED_HOSTNAMES = frozenset({"localhost", "localhost.localdomain", "127.0.0.1", "::1"})
 
 
-def is_safe_url(url: str) -> bool:
+def is_safe_url(url: str, allowed_hosts: set[str] | None = None) -> bool:
     """Validate that *url* is safe to fetch (no SSRF).
 
     Checks:
     1. Scheme must be ``http`` or ``https``
-    2. Hostname must exist and not be a known localhost alias
-    3. All resolved IPs must be publicly routable
-    4. Results are cached to pin DNS and prevent rebinding
+    2. Hostname must exist and either be in *allowed_hosts* or not a localhost alias
+    3. If not in *allowed_hosts*, all resolved IPs must be publicly routable
+    4. Results (for non-whitelisted hosts) are cached to pin DNS and prevent rebinding
     """
     try:
         parsed = urlparse(url)
@@ -112,6 +112,10 @@ def is_safe_url(url: str) -> bool:
     hostname = parsed.hostname
     if not hostname:
         return False
+
+    # Explicitly allowed hosts bypass IP/DNS checks (e.g. trusted local SearXNG)
+    if allowed_hosts and hostname.lower() in {h.lower() for h in allowed_hosts}:
+        return True
 
     if hostname.lower() in _BLOCKED_HOSTNAMES:
         return False
@@ -146,11 +150,19 @@ def is_safe_url(url: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-async def _ssrf_event_hook(request: httpx.Request) -> None:
-    """httpx request event hook that blocks SSRF attempts."""
-    url_str = str(request.url)
-    if not is_safe_url(url_str):
-        raise httpx.RequestError(f"SSRF blocked: {url_str}", request=request)
+def _make_ssrf_event_hook(allowed_hosts: set[str] | None = None):
+    """Factory for httpx request event hook that blocks SSRF attempts."""
+
+    async def ssrf_event_hook(request: httpx.Request) -> None:
+        url_str = str(request.url)
+        if not is_safe_url(url_str, allowed_hosts=allowed_hosts):
+            raise httpx.RequestError(f"SSRF blocked: {url_str}", request=request)
+
+    return ssrf_event_hook
+
+
+# Default hook used when no allowed_hosts are specified
+_ssrf_event_hook = _make_ssrf_event_hook()
 
 
 def safe_httpx_client(**kwargs: Any) -> httpx.AsyncClient:
@@ -160,13 +172,23 @@ def safe_httpx_client(**kwargs: Any) -> httpx.AsyncClient:
     it cannot be bypassed by earlier hooks.  Any additional ``event_hooks``
     passed via *kwargs* are preserved.
 
+    Parameters
+    ----------
+    allowed_hosts:
+        Optional set of hostnames that bypass SSRF IP/DNS checks.
+
     Usage::
 
         async with safe_httpx_client() as client:
             resp = await client.get("https://example.com")
     """
+    allowed_hosts = kwargs.pop("allowed_hosts", None)
     hooks = kwargs.pop("event_hooks", {})
     request_hooks = list(hooks.get("request", []))
-    request_hooks.insert(0, _ssrf_event_hook)
+
+    # Use specific hook if allowed_hosts provided, otherwise use default
+    hook = _make_ssrf_event_hook(allowed_hosts) if allowed_hosts else _ssrf_event_hook
+    request_hooks.insert(0, hook)
+
     hooks["request"] = request_hooks
     return httpx.AsyncClient(event_hooks=hooks, **kwargs)

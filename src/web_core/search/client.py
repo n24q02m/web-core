@@ -10,11 +10,14 @@ Adapted from wet-mcp's searxng.py with web-core conventions:
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import logging
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
+from web_core.http.client import safe_httpx_client
 from web_core.http.url import is_valid_domain, normalize_url
 from web_core.search.models import SearchError, SearchResult
 
@@ -23,19 +26,47 @@ logger = logging.getLogger(__name__)
 _BASE_DELAY = 1.0
 _MAX_PER_DOMAIN = 3
 
-_shared_client: httpx.AsyncClient | None = None
+_client_cache: dict[str, httpx.AsyncClient] = {}
 
 
-def _get_shared_client() -> httpx.AsyncClient:
-    """Lazy initialization of a shared httpx.AsyncClient.
+def _is_loopback(host: str) -> bool:
+    """Return True if the host is a known loopback address."""
+    if host.lower() in ("localhost", "localhost.localdomain", "127.0.0.1", "::1"):
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+        return ip.is_loopback
+    except ValueError:
+        return False
+
+
+def _get_client(searxng_url: str) -> httpx.AsyncClient:
+    """Lazy initialization of a shared httpx.AsyncClient per SearXNG host.
 
     Performance Optimization: Reusing the client connection pool avoids the overhead
     of establishing new TCP/TLS connections for every search request.
+
+    Security: Uses safe_httpx_client with the specific SearXNG host whitelisted IF
+    it is a loopback address. Public IPs are allowed by default. Non-loopback
+    private IPs are blocked to prevent SSRF.
     """
-    global _shared_client
-    if _shared_client is None or getattr(_shared_client, "is_closed", False):
-        _shared_client = httpx.AsyncClient(timeout=15.0)
-    return _shared_client
+    global _client_cache
+
+    try:
+        parsed = urlparse(searxng_url)
+        host = parsed.hostname or ""
+    except Exception:
+        host = ""
+
+    client = _client_cache.get(searxng_url)
+    if client is None or getattr(client, "is_closed", False):
+        # Whitelist ONLY loopback addresses. Public IPs are allowed by default.
+        # This prevents using the search client to probe internal networks.
+        allowed_hosts = {host} if host and _is_loopback(host) else None
+        client = safe_httpx_client(timeout=15.0, allowed_hosts=allowed_hosts)
+        _client_cache[searxng_url] = client
+
+    return client
 
 
 # ---------------------------------------------------------------------------
@@ -171,10 +202,8 @@ async def search(
 
     last_error: str | None = None
 
-    # SearXNG is a trusted local service — bypass SSRF protection.
-    # SSRF-safe client blocks localhost/private IPs by design, but SearXNG
-    # runs on localhost. External URL fetching still uses safe_httpx_client.
-    client = _get_shared_client()
+    # Use a per-host safe client that whitelists ONLY loopback addresses for SearXNG.
+    client = _get_client(searxng_url)
     for attempt in range(1, max_retries + 1):
         try:
             response = await client.get(
@@ -247,6 +276,12 @@ async def search(
                 max_retries,
             )
         except httpx.RequestError as exc:
+            # If it's an SSRF block, don't retry.
+            if "SSRF blocked" in str(exc):
+                logger.error("SSRF attempt blocked in Search Client: %s", exc)
+                last_error = f"Request error: {exc}"
+                raise SearchError(query, last_error) from exc
+
             exc_name = type(exc).__name__
             last_error = f"Request error: {exc_name}"
             logger.warning(
