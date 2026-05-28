@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from web_core.scraper.strategies.headless import HeadlessStrategy
+from web_core.scraper.strategies.headless import HeadlessConfig, HeadlessStrategy
 
 
 class TestHeadlessStrategy:
@@ -18,35 +18,35 @@ class TestHeadlessStrategy:
 
     def test_default_timeout(self):
         strategy = HeadlessStrategy()
-        assert strategy.timeout == 60.0
+        assert strategy.config.timeout == 60.0
 
     def test_custom_timeout(self):
-        strategy = HeadlessStrategy(timeout=120.0)
-        assert strategy.timeout == 120.0
+        strategy = HeadlessStrategy(config=HeadlessConfig(timeout=120.0))
+        assert strategy.config.timeout == 120.0
 
     def test_default_wait_for(self):
         strategy = HeadlessStrategy()
-        assert strategy.wait_for is None
+        assert strategy.config.wait_for is None
 
     def test_custom_wait_for(self):
-        strategy = HeadlessStrategy(wait_for="css:.content")
-        assert strategy.wait_for == "css:.content"
+        strategy = HeadlessStrategy(config=HeadlessConfig(wait_for="css:.content"))
+        assert strategy.config.wait_for == "css:.content"
 
     def test_default_stealth(self):
         strategy = HeadlessStrategy()
-        assert strategy.stealth is True
+        assert strategy.config.stealth is True
 
     def test_stealth_disabled(self):
-        strategy = HeadlessStrategy(stealth=False)
-        assert strategy.stealth is False
+        strategy = HeadlessStrategy(config=HeadlessConfig(stealth=False))
+        assert strategy.config.stealth is False
 
     def test_default_proxy(self):
         strategy = HeadlessStrategy()
-        assert strategy.proxy is None
+        assert strategy.config.proxy is None
 
     def test_custom_proxy(self):
-        strategy = HeadlessStrategy(proxy="http://proxy.example.com:8080")
-        assert strategy.proxy == "http://proxy.example.com:8080"
+        strategy = HeadlessStrategy(config=HeadlessConfig(proxy="http://proxy.example.com:8080"))
+        assert strategy.config.proxy == "http://proxy.example.com:8080"
 
     def test_build_browser_config_stealth_enabled(self):
         """BrowserConfig should have stealth enabled by default."""
@@ -65,7 +65,7 @@ class TestHeadlessStrategy:
 
     def test_build_browser_config_stealth_disabled(self):
         """BrowserConfig should respect stealth=False."""
-        strategy = HeadlessStrategy(stealth=False)
+        strategy = HeadlessStrategy(config=HeadlessConfig(stealth=False))
         with patch("crawl4ai.BrowserConfig") as mock_bc:
             mock_bc.return_value = MagicMock()
             strategy._build_browser_config()
@@ -80,7 +80,7 @@ class TestHeadlessStrategy:
 
     def test_build_browser_config_with_proxy(self):
         """BrowserConfig should set proxy_config when proxy is provided."""
-        strategy = HeadlessStrategy(proxy="http://proxy.example.com:8080")
+        strategy = HeadlessStrategy(config=HeadlessConfig(proxy="http://proxy.example.com:8080"))
         with patch("crawl4ai.BrowserConfig") as mock_bc:
             mock_instance = MagicMock()
             mock_bc.return_value = mock_instance
@@ -111,7 +111,7 @@ class TestHeadlessStrategy:
 
     def test_build_crawler_run_config_custom_wait_for(self):
         """CrawlerRunConfig should use custom wait_for when provided."""
-        strategy = HeadlessStrategy(wait_for="css:.loaded", timeout=45.0)
+        strategy = HeadlessStrategy(config=HeadlessConfig(wait_for="css:.loaded", timeout=45.0))
         with patch("crawl4ai.CrawlerRunConfig") as mock_crc:
             mock_crc.return_value = MagicMock()
             strategy._build_crawler_run_config()
@@ -196,7 +196,7 @@ class TestHeadlessStrategy:
         mock_crawler = AsyncMock()
         mock_crawler.arun = AsyncMock(return_value=mock_result)
 
-        strategy = HeadlessStrategy(wait_for="css:.loaded", crawler_factory=lambda: mock_crawler)
+        strategy = HeadlessStrategy(config=HeadlessConfig(wait_for="css:.loaded"), crawler_factory=lambda: mock_crawler)
         result = await strategy.fetch("https://example.com")
 
         assert result.metadata["rendered"] is True
@@ -215,7 +215,7 @@ class TestHeadlessStrategy:
         mock_crawler.arun = AsyncMock(return_value=mock_result)
 
         strategy = HeadlessStrategy(
-            proxy="http://proxy.example.com:8080",
+            config=HeadlessConfig(proxy="http://proxy.example.com:8080"),
             crawler_factory=lambda: mock_crawler,
         )
         result = await strategy.fetch("https://example.com")
@@ -232,7 +232,9 @@ class TestHeadlessStrategy:
         mock_crawler = AsyncMock()
         mock_crawler.arun = AsyncMock(return_value=mock_result)
 
-        strategy = HeadlessStrategy(timeout=45.0, wait_for="css:#main", crawler_factory=lambda: mock_crawler)
+        strategy = HeadlessStrategy(
+            config=HeadlessConfig(timeout=45.0, wait_for="css:#main"), crawler_factory=lambda: mock_crawler
+        )
         await strategy.fetch("https://example.com")
 
         mock_crawler.arun.assert_called_once()

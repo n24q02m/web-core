@@ -2,9 +2,20 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from web_core.scraper.base import BaseStrategy, ScrapingResult
+
+
+@dataclass
+class HeadlessConfig:
+    """Configuration for HeadlessStrategy."""
+
+    timeout: float = 60.0
+    wait_for: str | None = None
+    stealth: bool = True
+    proxy: str | None = None
 
 
 class HeadlessStrategy(BaseStrategy):
@@ -18,16 +29,10 @@ class HeadlessStrategy(BaseStrategy):
 
     def __init__(
         self,
-        timeout: float = 60.0,
-        wait_for: str | None = None,
-        stealth: bool = True,
-        proxy: str | None = None,
+        config: HeadlessConfig | None = None,
         crawler_factory: Any = None,
     ):
-        self.timeout = timeout
-        self.wait_for = wait_for
-        self.stealth = stealth
-        self.proxy = proxy
+        self.config = config or HeadlessConfig()
         self._crawler_factory = crawler_factory
 
     def _build_browser_config(self) -> Any:
@@ -37,12 +42,12 @@ class HeadlessStrategy(BaseStrategy):
         browser_config = BrowserConfig(
             headless=True,
             browser_type="chromium",
-            enable_stealth=self.stealth,
+            enable_stealth=self.config.stealth,
             user_agent_mode="random",
             verbose=False,
         )
-        if self.proxy is not None:
-            browser_config.proxy_config = {"server": self.proxy}
+        if self.config.proxy is not None:
+            browser_config.proxy_config = {"server": self.config.proxy}
         return browser_config
 
     def _build_crawler_run_config(self) -> Any:
@@ -50,9 +55,9 @@ class HeadlessStrategy(BaseStrategy):
         from crawl4ai import CrawlerRunConfig
 
         return CrawlerRunConfig(
-            wait_for=self.wait_for or "css:body",
+            wait_for=self.config.wait_for or "css:body",
             delay_before_return_html=2.0,
-            page_timeout=int(self.timeout * 1000),
+            page_timeout=int(self.config.timeout * 1000),
             verbose=False,
         )
 
@@ -80,8 +85,8 @@ class HeadlessStrategy(BaseStrategy):
             metadata={
                 "rendered": True,
                 "content_length": len(content),
-                "wait_for": self.wait_for,
-                "stealth": self.stealth,
-                "proxy": self.proxy is not None,
+                "wait_for": self.config.wait_for,
+                "stealth": self.config.stealth,
+                "proxy": self.config.proxy is not None,
             },
         )
