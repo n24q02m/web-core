@@ -108,6 +108,62 @@ def _build_filtered_query(
     return " ".join(parts)
 
 
+def _process_results(results: list[dict[str, Any]], max_results: int) -> list[SearchResult]:
+    """Deduplicate, domain-cap, and format raw SearXNG results.
+
+    Deduplication merges sources and keeps the longest snippet for the same normalized URL.
+    Results are limited to at most ``_MAX_PER_DOMAIN`` per domain.
+    """
+    # Pre-slice to avoid processing too many results
+    results = results[: max_results * 2]
+
+    # Deduplicate directly from raw results: merge sources, keep longest snippet
+    # Performance Optimization: Combining extraction and deduplication loops
+    # avoids creating an intermediate list of formatted dicts, saving ~25%
+    # processing time for large result sets.
+    seen: dict[str, dict[str, Any]] = {}
+    for r in results:
+        url = r.get("url", "")
+        norm_url = normalize_url(url)
+
+        source = r.get("engine", "")
+        snippet = r.get("content", "")
+        title = r.get("title", "")
+
+        if norm_url in seen:
+            existing = seen[norm_url]
+            if source:
+                existing["source"].add(source)
+            if len(snippet) > len(existing["snippet"]):
+                existing["snippet"] = snippet
+                if title:
+                    existing["title"] = title
+        else:
+            seen[norm_url] = {
+                "url": url,
+                "title": title,
+                "snippet": snippet,
+                "source": {source} if source else set(),
+            }
+
+    # Convert sets back to sorted strings
+    for value in seen.values():
+        value["source"] = ", ".join(sorted(value["source"]))
+
+    # Domain cap + final limit
+    capped = _apply_domain_cap(list(seen.values()))[:max_results]
+
+    return [
+        SearchResult(
+            url=r["url"],
+            title=r["title"],
+            snippet=r["snippet"],
+            source=r["source"],
+        )
+        for r in capped
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -184,53 +240,7 @@ async def search(
             )
             response.raise_for_status()
             data = response.json()
-            results = data.get("results", [])[: max_results * 2]
-
-            # Deduplicate directly from raw results: merge sources, keep longest snippet
-            # Performance Optimization: Combining extraction and deduplication loops
-            # avoids creating an intermediate list of formatted dicts, saving ~25%
-            # processing time for large result sets.
-            seen: dict[str, dict[str, Any]] = {}
-            for r in results:
-                url = r.get("url", "")
-                norm_url = normalize_url(url)
-
-                source = r.get("engine", "")
-                snippet = r.get("content", "")
-                title = r.get("title", "")
-
-                if norm_url in seen:
-                    existing = seen[norm_url]
-                    if source:
-                        existing["source"].add(source)
-                    if len(snippet) > len(existing["snippet"]):
-                        existing["snippet"] = snippet
-                        if title:
-                            existing["title"] = title
-                else:
-                    seen[norm_url] = {
-                        "url": url,
-                        "title": title,
-                        "snippet": snippet,
-                        "source": {source} if source else set(),
-                    }
-
-            # Convert sets back to sorted strings
-            for value in seen.values():
-                value["source"] = ", ".join(sorted(value["source"]))
-
-            # Domain cap + final limit
-            capped = _apply_domain_cap(list(seen.values()))[:max_results]
-
-            return [
-                SearchResult(
-                    url=r["url"],
-                    title=r["title"],
-                    snippet=r["snippet"],
-                    source=r["source"],
-                )
-                for r in capped
-            ]
+            return _process_results(data.get("results", []), max_results)
 
         except httpx.HTTPStatusError as e:
             status = e.response.status_code
