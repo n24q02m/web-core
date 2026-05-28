@@ -1,7 +1,7 @@
 import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from web_core.scraper.strategies.patchright_browser import PatchrightStrategy
+from web_core.scraper.strategies.patchright_browser import PatchrightConfig, PatchrightStrategy
 
 NORMAL_HTML = "<html><body><h1>Hello World</h1></body></html>"
 CF_JS_CHALLENGE_HTML = "<html><body><title>just a moment...</title></body></html>"
@@ -176,7 +176,8 @@ class TestPatchrightStrategy:
 
     async def test_custom_timeout(self):
         provider, page = _make_mock_provider(NORMAL_HTML)
-        strategy = PatchrightStrategy(provider=provider, timeout=30.0)
+        config = PatchrightConfig(timeout=30.0)
+        strategy = PatchrightStrategy(config=config, provider=provider)
 
         await strategy.fetch("https://example.com")
 

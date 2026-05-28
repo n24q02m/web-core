@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass, field
 from typing import Any
 
 from web_core.scraper.base import BaseStrategy, ScrapingResult
@@ -17,6 +18,16 @@ _CF_CHALLENGE_WAIT: float = 3.0
 _CF_POLL_MAX_CHECKS: int = 20
 # Khoang thoi gian giua cac lan kiem tra (giay)
 _CF_POLL_INTERVAL: float = 0.5
+
+
+@dataclass
+class PatchrightConfig:
+    """Configuration for PatchrightStrategy."""
+
+    timeout: float = 60.0
+    headless: bool = True
+    cf_wait: float = _CF_CHALLENGE_WAIT
+    launch_config: dict[str, Any] = field(default_factory=dict)
 
 
 class PatchrightStrategy(BaseStrategy):
@@ -36,16 +47,20 @@ class PatchrightStrategy(BaseStrategy):
 
     def __init__(
         self,
-        timeout: float = 60.0,
-        headless: bool = True,
-        cf_wait: float = _CF_CHALLENGE_WAIT,
-        launch_config: dict[str, Any] | None = None,
+        config: PatchrightConfig | None = None,
         provider: Any = None,
+        **kwargs: Any,
     ):
-        self.timeout = timeout
-        self.headless = headless
-        self.cf_wait = cf_wait
-        self.launch_config = launch_config
+        self._config = config or PatchrightConfig(
+            timeout=kwargs.get("timeout", 60.0),
+            headless=kwargs.get("headless", True),
+            cf_wait=kwargs.get("cf_wait", _CF_CHALLENGE_WAIT),
+            launch_config=kwargs.get("launch_config") or {},
+        )
+        self.timeout = self._config.timeout
+        self.headless = self._config.headless
+        self.cf_wait = self._config.cf_wait
+        self.launch_config = self._config.launch_config
         self._provider = provider
 
     async def _wait_for_cf_resolution(self, page: Any) -> str:
