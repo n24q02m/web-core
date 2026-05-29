@@ -92,14 +92,15 @@ def _check_ip_safe(ip_str: str, hostname: str) -> bool:
 _BLOCKED_HOSTNAMES = frozenset({"localhost", "localhost.localdomain", "127.0.0.1", "::1"})
 
 
-def is_safe_url(url: str) -> bool:
+def is_safe_url(url: str, *, allow_private: bool = False) -> bool:
     """Validate that *url* is safe to fetch (no SSRF).
 
     Checks:
     1. Scheme must be ``http`` or ``https``
-    2. Hostname must exist and not be a known localhost alias
-    3. All resolved IPs must be publicly routable
-    4. Results are cached to pin DNS and prevent rebinding
+    2. Hostname must exist
+    3. Hostname must not be a known localhost alias (unless ``allow_private=True``)
+    4. All resolved IPs must be publicly routable (unless ``allow_private=True``)
+    5. Results are cached to pin DNS and prevent rebinding
     """
     try:
         parsed = urlparse(url)
@@ -113,7 +114,7 @@ def is_safe_url(url: str) -> bool:
     if not hostname:
         return False
 
-    if hostname.lower() in _BLOCKED_HOSTNAMES:
+    if not allow_private and hostname.lower() in _BLOCKED_HOSTNAMES:
         return False
 
     # Fast path: already resolved, validated, and pinned
@@ -126,10 +127,11 @@ def is_safe_url(url: str) -> bool:
 
     try:
         results = _original_getaddrinfo(hostname, None)
-        for res in results:
-            ip_str = str(res[4][0])
-            if not _check_ip_safe(ip_str, hostname):
-                return False
+        if not allow_private:
+            for res in results:
+                ip_str = str(res[4][0])
+                if not _check_ip_safe(ip_str, hostname):
+                    return False
         # Pin the DNS result
         with _dns_cache_lock:
             _dns_cache[hostname] = (results, time.monotonic())
@@ -146,11 +148,16 @@ def is_safe_url(url: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-async def _ssrf_event_hook(request: httpx.Request) -> None:
-    """httpx request event hook that blocks SSRF attempts."""
-    url_str = str(request.url)
-    if not is_safe_url(url_str):
-        raise httpx.RequestError(f"SSRF blocked: {url_str}", request=request)
+def _ssrf_event_hook_factory(allow_private: bool) -> Any:
+    """Create an SSRF event hook with specific settings."""
+
+    async def _ssrf_event_hook(request: httpx.Request) -> None:
+        """httpx request event hook that blocks SSRF attempts."""
+        url_str = str(request.url)
+        if not is_safe_url(url_str, allow_private=allow_private):
+            raise httpx.RequestError(f"SSRF blocked: {url_str}", request=request)
+
+    return _ssrf_event_hook
 
 
 def safe_httpx_client(**kwargs: Any) -> httpx.AsyncClient:
@@ -160,13 +167,18 @@ def safe_httpx_client(**kwargs: Any) -> httpx.AsyncClient:
     it cannot be bypassed by earlier hooks.  Any additional ``event_hooks``
     passed via *kwargs* are preserved.
 
+    Optional Parameter:
+    - ``allow_private``: If ``True``, allows requests to loopback and private IPs.
+      Defaults to ``False``.
+
     Usage::
 
         async with safe_httpx_client() as client:
             resp = await client.get("https://example.com")
     """
+    allow_private = kwargs.pop("allow_private", False)
     hooks = kwargs.pop("event_hooks", {})
     request_hooks = list(hooks.get("request", []))
-    request_hooks.insert(0, _ssrf_event_hook)
+    request_hooks.insert(0, _ssrf_event_hook_factory(allow_private))
     hooks["request"] = request_hooks
     return httpx.AsyncClient(event_hooks=hooks, **kwargs)

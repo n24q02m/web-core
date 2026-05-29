@@ -15,6 +15,7 @@ from typing import Any
 
 import httpx
 
+from web_core.http import safe_httpx_client
 from web_core.http.url import is_valid_domain, normalize_url
 from web_core.search.models import SearchError, SearchResult
 
@@ -34,7 +35,7 @@ def _get_shared_client() -> httpx.AsyncClient:
     """
     global _shared_client
     if _shared_client is None or getattr(_shared_client, "is_closed", False):
-        _shared_client = httpx.AsyncClient(timeout=15.0)
+        _shared_client = safe_httpx_client(allow_private=True, timeout=15.0)
     return _shared_client
 
 

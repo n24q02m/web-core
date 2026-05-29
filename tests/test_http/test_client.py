@@ -15,7 +15,7 @@ from web_core.http.client import (
     _dns_cache,
     _dns_cache_lock,
     _pinned_getaddrinfo,
-    _ssrf_event_hook,
+    _ssrf_event_hook_factory,
     is_safe_url,
     safe_httpx_client,
 )
@@ -380,7 +380,7 @@ class TestCheckIpSafe:
 
 
 # ---------------------------------------------------------------------------
-# _ssrf_event_hook
+# _ssrf_event_hook_factory(allow_private=False)
 # ---------------------------------------------------------------------------
 
 
@@ -390,7 +390,7 @@ class TestSsrfEventHook:
     async def test_blocks_unsafe_url(self):
         request = httpx.Request("GET", "http://localhost/secret")
         with pytest.raises(httpx.RequestError, match="SSRF blocked"):
-            await _ssrf_event_hook(request)
+            await _ssrf_event_hook_factory(allow_private=False)(request)
 
     async def test_allows_safe_url(self):
         """Safe URLs should pass through without raising."""
@@ -400,7 +400,7 @@ class TestSsrfEventHook:
         ):
             request = httpx.Request("GET", "https://example.com/page")
             # Should not raise
-            await _ssrf_event_hook(request)
+            await _ssrf_event_hook_factory(allow_private=False)(request)
 
 
 # ---------------------------------------------------------------------------
@@ -415,10 +415,10 @@ class TestSafeHttpxClient:
         client = safe_httpx_client()
         assert isinstance(client, httpx.AsyncClient)
 
-    def test_has_ssrf_event_hook(self):
+    def test_has_ssrf_event_hook_factory(self):
         client = safe_httpx_client()
         request_hooks = client.event_hooks.get("request", [])
-        assert _ssrf_event_hook in request_hooks
+        assert any(h.__name__ == "_ssrf_event_hook" for h in request_hooks)
 
     def test_ssrf_hook_is_first(self):
         """SSRF hook must be the first request hook to prevent bypass."""
@@ -428,7 +428,7 @@ class TestSafeHttpxClient:
 
         client = safe_httpx_client(event_hooks={"request": [custom_hook]})
         request_hooks = client.event_hooks["request"]
-        assert request_hooks[0] is _ssrf_event_hook
+        assert request_hooks[0].__name__ == "_ssrf_event_hook"
         assert request_hooks[1] is custom_hook
 
     def test_preserves_other_kwargs(self):
