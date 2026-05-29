@@ -470,3 +470,80 @@ class TestSolveCfTurnstileViaPatchright:
         assert result.metadata["captcha_solved"] is True
         assert result.content == "<html>real content after solve</html>"
         mock_page.evaluate.assert_called_once()
+
+
+class TestCaptchaCoverageEnhancement:
+    """Additional tests to reach 100% coverage."""
+
+    async def test_solve_captcha_no_http_client(self):
+        """solve_captcha uses safe_httpx_client when no http_client is provided."""
+        mock_response = MagicMock()
+        # RECAPTCHA_V2_PROXYLESS expects "gRecaptchaResponse"
+        mock_response.json.return_value = {"solution": {"gRecaptchaResponse": "default-client-token"}}
+
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+
+        strategy = CaptchaStrategy(capsolver_api_key="key")
+        with patch("web_core.scraper.strategies.captcha.safe_httpx_client", return_value=mock_client):
+            token = await strategy.solve_captcha(site_key="site-key", page_url="https://example.com")
+
+        assert token == "default-client-token"
+        mock_client.post.assert_called_once()
+
+    async def test_extract_sitekey_iframe_no_regex_match(self):
+        """_extract_turnstile_sitekey handles iframe src with /0x that doesn't match regex."""
+        mock_page = AsyncMock()
+        mock_page.wait_for_selector = AsyncMock()
+        mock_page.query_selector = AsyncMock(return_value=None)
+
+        # Strategy 2: /0x is present but it's not followed by hex chars as expected by _RE_CF_IFRAME_0X
+        # _RE_CF_IFRAME_0X = re.compile(r"/(0x[A-Za-z0-9]+)[/&]")
+        mock_page.evaluate = AsyncMock(
+            side_effect=[
+                ["https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/0x/invalid"],  # iframes
+                [],  # scripts
+            ]
+        )
+
+        strategy = CaptchaStrategy(capsolver_api_key="key")
+        result = await strategy._extract_turnstile_sitekey(mock_page)
+        assert result is None
+
+    async def test_extract_sitekey_script_no_sitekey_keyword(self):
+        """_extract_turnstile_sitekey skips scripts without sitekey keyword."""
+        mock_page = AsyncMock()
+        mock_page.wait_for_selector = AsyncMock()
+        mock_page.query_selector = AsyncMock(return_value=None)
+
+        mock_page.evaluate = AsyncMock(
+            side_effect=[
+                [],  # iframes
+                ["console.log('hello');", "var x = 1;"],  # scripts
+            ]
+        )
+
+        strategy = CaptchaStrategy(capsolver_api_key="key")
+        result = await strategy._extract_turnstile_sitekey(mock_page)
+        assert result is None
+
+    async def test_extract_sitekey_script_regex_mismatch(self):
+        """_extract_turnstile_sitekey handles script with sitekey keyword but no regex match."""
+        mock_page = AsyncMock()
+        mock_page.wait_for_selector = AsyncMock()
+        mock_page.query_selector = AsyncMock(return_value=None)
+
+        # "sitekey" is present (triggers the continue check) but doesn't match _RE_SCRIPT_SITEKEY
+        # _RE_SCRIPT_SITEKEY = re.compile(r"sitekey['\"\s:=]+['"]([A-Za-z0-9_-]{10,})['"]", re.IGNORECASE)
+        mock_page.evaluate = AsyncMock(
+            side_effect=[
+                [],  # iframes
+                ["var sitekey = 'too-short';"],  # scripts
+            ]
+        )
+
+        strategy = CaptchaStrategy(capsolver_api_key="key")
+        result = await strategy._extract_turnstile_sitekey(mock_page)
+        assert result is None
