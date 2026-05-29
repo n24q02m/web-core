@@ -351,3 +351,49 @@ async def test_infer_model_param_overrides_default(monkeypatch):
     await infer_selectors_with_llm("https://example.com", "<html/>", model="gemini-2.5-pro")
     args = mock_call.await_args.args
     assert args[1] == "gemini-2.5-pro"
+
+
+@pytest.mark.asyncio
+async def test_infer_llm_caller_returns_invalid_json(monkeypatch):
+    _clear_llm_env(monkeypatch)
+
+    async def fake_caller(_prompt, _html):
+        return "invalid { json"
+
+    result = await infer_selectors_with_llm(
+        "https://example.com",
+        "<html/>",
+        llm_caller=fake_caller,
+    )
+    assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_infer_llm_caller_returns_unexpected_type(monkeypatch):
+    _clear_llm_env(monkeypatch)
+
+    async def fake_caller(_prompt, _html):
+        return [1, 2, 3]  # Unexpected type
+
+    result = await infer_selectors_with_llm(
+        "https://example.com",
+        "<html/>",
+        llm_caller=fake_caller,
+    )
+    assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_infer_domain_extraction_protocol_less(monkeypatch):
+    _clear_llm_env(monkeypatch)
+
+    async def fake_caller(_prompt, _html):
+        return {"content": "#c"}
+
+    # Test with // protocol-less URL
+    result = await infer_selectors_with_llm(
+        "//example.com/path",
+        "<html/>",
+        llm_caller=fake_caller,
+    )
+    assert result == {"content": "#c"}
