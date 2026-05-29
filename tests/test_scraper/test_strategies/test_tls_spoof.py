@@ -191,3 +191,39 @@ class TestTLSSpoofStrategy:
             pytest.raises(ValueError, match=r"SSRF blocked: http://127\.0\.0\.1/admin"),
         ):
             await strategy.fetch("https://example.com/safe")
+
+    async def test_fetch_with_cookies(self):
+        """fetch should pass cookies from selectors to the session."""
+        mock_response = MagicMock()
+        mock_response.text = "cookies received"
+        mock_response.url = "https://example.com"
+        mock_response.status_code = 200
+
+        mock_session = AsyncMock()
+        mock_session.get = AsyncMock(return_value=mock_response)
+
+        strategy = TLSSpoofStrategy(session_factory=lambda: mock_session)
+        await strategy.fetch("https://example.com", selectors={"cookies": {"session": "123"}})
+
+        mock_session.get.assert_called_once_with(
+            "https://example.com",
+            impersonate="chrome131",
+            timeout=30.0,
+            cookies={"session": "123"},
+            allow_redirects=False,
+        )
+
+    async def test_fetch_too_many_redirects(self):
+        """fetch should raise ValueError if max_redirects is exceeded."""
+        mock_response = MagicMock()
+        mock_response.status_code = 302
+        mock_response.headers = {"Location": "/redirect"}
+
+        mock_session = AsyncMock()
+        # Side effect that always returns a redirect
+        mock_session.get = AsyncMock(return_value=mock_response)
+
+        strategy = TLSSpoofStrategy(session_factory=lambda: mock_session)
+
+        with pytest.raises(ValueError, match="Too many redirects"):
+            await strategy.fetch("https://example.com/loop")
