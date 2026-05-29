@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -203,6 +204,36 @@ class TestTrackingParams:
 
 class TestStripTrackingParams:
     """Test tracking param stripping (alias for normalize_url)."""
+
+    @pytest.mark.parametrize("param", sorted(_TRACKING_PARAMS))
+    def test_strips_all_tracking_params(self, param):
+        """Verify every parameter in the tracking set is correctly stripped."""
+        url = f"https://example.com/page?{param}=value&keep=me"
+        result = strip_tracking_params(url)
+        parsed = urlparse(result)
+        params = parse_qs(parsed.query)
+        assert param not in params
+        assert params["keep"] == ["me"]
+
+    def test_full_normalization_applied(self):
+        """Verify that full normalization is applied as documented."""
+        url = "HTTPS://WWW.Example.com/Path/#fragment?utm_source=track"
+        # normalize_url strips fragment, trailing slash, www, and lowercases
+        expected = "https://example.com/Path"
+        assert strip_tracking_params(url) == expected
+
+    def test_complex_url_mixed_params(self):
+        """Test a complex URL with multiple tracking and legitimate parameters."""
+        url = (
+            "https://example.com/search?q=python&utm_source=google&page=1&fbclid=abc123&utm_campaign=winter&ref=sidebar"
+        )
+        result = strip_tracking_params(url)
+        assert "q=python" in result
+        assert "page=1" in result
+        assert "utm_source" not in result
+        assert "fbclid" not in result
+        assert "utm_campaign" not in result
+        assert "ref" not in result
 
     def test_strips_utm_params(self):
         result = strip_tracking_params("https://example.com/?utm_source=x&utm_medium=y")
