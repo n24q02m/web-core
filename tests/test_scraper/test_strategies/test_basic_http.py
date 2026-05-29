@@ -119,3 +119,39 @@ class TestBasicHTTPStrategy:
 
         assert result.status_code == 403
         assert result.content == "Forbidden"
+
+    async def test_fetch_passes_cookies(self, mock_httpx_client, mock_httpx_response):
+        """fetch should pass cookies from selectors to the HTTP client."""
+        resp = mock_httpx_response(200, "ok")
+        resp.url = "https://example.com"
+        mock_httpx_client.get = AsyncMock(return_value=resp)
+
+        cookies = {"session": "123"}
+        strategy = BasicHTTPStrategy(http_client=mock_httpx_client)
+        await strategy.fetch("https://example.com", selectors={"cookies": cookies})
+
+        mock_httpx_client.get.assert_called_once_with(
+            "https://example.com",
+            headers=strategy.headers,
+            timeout=30.0,
+            follow_redirects=True,
+            cookies=cookies,
+        )
+
+    async def test_fetch_with_invalid_cookies_in_selectors(self, mock_httpx_client, mock_httpx_response):
+        """fetch should ignore non-dict cookies in selectors."""
+        resp = mock_httpx_response(200, "ok")
+        resp.url = "https://example.com"
+        mock_httpx_client.get = AsyncMock(return_value=resp)
+
+        strategy = BasicHTTPStrategy(http_client=mock_httpx_client)
+        # selectors["cookies"] is a string instead of a dict
+        await strategy.fetch("https://example.com", selectors={"cookies": "not-a-dict"})
+
+        mock_httpx_client.get.assert_called_once_with(
+            "https://example.com",
+            headers=strategy.headers,
+            timeout=30.0,
+            follow_redirects=True,
+            cookies={},
+        )
