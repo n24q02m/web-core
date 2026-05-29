@@ -17,10 +17,25 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 from web_core.http import safe_httpx_client
 
 _gdown_mod: Any = None
 _gdown_lock: asyncio.Lock | None = None
+_shared_client: httpx.AsyncClient | None = None
+
+
+def _get_shared_client() -> httpx.AsyncClient:
+    """Lazy initialization of a shared httpx.AsyncClient.
+
+    Performance Optimization: Reusing the client connection pool avoids the overhead
+    of establishing new TCP/TLS connections for every request.
+    """
+    global _shared_client
+    if _shared_client is None or getattr(_shared_client, "is_closed", False):
+        _shared_client = safe_httpx_client(follow_redirects=True, timeout=30.0)
+    return _shared_client
 
 
 async def _get_gdown() -> Any:
@@ -118,9 +133,9 @@ async def _list_folder_via_html(folder_id: str) -> list[DriveFile]:
         "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
-    async with safe_httpx_client(follow_redirects=True, timeout=30.0) as client:
-        resp = await client.get(url, headers=headers)
-        resp.raise_for_status()
+    client = _get_shared_client()
+    resp = await client.get(url, headers=headers)
+    resp.raise_for_status()
 
     html = resp.text
 
