@@ -570,3 +570,76 @@ class TestSearch:
             await search(SEARXNG_URL, "test")
 
         mock_factory.assert_called_once_with(timeout=15.0)
+
+    async def test_get_shared_client_reused(self):
+        """Branch 36->38: Re-initialization if already set but closed."""
+        from web_core.search import client as client_mod
+        from web_core.search.client import _get_shared_client
+
+        # Reset global state for testing
+        old_client = client_mod._shared_client
+        client_mod._shared_client = None
+
+        try:
+            with patch("httpx.AsyncClient") as mock_client_class:
+                m1 = MagicMock()
+                m1.is_closed = False
+                m2 = MagicMock()
+                m2.is_closed = False
+
+                mock_client_class.side_effect = [m1, m2]
+
+                # 1. First call creates it
+                c1 = _get_shared_client()
+                assert c1 is m1
+                assert mock_client_class.call_count == 1
+
+                # 2. Second call reuses it
+                c2 = _get_shared_client()
+                assert c2 is c1
+                assert mock_client_class.call_count == 1
+
+                # 3. If closed, creates new one
+                m1.is_closed = True
+                c3 = _get_shared_client()
+                assert c3 is m2
+                assert c3 is not c1
+                assert mock_client_class.call_count == 2
+        finally:
+            client_mod._shared_client = old_client
+
+    async def test_dedup_with_empty_source(self, mock_httpx_client):
+        """Branch 204->206: Existing result, but new hit has no engine/source."""
+        raw = [
+            _raw_result("https://a.com", "T", "S", "google"),
+            _raw_result("https://a.com", "T", "S", ""),  # empty engine
+        ]
+        mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response(raw))
+        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
+            results = await search(SEARXNG_URL, "q")
+        assert results[0].source == "google"
+
+    async def test_dedup_with_empty_title(self, mock_httpx_client):
+        """Branch 208->194: Existing result, new hit has longer snippet but empty title."""
+        raw = [
+            _raw_result("https://a.com", "Original Title", "Short", "google"),
+            _raw_result("https://a.com", "", "Much Longer Snippet", "bing"),
+        ]
+        mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response(raw))
+        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
+            results = await search(SEARXNG_URL, "q")
+        assert results[0].snippet == "Much Longer Snippet"
+        assert results[0].title == "Original Title"  # Should not have been overwritten by empty string
+
+    async def test_catches_and_reraises_search_error(self, mock_httpx_client):
+        """Line 260: Catch SearchError inside the loop and re-raise it."""
+        raw = [_raw_result("https://a.com")]
+        mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response(raw))
+
+        with (
+            patch("httpx.AsyncClient", return_value=mock_httpx_client),
+            patch("web_core.search.client.normalize_url", side_effect=SearchError("q", "forced")),
+        ):
+            with pytest.raises(SearchError) as exc:
+                await search(SEARXNG_URL, "q")
+            assert exc.value.reason == "forced"
