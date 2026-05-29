@@ -98,6 +98,25 @@ class TestIsSafeUrl:
         ):
             assert is_safe_url("http://metadata.example.com") is False
 
+    def test_is_safe_url_handles_expired_cache(self):
+        """is_safe_url should re-resolve if the cache entry has expired."""
+        from web_core.http.client import _DNS_CACHE_TTL, _dns_cache, _dns_cache_lock
+
+        hostname = "expired-cache.example.com"
+        old_results = [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("1.1.1.1", 0))]
+        new_results = [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("9.9.9.9", 0))]
+
+        with _dns_cache_lock:
+            _dns_cache[hostname] = (old_results, time.monotonic() - _DNS_CACHE_TTL - 1)
+
+        with patch(
+            "web_core.http.client._original_getaddrinfo",
+            return_value=new_results,
+        ) as mock_gai:
+            assert is_safe_url(f"http://{hostname}") is True
+            # Should have called getaddrinfo again because cache was expired
+            mock_gai.assert_called_once()
+
     def test_blocks_multicast_address(self):
         """224.0.0.0/4 multicast must be blocked."""
         with patch(
@@ -374,3 +393,22 @@ class TestSafeHttpxClient:
         client = safe_httpx_client(event_hooks={"response": [response_hook]})
         response_hooks = client.event_hooks.get("response", [])
         assert response_hook in response_hooks
+
+    async def test_client_blocks_ssrf(self):
+        """The client should raise RequestError when an unsafe URL is requested."""
+        async with safe_httpx_client() as client:
+            with pytest.raises(httpx.RequestError, match="SSRF blocked"):
+                await client.get("http://127.0.0.1")
+
+    async def test_client_allows_safe_url(self):
+        """The client should allow safe URLs."""
+        # Mock DNS resolution for example.com to a safe IP
+        mock_results = [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 80))]
+
+        transport = httpx.MockTransport(lambda request: httpx.Response(200, content=b"ok"))
+
+        async with safe_httpx_client(transport=transport) as client:
+            with patch("web_core.http.client._original_getaddrinfo", return_value=mock_results):
+                resp = await client.get("http://example.com")
+                assert resp.status_code == 200
+                assert resp.content == b"ok"
