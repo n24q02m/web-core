@@ -113,6 +113,57 @@ class TestNormalizeUrl:
         with patch("web_core.http.url.urlparse", side_effect=Exception("parse fail")):
             assert normalize_url(raw) == raw
 
+    def test_preserves_port(self):
+        result = normalize_url("https://example.com:8080/path")
+        assert result == "https://example.com:8080/path"
+
+    def test_duplicate_tracking_params(self):
+        result = normalize_url("https://example.com/?utm_source=a&utm_source=b")
+        assert "?" not in result
+
+    def test_empty_tracking_param_value(self):
+        result = normalize_url("https://example.com/?utm_source=")
+        assert "?" not in result
+
+    def test_no_value_tracking_param(self):
+        result = normalize_url("https://example.com/?utm_source")
+        assert "?" not in result
+
+    def test_near_tracking_param_match(self):
+        url = "https://example.com/?not_utm_source=a"
+        assert normalize_url(url) == "https://example.com?not_utm_source=a"
+
+    def test_www_in_middle_of_domain(self):
+        url = "https://mywwwsite.com"
+        assert normalize_url(url) == url
+
+    def test_www_start_of_subdomain(self):
+        url = "https://sub.www.example.com"
+        assert normalize_url(url) == url
+
+    def test_multiple_trailing_slashes(self):
+        result = normalize_url("https://example.com/path///")
+        assert result == "https://example.com/path"
+
+    def test_short_tracking_params(self):
+        result = normalize_url("https://example.com/?s=1&ref=2&ref_src=3")
+        assert "?" not in result
+
+    def test_encoded_path(self):
+        url = "https://example.com/path%20with%20space"
+        assert normalize_url(url) == url
+
+    def test_preserves_params_section(self):
+        """Test that the rarely used 'params' section (after ;) is preserved."""
+        url = "https://example.com/path;matrix=1?q=test"
+        result = normalize_url(url)
+        assert ";matrix=1" in result
+        assert "q=test" in result
+
+    def test_multiple_trailing_slashes_root(self):
+        result = normalize_url("https://example.com///")
+        assert result == "https://example.com"
+
 
 class TestTrackingParams:
     """Verify the tracking params set is comprehensive."""
