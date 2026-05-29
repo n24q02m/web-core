@@ -178,6 +178,55 @@ class TestIsSafeUrl:
         ):
             assert is_safe_url("http://dns-error.example.com") is False
 
+    def test_uses_cached_dns_result(self):
+        """is_safe_url should return True immediately if the hostname is cached and fresh."""
+        hostname = "already-cached.example.com"
+        mock_results = [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 0))]
+        with _dns_cache_lock:
+            _dns_cache[hostname] = (mock_results, time.monotonic())
+
+        try:
+            with patch("web_core.http.client._original_getaddrinfo") as mock_gai:
+                assert is_safe_url(f"http://{hostname}") is True
+                mock_gai.assert_not_called()
+        finally:
+            with _dns_cache_lock:
+                _dns_cache.pop(hostname, None)
+
+    def test_blocks_if_any_ip_is_unsafe(self):
+        """If any resolved IP is unsafe, the entire URL must be blocked."""
+        with patch(
+            "web_core.http.client._original_getaddrinfo",
+            return_value=[
+                (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 0)),
+                (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("10.0.0.1", 0)),
+            ],
+        ):
+            assert is_safe_url("http://mixed-ips.example.com") is False
+
+    def test_blocks_localhost_case_insensitive(self):
+        """Localhost aliases should be blocked regardless of case."""
+        assert is_safe_url("http://LOCALHOST") is False
+        assert is_safe_url("http://LocalHost.LocalDomain") is False
+
+    def test_handles_expired_cache_entry(self):
+        """is_safe_url should re-resolve if the cache entry is expired."""
+        hostname = "expired-cache.example.com"
+        with _dns_cache_lock:
+            _dns_cache[hostname] = ([], time.monotonic() - _DNS_CACHE_TTL - 1)
+
+        mock_results = [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 0))]
+        try:
+            with patch(
+                "web_core.http.client._original_getaddrinfo",
+                return_value=mock_results,
+            ) as mock_gai:
+                assert is_safe_url(f"http://{hostname}") is True
+                mock_gai.assert_called_once()
+        finally:
+            with _dns_cache_lock:
+                _dns_cache.pop(hostname, None)
+
 
 # ---------------------------------------------------------------------------
 # _pinned_getaddrinfo
