@@ -28,7 +28,7 @@ dependencies = [
     "browserforge>=1.2.4",
     "capsolver>=1.0.7",
     "pydantic>=2.12.5",
-    "gdown>=6.0.0",
+    "gdown>=6.1.0",
     "pillow>=12.2.0",
 ]
 
@@ -38,7 +38,7 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "pytest-timeout>=2.4.0",
-    "ruff>=0.15.14",
+    "ruff>=0.15.15",
     "ty>=0.0.40",
 ]
 
