@@ -7,7 +7,7 @@ comparison, and for validating domain names to prevent injection attacks.
 from __future__ import annotations
 
 import re
-from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
 # ---------------------------------------------------------------------------
 # Tracking parameters to strip
@@ -66,8 +66,10 @@ def normalize_url(url: str) -> str:
     if not url:
         return ""
 
+    # ⚡ Bolt Optimization: Using urlsplit instead of urlparse
+    # Avoids unnecessary separation of path parameters, reducing internal function calls and tuple reallocation overhead.
     try:
-        parsed = urlparse(url)
+        parsed = urlsplit(url)
     except Exception:
         return url
 
@@ -90,8 +92,10 @@ def normalize_url(url: str) -> str:
     else:
         query = ""
 
+    # ⚡ Bolt Optimization: Using urlunsplit instead of urlunparse
+    # Pairs with urlsplit for faster reconstruction.
     # Fragment is always stripped (empty string)
-    return urlunparse((scheme, netloc, path, parsed.params, query, ""))
+    return urlunsplit((scheme, netloc, path, query, ""))
 
 
 def strip_tracking_params(url: str) -> str:
