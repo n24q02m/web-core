@@ -67,7 +67,8 @@ def normalize_url(url: str) -> str:
         return ""
 
     # ⚡ Bolt Optimization: Using urlsplit instead of urlparse
-    # Avoids unnecessary separation of path parameters, reducing internal function calls and tuple reallocation overhead.
+    # Avoids unnecessary separation of path parameters, reducing internal
+    # function calls and tuple reallocation overhead.
     try:
         parsed = urlsplit(url)
     except Exception:
