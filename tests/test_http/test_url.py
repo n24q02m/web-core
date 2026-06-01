@@ -109,9 +109,9 @@ class TestNormalizeUrl:
         assert "fbclid" not in result
 
     def test_urlparse_exception_returns_original(self):
-        """If urlparse raises, the original URL string is returned unchanged."""
+        """If urlsplit raises, the original URL string is returned unchanged."""
         raw = "https://example.com/page"
-        with patch("web_core.http.url.urlparse", side_effect=Exception("parse fail")):
+        with patch("web_core.http.url.urlsplit", side_effect=Exception("parse fail")):
             assert normalize_url(raw) == raw
 
     def test_preserves_port(self):
