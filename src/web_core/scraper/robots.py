@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import time
-from urllib.parse import urlparse
+from urllib.parse import urlsplit
 from urllib.robotparser import RobotFileParser
 
 import httpx
@@ -67,7 +67,7 @@ class RobotsCache:
 
         Missing or unreachable robots.txt defaults to **allow** (per RFC 9309).
         """
-        parsed = urlparse(url)
+        parsed = urlsplit(url)
         origin = f"{parsed.scheme}://{parsed.netloc}"
 
         parser = await self._get_parser(origin)
