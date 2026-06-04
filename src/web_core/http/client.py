@@ -86,6 +86,30 @@ def _check_ip_safe(ip_str: str, hostname: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# URL safety validation helpers
+# ---------------------------------------------------------------------------
+
+
+def _is_dns_pinned(hostname: str) -> bool:
+    """Check if the hostname is already pinned and the cache is fresh."""
+    with _dns_cache_lock:
+        entry = _dns_cache.get(hostname)
+        if entry is None:
+            return False
+        _, cached_at = entry
+        return time.monotonic() - cached_at < _DNS_CACHE_TTL
+
+
+def _are_resolved_ips_safe(results: list, hostname: str) -> bool:
+    """Check if all resolved IPs for the hostname are safe."""
+    for res in results:
+        ip_str = str(res[4][0])
+        if not _check_ip_safe(ip_str, hostname):
+            return False
+    return True
+
+
+# ---------------------------------------------------------------------------
 # URL safety validation
 # ---------------------------------------------------------------------------
 
@@ -104,40 +128,29 @@ def is_safe_url(url: str, *, allow_private: bool = False) -> bool:
     """
     try:
         parsed = urlparse(url)
+        hostname = parsed.hostname
     except Exception:
         return False
 
-    if parsed.scheme not in ("http", "https"):
-        return False
-
-    hostname = parsed.hostname
-    if not hostname:
+    if not hostname or parsed.scheme not in ("http", "https"):
         return False
 
     if not allow_private and hostname.lower() in _BLOCKED_HOSTNAMES:
         return False
 
     # Fast path: already resolved, validated, and pinned
-    with _dns_cache_lock:
-        entry = _dns_cache.get(hostname)
-        if entry is not None:
-            _, cached_at = entry
-            if time.monotonic() - cached_at < _DNS_CACHE_TTL:
-                return True
+    if _is_dns_pinned(hostname):
+        return True
 
     try:
         results = _original_getaddrinfo(hostname, None)
-        if not allow_private:
-            for res in results:
-                ip_str = str(res[4][0])
-                if not _check_ip_safe(ip_str, hostname):
-                    return False
+        if not allow_private and not _are_resolved_ips_safe(results, hostname):
+            return False
+
         # Pin the DNS result
         with _dns_cache_lock:
             _dns_cache[hostname] = (results, time.monotonic())
-    except socket.gaierror:
-        return False
-    except Exception:
+    except (socket.gaierror, Exception):
         return False
 
     return True
