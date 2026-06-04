@@ -45,25 +45,26 @@ def _load_domain_cookies() -> dict[str, dict[str, str]]:
 
     Expected format: {"domain": {"cookie_name": "value"}, ...}
     """
-    cookies: dict[str, dict[str, str]] = {}
-
-    # Load from environment variable to allow configuration of tokens/secrets
     raw = os.environ.get("WEB_CORE_DOMAIN_COOKIES")
-    if raw:
-        try:
-            env_cookies = json.loads(raw)
-            if isinstance(env_cookies, dict):
-                for domain, domain_cookies in env_cookies.items():
-                    if isinstance(domain_cookies, dict):
-                        cookies[domain] = domain_cookies
-            else:
-                logger.warning("WEB_CORE_DOMAIN_COOKIES is not a JSON object")
-        except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse WEB_CORE_DOMAIN_COOKIES: {e}")
-        except Exception as e:
-            logger.warning(f"Unexpected error loading WEB_CORE_DOMAIN_COOKIES: {e}")
+    if not raw:
+        return {}
 
-    return cookies
+    try:
+        env_cookies = json.loads(raw)
+    except json.JSONDecodeError as e:
+        logger.warning(f"Failed to parse WEB_CORE_DOMAIN_COOKIES: {e}")
+        return {}
+    except Exception as e:
+        logger.warning(f"Unexpected error loading WEB_CORE_DOMAIN_COOKIES: {e}")
+        return {}
+
+    if not isinstance(env_cookies, dict):
+        logger.warning("WEB_CORE_DOMAIN_COOKIES is not a JSON object")
+        return {}
+
+    return {
+        domain: domain_cookies for domain, domain_cookies in env_cookies.items() if isinstance(domain_cookies, dict)
+    }
 
 
 # Domain cookies for sites requiring specific cookies (e.g., age verification)
