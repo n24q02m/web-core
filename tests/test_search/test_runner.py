@@ -314,6 +314,47 @@ class TestFindAvailablePort:
         assert isinstance(port, int)
         assert port >= 18888
 
+    def test_find_available_port_invalid_range(self):
+        """Covers the case where start_port is outside [1024, 65535]."""
+        # Low port
+        port = _find_available_port(80, max_tries=5)
+        assert 49152 <= port <= 65535
+
+        # High port
+        port = _find_available_port(70000, max_tries=5)
+        assert 49152 <= port <= 65535
+
+    def test_find_available_port_retries_on_bind_error(self):
+        """Covers OSError during s.bind()."""
+        with patch("socket.socket") as mock_socket_cls:
+            # First mock socket fails on bind, second succeeds
+            mock_s1 = MagicMock()
+            mock_s1.__enter__.return_value = mock_s1
+            mock_s1.bind.side_effect = OSError("First port taken")
+
+            mock_s2 = MagicMock()
+            mock_s2.__enter__.return_value = mock_s2
+            # mock_s2.bind succeeds (default)
+
+            mock_socket_cls.side_effect = [mock_s1, mock_s2]
+
+            port = _find_available_port(18888, max_tries=5)
+            assert isinstance(port, int)
+            assert mock_socket_cls.call_count == 2
+
+    def test_find_available_port_retries_on_socket_creation_error(self):
+        """Covers OSError during socket.socket() instantiation."""
+        with patch("socket.socket") as mock_socket_cls:
+            # First call to socket.socket() fails
+            mock_s2 = MagicMock()
+            mock_s2.__enter__.return_value = mock_s2
+
+            mock_socket_cls.side_effect = [OSError("Socket creation failed"), mock_s2]
+
+            port = _find_available_port(18888, max_tries=5)
+            assert isinstance(port, int)
+            assert mock_socket_cls.call_count == 2
+
 
 # ===========================================================================
 # _wait_for_service
