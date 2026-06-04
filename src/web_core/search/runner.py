@@ -170,6 +170,39 @@ def _get_startup_lock() -> asyncio.Lock:
 # ---------------------------------------------------------------------------
 
 
+def _is_pid_alive_win32(pid: int) -> bool:  # pragma: no cover
+    """Windows-specific PID liveness check using ctypes OpenProcess."""
+    import ctypes
+
+    PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+    handle = ctypes.windll.kernel32.OpenProcess(  # type: ignore[attr-defined]
+        PROCESS_QUERY_LIMITED_INFORMATION, False, pid
+    )
+    if handle:
+        ctypes.windll.kernel32.CloseHandle(handle)  # type: ignore[attr-defined]
+        return True
+    return False
+
+
+def _is_zombie(pid: int) -> bool:  # pragma: no cover
+    """Check if a Linux process is in a zombie state."""
+    try:
+        status_path = Path(f"/proc/{pid}/status")
+        if not status_path.exists():
+            return False
+
+        for line in status_path.read_text().splitlines():
+            if line.startswith("State:"):
+                state_info = line.split(":")[1]
+                if "Z" in state_info:
+                    logger.debug("PID %d is a zombie process", pid)
+                    return True
+                break
+    except OSError:
+        pass
+    return False
+
+
 def _is_pid_alive(pid: int) -> bool:  # pragma: no cover
     """Check if a process with the given PID is alive (not zombie).
 
@@ -181,16 +214,7 @@ def _is_pid_alive(pid: int) -> bool:  # pragma: no cover
         return False
 
     if sys.platform == "win32":
-        import ctypes
-
-        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-        handle = ctypes.windll.kernel32.OpenProcess(  # type: ignore[attr-defined]
-            PROCESS_QUERY_LIMITED_INFORMATION, False, pid
-        )
-        if handle:
-            ctypes.windll.kernel32.CloseHandle(handle)  # type: ignore[attr-defined]
-            return True
-        return False
+        return _is_pid_alive_win32(pid)
 
     try:
         os.kill(pid, 0)
@@ -200,19 +224,7 @@ def _is_pid_alive(pid: int) -> bool:  # pragma: no cover
     # On Linux, check /proc/{pid}/status for zombie state.
     # os.kill(pid, 0) succeeds for zombie processes (PID still in table),
     # but they are defunct and cannot serve requests.
-    try:
-        status_path = Path(f"/proc/{pid}/status")
-        if status_path.exists():
-            for line in status_path.read_text().splitlines():
-                if line.startswith("State:"):
-                    if "Z" in line.split(":")[1]:
-                        logger.debug("PID %d is a zombie process", pid)
-                        return False
-                    break
-    except OSError:
-        pass
-
-    return True
+    return not _is_zombie(pid)
 
 
 def _read_discovery() -> dict | None:
