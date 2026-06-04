@@ -10,6 +10,7 @@ Enhanced with:
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass
 from typing import Any
 
 from langgraph.graph import END, START, StateGraph
@@ -23,6 +24,16 @@ from web_core.scraper.selector_inference import (
 )
 from web_core.scraper.state import ScrapingError, ScrapingState
 from web_core.scraper.utils import is_cloudflare_challenge
+
+
+@dataclass
+class ScrapingConfig:
+    """Configuration for ScrapingAgent."""
+
+    max_retries: int = 5
+    min_content_length: int = 100
+    enable_selector_inference: bool = True
+    respect_robots: bool = True
 
 
 class ScrapingAgent:
@@ -41,18 +52,20 @@ class ScrapingAgent:
         strategies: dict[str, Any] | None = None,
         strategy_cache: StrategyCache | None = None,
         robots_cache: RobotsCache | None = None,
-        max_retries: int = 5,
-        min_content_length: int = 100,
-        enable_selector_inference: bool = True,
-        respect_robots: bool = True,
+        config: ScrapingConfig | None = None,
+        **kwargs: Any,
     ):
         self.strategies = strategies or {}
         self.strategy_cache = strategy_cache or StrategyCache()
         self.robots_cache = robots_cache or RobotsCache()
-        self.max_retries = max_retries
-        self.min_content_length = min_content_length
-        self.enable_selector_inference = enable_selector_inference
-        self.respect_robots = respect_robots
+
+        # Handle config with backward compatibility for kwargs
+        _config = config or ScrapingConfig()
+        self.max_retries = kwargs.get("max_retries", _config.max_retries)
+        self.min_content_length = kwargs.get("min_content_length", _config.min_content_length)
+        self.enable_selector_inference = kwargs.get("enable_selector_inference", _config.enable_selector_inference)
+        self.respect_robots = kwargs.get("respect_robots", _config.respect_robots)
+
         self._graph = self._build_graph()
 
     def _build_graph(self):

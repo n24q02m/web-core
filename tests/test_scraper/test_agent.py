@@ -354,3 +354,38 @@ class TestScrapingAgent:
 
         assert strategy.call_count == 2
         mock_llm.assert_called_once()
+
+    async def test_init_with_config_object(self):
+        """Agent should correctly use values from a ScrapingConfig object."""
+        from web_core.scraper.agent import ScrapingConfig
+
+        config = ScrapingConfig(
+            max_retries=2, min_content_length=200, enable_selector_inference=False, respect_robots=False
+        )
+        agent = ScrapingAgent(config=config)
+
+        assert agent.max_retries == 2
+        assert agent.min_content_length == 200
+        assert agent.enable_selector_inference is False
+        assert agent.respect_robots is False
+
+    async def test_init_with_kwargs_backward_compatibility(self):
+        """Agent should correctly use values from kwargs for backward compatibility."""
+        agent = ScrapingAgent(
+            max_retries=3, min_content_length=150, enable_selector_inference=False, respect_robots=True
+        )
+
+        assert agent.max_retries == 3
+        assert agent.min_content_length == 150
+        assert agent.enable_selector_inference is False
+        assert agent.respect_robots is True
+
+    async def test_init_mixed_config_and_kwargs(self):
+        """Kwargs should override values in the config object if both are provided."""
+        from web_core.scraper.agent import ScrapingConfig
+
+        config = ScrapingConfig(max_retries=5, min_content_length=100)
+        agent = ScrapingAgent(config=config, max_retries=10)
+
+        assert agent.max_retries == 10
+        assert agent.min_content_length == 100
