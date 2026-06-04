@@ -452,28 +452,18 @@ def _is_searxng_installed() -> bool:
         return False
 
 
-def _install_searxng() -> bool:  # pragma: no cover
-    """Install SearXNG from GitHub zip archive.
+def _install_searxng_build_deps(pip_cmd: list[str]) -> bool:
+    """Pre-install build dependencies required by SearXNG.
 
-    Uses zip URL instead of ``git+`` to avoid filename issues on some
-    platforms. Pre-installs build dependencies before SearXNG.
-
-    Returns ``True`` if installation succeeded.
+    On Windows, also install waitress (production WSGI server) to replace
+    Flask's Werkzeug dev server which deadlocks under concurrent requests.
     """
-    logger.info("Installing SearXNG from GitHub (first run)...")
+    build_deps = ["msgspec", "setuptools", "wheel", "pyyaml"]
+    if sys.platform == "win32":
+        build_deps.append("waitress>=3.0.0")
 
+    logger.debug("Installing SearXNG build dependencies...")
     try:
-        pip_cmd = _get_pip_command()
-        logger.debug("Using pip command: %s", pip_cmd)
-
-        # Pre-install build dependencies required by SearXNG.
-        # On Windows, also install waitress (production WSGI server) to replace
-        # Flask's Werkzeug dev server which deadlocks under concurrent requests.
-        build_deps = ["msgspec", "setuptools", "wheel", "pyyaml"]
-        if sys.platform == "win32":
-            build_deps.append("waitress>=3.0.0")
-
-        logger.debug("Installing SearXNG build dependencies...")
         deps_result = subprocess.run(
             [*pip_cmd, "--quiet", *build_deps],
             stdin=subprocess.DEVNULL,
@@ -484,16 +474,29 @@ def _install_searxng() -> bool:  # pragma: no cover
         if deps_result.returncode != 0:
             logger.error("Build deps installation failed: %s", deps_result.stderr[:500])
             return False
+        return True
+    except subprocess.TimeoutExpired:
+        logger.error("SearXNG build deps installation timed out")
+        return False
+    except Exception as e:
+        logger.error("Failed to install SearXNG build deps: %s", e)
+        return False
 
-        # Security: Validate the installation URL before execution.
-        if (
-            not _SEARXNG_INSTALL_URL.startswith("https://github.com/searxng/searxng/archive/")
-            or "#sha256=" not in _SEARXNG_INSTALL_URL
-        ):
-            logger.error("Invalid or insecure SearXNG install URL: %s", _SEARXNG_INSTALL_URL)
-            return False
 
-        # Install SearXNG with --no-build-isolation (uses pre-installed deps).
+def _validate_searxng_install_url() -> bool:
+    """Security: Validate the installation URL before execution."""
+    if (
+        not _SEARXNG_INSTALL_URL.startswith("https://github.com/searxng/searxng/archive/")
+        or "#sha256=" not in _SEARXNG_INSTALL_URL
+    ):
+        logger.error("Invalid or insecure SearXNG install URL: %s", _SEARXNG_INSTALL_URL)
+        return False
+    return True
+
+
+def _run_searxng_package_install(pip_cmd: list[str]) -> bool:
+    """Install SearXNG with --no-build-isolation (uses pre-installed deps)."""
+    try:
         result = subprocess.run(
             [*pip_cmd, "--quiet", "--no-build-isolation", _SEARXNG_INSTALL_URL],
             stdin=subprocess.DEVNULL,
@@ -508,13 +511,34 @@ def _install_searxng() -> bool:  # pragma: no cover
 
         logger.error("SearXNG installation failed: %s", result.stderr[:500])
         return False
-
     except subprocess.TimeoutExpired:
-        logger.error("SearXNG installation timed out")
+        logger.error("SearXNG package installation timed out")
         return False
     except Exception as e:
-        logger.error("Failed to install SearXNG: %s", e)
+        logger.error("Failed to install SearXNG package: %s", e)
         return False
+
+
+def _install_searxng() -> bool:  # pragma: no cover
+    """Install SearXNG from GitHub zip archive.
+
+    Uses zip URL instead of ``git+`` to avoid filename issues on some
+    platforms. Pre-installs build dependencies before SearXNG.
+
+    Returns ``True`` if installation succeeded.
+    """
+    logger.info("Installing SearXNG from GitHub (first run)...")
+
+    pip_cmd = _get_pip_command()
+    logger.debug("Using pip command: %s", pip_cmd)
+
+    if not _install_searxng_build_deps(pip_cmd):
+        return False
+
+    if not _validate_searxng_install_url():
+        return False
+
+    return _run_searxng_package_install(pip_cmd)
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,65 @@
+def _install_searxng_build_deps(pip_cmd: list[str]) -> bool:
+    """Pre-install build dependencies required by SearXNG.
+
+    On Windows, also install waitress (production WSGI server) to replace
+    Flask's Werkzeug dev server which deadlocks under concurrent requests.
+    """
+    build_deps = ["msgspec", "setuptools", "wheel", "pyyaml"]
+    if sys.platform == "win32":
+        build_deps.append("waitress>=3.0.0")
+
+    logger.debug("Installing SearXNG build dependencies...")
+    try:
+        deps_result = subprocess.run(
+            [*pip_cmd, "--quiet", *build_deps],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if deps_result.returncode != 0:
+            logger.error("Build deps installation failed: %s", deps_result.stderr[:500])
+            return False
+        return True
+    except subprocess.TimeoutExpired:
+        logger.error("SearXNG build deps installation timed out")
+        return False
+    except Exception as e:
+        logger.error("Failed to install SearXNG build deps: %s", e)
+        return False
+
+
+def _validate_searxng_install_url() -> bool:
+    """Security: Validate the installation URL before execution."""
+    if (
+        not _SEARXNG_INSTALL_URL.startswith("https://github.com/searxng/searxng/archive/")
+        or "#sha256=" not in _SEARXNG_INSTALL_URL
+    ):
+        logger.error("Invalid or insecure SearXNG install URL: %s", _SEARXNG_INSTALL_URL)
+        return False
+    return True
+
+
+def _run_searxng_package_install(pip_cmd: list[str]) -> bool:
+    """Install SearXNG with --no-build-isolation (uses pre-installed deps)."""
+    try:
+        result = subprocess.run(
+            [*pip_cmd, "--quiet", "--no-build-isolation", _SEARXNG_INSTALL_URL],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+
+        if result.returncode == 0:
+            logger.info("SearXNG installed successfully")
+            return True
+
+        logger.error("SearXNG installation failed: %s", result.stderr[:500])
+        return False
+    except subprocess.TimeoutExpired:
+        logger.error("SearXNG package installation timed out")
+        return False
+    except Exception as e:
+        logger.error("Failed to install SearXNG package: %s", e)
+        return False
