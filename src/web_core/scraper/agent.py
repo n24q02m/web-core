@@ -141,39 +141,41 @@ class ScrapingAgent:
         """Execute the current strategy with time tracking."""
         order = state.get("strategy_order", [])
         idx = state.get("current_strategy_idx", 0)
-        errors = list(state.get("errors", []))
-        tried = list(state.get("strategies_tried", []))
-        url = state.get("url", "")
-        selectors = state.get("selectors")
 
         if idx >= len(order):
-            return {
-                **state,
-                "success": False,
-                "content": "",
-                "status_code": 0,
-                "errors": errors,
-                "strategies_tried": tried,
-            }
+            return self._handle_exhausted_strategies(state)
 
         strategy_name = order[idx]
         strategy = self.strategies.get(strategy_name)
 
-        # Only add to tried list if not already there (avoids duplicates on retry)
+        # Update tried list (avoids duplicates on retry)
+        tried = list(state.get("strategies_tried", []))
         if not tried or tried[-1] != strategy_name:
             tried.append(strategy_name)
 
         if strategy is None:
-            errors.append(f"Strategy '{strategy_name}' not found")
-            return {
-                **state,
-                "success": False,
-                "content": "",
-                "status_code": 0,
-                "errors": errors,
-                "strategies_tried": tried,
-            }
+            return self._record_strategy_failure(state, tried, strategy_name, f"Strategy '{strategy_name}' not found")
 
+        return await self._perform_strategy_fetch(state, tried, strategy, strategy_name)
+
+    def _handle_exhausted_strategies(self, state: ScrapingState) -> ScrapingState:
+        """Return failure state when no more strategies are available."""
+        return {
+            **state,
+            "success": False,
+            "content": "",
+            "status_code": 0,
+            "errors": list(state.get("errors", [])),
+            "strategies_tried": list(state.get("strategies_tried", [])),
+        }
+
+    async def _perform_strategy_fetch(
+        self, state: ScrapingState, tried: list[str], strategy: Any, strategy_name: str
+    ) -> ScrapingState:
+        """Execute the strategy fetch and handle results/timing."""
+        url = state.get("url", "")
+        selectors = state.get("selectors")
+        errors = list(state.get("errors", []))
         try:
             t0 = time.monotonic()
             result = await strategy.fetch(url, selectors)
@@ -193,15 +195,28 @@ class ScrapingAgent:
                 "metadata": metadata,
             }
         except Exception as e:
-            errors.append(f"{strategy_name}: {e!s}")
-            return {
-                **state,
-                "success": False,
-                "content": "",
-                "status_code": 0,
-                "errors": errors,
-                "strategies_tried": tried,
-            }
+            return self._record_strategy_failure(state, tried, strategy_name, str(e))
+
+    def _record_strategy_failure(
+        self, state: ScrapingState, tried: list[str], strategy_name: str, error_msg: str
+    ) -> ScrapingState:
+        """Update state with strategy error and return failure indicator."""
+        errors = list(state.get("errors", []))
+
+        # Maintain original error formatting
+        formatted_error = (
+            error_msg if "not found" in error_msg else f"{strategy_name}: {error_msg}"
+        )
+        errors.append(formatted_error)
+
+        return {
+            **state,
+            "success": False,
+            "content": "",
+            "status_code": 0,
+            "errors": errors,
+            "strategies_tried": tried,
+        }
 
     async def _validate_node(self, state: ScrapingState) -> ScrapingState:
         """Validate that the response is usable.
