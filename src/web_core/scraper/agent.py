@@ -204,9 +204,7 @@ class ScrapingAgent:
         errors = list(state.get("errors", []))
 
         # Maintain original error formatting
-        formatted_error = (
-            error_msg if "not found" in error_msg else f"{strategy_name}: {error_msg}"
-        )
+        formatted_error = error_msg if "not found" in error_msg else f"{strategy_name}: {error_msg}"
         errors.append(formatted_error)
 
         return {
