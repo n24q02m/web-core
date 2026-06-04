@@ -192,9 +192,12 @@ async def search(
             # avoids creating an intermediate list of formatted dicts, saving ~25%
             # processing time for large result sets.
             seen: dict[str, dict[str, Any]] = {}
+            url_to_norm: dict[str, str] = {}
             for r in results:
                 url = r.get("url", "")
-                norm_url = normalize_url(url)
+                if url not in url_to_norm:
+                    url_to_norm[url] = normalize_url(url)
+                norm_url = url_to_norm[url]
 
                 source = r.get("engine", "")
                 snippet = r.get("content", "")
