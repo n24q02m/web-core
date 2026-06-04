@@ -100,7 +100,7 @@ async def _list_folder_via_gdown(folder_id: str) -> list[DriveFile]:
         files = []
         for item in items:
             # GoogleDriveFileToDownload has .id and .path attributes
-            name = item.path.split("/")[-1] if hasattr(item, "path") and item.path else ""
+            name = item.path.split("/")[-1]
             ext = "." + name.rsplit(".", 1)[-1].lower() if "." in name else ""
             if ext in _SUPPORTED_EXTS:
                 files.append(DriveFile(file_id=item.id, name=name))
