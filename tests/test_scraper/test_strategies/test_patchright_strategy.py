@@ -1,6 +1,7 @@
 import contextlib
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from web_core.scraper.strategies.patchright_browser import PatchrightStrategy
 
