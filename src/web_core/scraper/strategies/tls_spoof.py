@@ -44,7 +44,7 @@ class TLSSpoofStrategy(BaseStrategy):
 
         return self._create_result(response)
 
-    def _extract_cookies(self, selectors: dict[str, str] | None) -> dict[str, str] | None:
+    def _extract_cookies(self, selectors: dict[str, Any] | None) -> dict[str, str] | None:
         if selectors and isinstance(selectors.get("cookies"), dict):
             return selectors["cookies"]
         return None
