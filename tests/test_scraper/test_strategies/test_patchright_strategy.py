@@ -1,4 +1,5 @@
 import contextlib
+import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from web_core.scraper.strategies.patchright_browser import PatchrightStrategy
@@ -33,6 +34,11 @@ def _make_mock_provider(content: str):
 
 
 class TestPatchrightStrategy:
+    @pytest.fixture(autouse=True)
+    def mock_is_safe_url(self):
+        with patch("web_core.scraper.strategies.patchright_browser.is_safe_url", return_value=True):
+            yield
+
     async def test_fetch_normal_page(self):
         provider, _page = _make_mock_provider(NORMAL_HTML)
         strategy = PatchrightStrategy(provider=provider)
@@ -318,3 +324,13 @@ class TestPatchrightStrategy:
             result = await strategy.fetch("https://managed-timeout.com")
 
         assert result.strategy == "patchright"
+
+    async def test_fetch_ssrf_blocked(self):
+        """When URL is unsafe, returns SSRF blocked error."""
+        strategy = PatchrightStrategy()
+
+        with patch("web_core.scraper.strategies.patchright_browser.is_safe_url", return_value=False):
+            result = await strategy.fetch("http://127.0.0.1/admin")
+
+        assert result.status_code == 403
+        assert result.metadata["error"] == "ssrf_blocked"

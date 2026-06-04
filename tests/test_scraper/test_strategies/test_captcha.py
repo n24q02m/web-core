@@ -547,3 +547,14 @@ class TestCaptchaCoverageEnhancement:
         strategy = CaptchaStrategy(capsolver_api_key="key")
         result = await strategy._extract_turnstile_sitekey(mock_page)
         assert result is None
+
+    async def test_solve_cf_turnstile_ssrf_blocked(self):
+        """When URL is unsafe, returns SSRF blocked error."""
+        strategy = CaptchaStrategy(capsolver_api_key="key")
+
+        with patch("web_core.scraper.strategies.captcha.is_safe_url", return_value=False):
+            result = await strategy._solve_cf_turnstile_via_patchright("http://127.0.0.1/admin")
+
+        assert result.status_code == 403
+        assert result.metadata["captcha_solved"] is False
+        assert result.metadata["error"] == "ssrf_blocked"
