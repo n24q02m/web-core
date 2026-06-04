@@ -26,6 +26,17 @@ _FAKE_DOCKER = "/usr/bin/docker"
 
 
 @pytest.fixture(autouse=True)
+def patch_runner_globals(tmp_path, monkeypatch):
+    """Ensure runner globals are patched so we don't clobber the real system."""
+    import web_core.search.runner as mod
+
+    config_dir = tmp_path / ".web-core"
+    config_dir.mkdir()
+    monkeypatch.setattr(mod, "_CONFIG_DIR", config_dir)
+    monkeypatch.setattr(mod, "_DISCOVERY_FILE", config_dir / "searxng_instance.json")
+
+
+@pytest.fixture(autouse=True)
 def _reset_docker_state():
     """Reset module-level Docker state before and after each test."""
     import web_core.search.runner as mod
@@ -46,15 +57,8 @@ def _reset_docker_state():
 # ---------------------------------------------------------------------------
 
 
-async def test_spawn_docker_searxng_reuses_existing_container(tmp_path, monkeypatch):
+async def test_spawn_docker_searxng_reuses_existing_container():
     """When container searxng-wet-{PINNED_PORT} already running, do NOT docker run."""
-    import web_core.search.runner as mod
-
-    config_dir = tmp_path / ".web-core"
-    config_dir.mkdir()
-    monkeypatch.setattr(mod, "_CONFIG_DIR", config_dir)
-    monkeypatch.setattr(mod, "_DISCOVERY_FILE", config_dir / "searxng_instance.json")
-
     container_name = f"searxng-wet-{PINNED_SEARXNG_PORT}"
 
     call_args_list: list = []
@@ -93,15 +97,8 @@ async def test_spawn_docker_searxng_reuses_existing_container(tmp_path, monkeypa
 # ---------------------------------------------------------------------------
 
 
-async def test_spawn_docker_searxng_creates_when_absent(tmp_path, monkeypatch):
+async def test_spawn_docker_searxng_creates_when_absent():
     """When no container running on PINNED_PORT, rm stale + docker run must be called."""
-    import web_core.search.runner as mod
-
-    config_dir = tmp_path / ".web-core"
-    config_dir.mkdir()
-    monkeypatch.setattr(mod, "_CONFIG_DIR", config_dir)
-    monkeypatch.setattr(mod, "_DISCOVERY_FILE", config_dir / "searxng_instance.json")
-
     container_name = f"searxng-wet-{PINNED_SEARXNG_PORT}"
 
     call_args_list: list = []
