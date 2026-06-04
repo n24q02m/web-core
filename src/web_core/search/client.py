@@ -109,6 +109,75 @@ def _build_filtered_query(
     return " ".join(parts)
 
 
+def _build_search_params(
+    query: str,
+    categories: str,
+    time_range: str | None,
+    language: str | None,
+    include_domains: list[str] | None,
+    exclude_domains: list[str] | None,
+) -> dict[str, str]:
+    effective_query = _build_filtered_query(query, include_domains, exclude_domains)
+    params: dict[str, str] = {
+        "q": effective_query,
+        "format": "json",
+        "categories": categories,
+    }
+    if time_range and time_range in ("day", "week", "month", "year"):
+        params["time_range"] = time_range
+    if language:
+        params["language"] = language
+    return params
+
+
+def _process_results(results: list[dict[str, Any]], max_results: int) -> list[SearchResult]:
+    # Deduplicate directly from raw results: merge sources, keep longest snippet
+    # Performance Optimization: Combining extraction and deduplication loops
+    # avoids creating an intermediate list of formatted dicts, saving ~25%
+    # processing time for large result sets.
+    seen: dict[str, dict[str, Any]] = {}
+    for r in results:
+        url = r.get("url", "")
+        norm_url = normalize_url(url)
+
+        source = r.get("engine", "")
+        snippet = r.get("content", "")
+        title = r.get("title", "")
+
+        if norm_url in seen:
+            existing = seen[norm_url]
+            if source:
+                existing["source"].add(source)
+            if len(snippet) > len(existing["snippet"]):
+                existing["snippet"] = snippet
+                if title:
+                    existing["title"] = title
+        else:
+            seen[norm_url] = {
+                "url": url,
+                "title": title,
+                "snippet": snippet,
+                "source": {source} if source else set(),
+            }
+
+    # Convert sets back to sorted strings
+    for value in seen.values():
+        value["source"] = ", ".join(sorted(value["source"]))
+
+    # Domain cap + final limit
+    capped = _apply_domain_cap(list(seen.values()))[:max_results]
+
+    return [
+        SearchResult(
+            url=r["url"],
+            title=r["title"],
+            snippet=r["snippet"],
+            source=r["source"],
+        )
+        for r in capped
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -159,16 +228,7 @@ async def search(
     SearchError
         On 4xx (non-retryable) or after all retries are exhausted.
     """
-    effective_query = _build_filtered_query(query, include_domains, exclude_domains)
-    params: dict[str, str] = {
-        "q": effective_query,
-        "format": "json",
-        "categories": categories,
-    }
-    if time_range and time_range in ("day", "week", "month", "year"):
-        params["time_range"] = time_range
-    if language:
-        params["language"] = language
+    params = _build_search_params(query, categories, time_range, language, include_domains, exclude_domains)
 
     last_error: str | None = None
 
@@ -187,51 +247,7 @@ async def search(
             data = response.json()
             results = data.get("results", [])[: max_results * 2]
 
-            # Deduplicate directly from raw results: merge sources, keep longest snippet
-            # Performance Optimization: Combining extraction and deduplication loops
-            # avoids creating an intermediate list of formatted dicts, saving ~25%
-            # processing time for large result sets.
-            seen: dict[str, dict[str, Any]] = {}
-            for r in results:
-                url = r.get("url", "")
-                norm_url = normalize_url(url)
-
-                source = r.get("engine", "")
-                snippet = r.get("content", "")
-                title = r.get("title", "")
-
-                if norm_url in seen:
-                    existing = seen[norm_url]
-                    if source:
-                        existing["source"].add(source)
-                    if len(snippet) > len(existing["snippet"]):
-                        existing["snippet"] = snippet
-                        if title:
-                            existing["title"] = title
-                else:
-                    seen[norm_url] = {
-                        "url": url,
-                        "title": title,
-                        "snippet": snippet,
-                        "source": {source} if source else set(),
-                    }
-
-            # Convert sets back to sorted strings
-            for value in seen.values():
-                value["source"] = ", ".join(sorted(value["source"]))
-
-            # Domain cap + final limit
-            capped = _apply_domain_cap(list(seen.values()))[:max_results]
-
-            return [
-                SearchResult(
-                    url=r["url"],
-                    title=r["title"],
-                    snippet=r["snippet"],
-                    source=r["source"],
-                )
-                for r in capped
-            ]
+            return _process_results(results, max_results)
 
         except httpx.HTTPStatusError as e:
             status = e.response.status_code
