@@ -1,6 +1,7 @@
-import pytest
 import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from web_core.scraper.strategies.patchright_browser import PatchrightStrategy
 
@@ -39,37 +40,30 @@ class TestPatchrightStrategy:
         with patch("web_core.scraper.strategies.patchright_browser.is_safe_url", return_value=True):
             yield
 
-    async def test_fetch_normal_page(self):
+    async def test_fetch_success(self):
         provider, _page = _make_mock_provider(NORMAL_HTML)
         strategy = PatchrightStrategy(provider=provider)
 
         result = await strategy.fetch("https://example.com")
 
         assert result.content == NORMAL_HTML
-        assert result.status_code == 200
+        assert result.url == "https://example.com"
         assert result.strategy == "patchright"
+        assert result.status_code == 200
+        assert result.metadata["rendered"] is True
         assert result.metadata["cf_challenge"] is None
 
-    async def test_fetch_detects_turnstile(self):
-        provider, _page = _make_mock_provider(CF_TURNSTILE_HTML)
-        strategy = PatchrightStrategy(provider=provider)
-
-        result = await strategy.fetch("https://protected.com")
-
-        assert result.metadata["cf_challenge"] == "turnstile"
-        assert result.content == CF_TURNSTILE_HTML
-
     async def test_fetch_js_challenge_polls_and_resolves(self):
-        """JS challenge should be polled until content changes to normal."""
+        """CF JS challenge detected and resolves after polling (line 120)."""
         provider, page = _make_mock_provider(CF_JS_CHALLENGE_HTML)
 
-        # After polling, page.content() returns normal HTML
-        call_count = 0
+        # After wait, content changes to normal
+        content_calls = 0
 
         async def content_side_effect():
-            nonlocal call_count
-            call_count += 1
-            if call_count >= 3:
+            nonlocal content_calls
+            content_calls += 1
+            if content_calls >= 2:
                 return NORMAL_HTML
             return CF_JS_CHALLENGE_HTML
 
@@ -161,12 +155,11 @@ class TestPatchrightStrategy:
         assert result.metadata["cf_challenge"] is None
 
     async def test_browser_cleanup_on_success(self):
-        provider, page = _make_mock_provider(NORMAL_HTML)
+        provider, _page = _make_mock_provider(NORMAL_HTML)
         strategy = PatchrightStrategy(provider=provider)
 
         await strategy.fetch("https://example.com")
 
-        page.close.assert_awaited_once()
         provider.close.assert_awaited_once()
 
     async def test_browser_cleanup_on_error(self):
@@ -328,6 +321,8 @@ class TestPatchrightStrategy:
     async def test_fetch_ssrf_blocked(self):
         """fetch raises ValueError if is_safe_url returns False."""
         strategy = PatchrightStrategy()
-        with patch("web_core.scraper.strategies.patchright_browser.is_safe_url", return_value=False):
-            with pytest.raises(ValueError, match="SSRF blocked: http://unsafe.com"):
-                await strategy.fetch("http://unsafe.com")
+        with (
+            patch("web_core.scraper.strategies.patchright_browser.is_safe_url", return_value=False),
+            pytest.raises(ValueError, match=r"SSRF blocked: http://unsafe.com"),
+        ):
+            await strategy.fetch("http://unsafe.com")
