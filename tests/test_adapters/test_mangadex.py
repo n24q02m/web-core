@@ -556,6 +556,47 @@ class TestDownloadImage:
         call_args = mock_client.get.call_args
         assert call_args.args[0] == "https://server.example.com/data-saver/abcdef/page1.jpg"
 
+    async def test_download_image_http_error(self):
+        mock_resp = _make_mock_response()
+        mock_resp.status_code = 404
+        mock_resp.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "404 Not Found", request=MagicMock(), response=mock_resp
+        )
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+            client = MangaDexClient()
+            with pytest.raises(httpx.HTTPStatusError):
+                await client.download_image(
+                    "https://server.example.com",
+                    "abcdef",
+                    "page1.png",
+                )
+
+    async def test_download_image_with_reused_client(self):
+        image_bytes = b"reused-client-data"
+        mock_resp = _make_mock_response(content=image_bytes)
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+            async with MangaDexClient() as client:
+                result = await client.download_image(
+                    "https://server.example.com",
+                    "abcdef",
+                    "page1.png",
+                )
+                assert result == image_bytes
+                # Initial call to _get or similar would have used client if it was in context
+                # but here we only call download_image.
+                # In MangaDexClient.__aenter__, it sets self._client = safe_httpx_client(...)
+                mock_client.get.assert_called_once()
+
 
 # ---------------------------------------------------------------------------
 # Rate limiting
