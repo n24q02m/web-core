@@ -49,7 +49,7 @@ def _apply_domain_cap(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     domain_counts: dict[str, int] = {}
     result: list[dict[str, Any]] = []
     for item in items:
-        url = item.get("url", "")
+        url = item.get("url") or ""
         # Fast path domain extraction (~3.5x faster than urlparse for hot loops)
         if url.startswith("//"):
             domain = url[2:].partition("/")[0].partition("?")[0].partition("#")[0]
@@ -193,12 +193,12 @@ async def search(
             # processing time for large result sets.
             seen: dict[str, dict[str, Any]] = {}
             for r in results:
-                url = r.get("url", "")
+                url = r.get("url") or ""
                 norm_url = normalize_url(url)
 
-                source = r.get("engine", "")
-                snippet = r.get("content", "")
-                title = r.get("title", "")
+                source = r.get("engine") or ""
+                snippet = r.get("content") or ""
+                title = r.get("title") or ""
 
                 if norm_url in seen:
                     existing = seen[norm_url]

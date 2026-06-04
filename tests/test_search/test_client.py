@@ -182,6 +182,18 @@ class TestApplyDomainCap:
         # Empty netloc is still a "domain" — should not crash
         assert len(result) == 2
 
+    def test_url_is_none_treated_as_empty(self):
+        """Items with url=None should be treated as empty string."""
+        items = [{"url": None}, {"url": "https://a.com/1"}]
+        result = _apply_domain_cap(items)
+        assert len(result) == 2
+
+    def test_multiple_missing_urls_capped(self):
+        """Multiple items with missing URLs should be capped under the empty domain."""
+        items = [{"title": f"no url {i}"} for i in range(10)]
+        result = _apply_domain_cap(items)
+        assert len(result) == _MAX_PER_DOMAIN
+
     def test_protocol_relative_url(self):
         items = [
             {"url": "//example.com/1"},
@@ -643,3 +655,16 @@ class TestSearch:
             with pytest.raises(SearchError) as exc:
                 await search(SEARXNG_URL, "q")
             assert exc.value.reason == "forced"
+
+    async def test_search_handles_null_response_fields(self, mock_httpx_client):
+        """Search should handle null values for all fields in the JSON response."""
+        raw = [{"url": None, "title": None, "content": None, "engine": None}]
+        mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response(raw))
+        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
+            results = await search(SEARXNG_URL, "q")
+
+        assert len(results) == 1
+        assert results[0].url == ""
+        assert results[0].title == ""
+        assert results[0].snippet == ""
+        assert results[0].source == ""
