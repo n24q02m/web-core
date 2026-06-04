@@ -1,3 +1,4 @@
+import pytest
 import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -33,6 +34,11 @@ def _make_mock_provider(content: str):
 
 
 class TestPatchrightStrategy:
+    @pytest.fixture(autouse=True)
+    def mock_is_safe_url(self):
+        with patch("web_core.scraper.strategies.patchright_browser.is_safe_url", return_value=True):
+            yield
+
     async def test_fetch_normal_page(self):
         provider, _page = _make_mock_provider(NORMAL_HTML)
         strategy = PatchrightStrategy(provider=provider)
@@ -318,3 +324,10 @@ class TestPatchrightStrategy:
             result = await strategy.fetch("https://managed-timeout.com")
 
         assert result.strategy == "patchright"
+
+    async def test_fetch_ssrf_blocked(self):
+        """fetch raises ValueError if is_safe_url returns False."""
+        strategy = PatchrightStrategy()
+        with patch("web_core.scraper.strategies.patchright_browser.is_safe_url", return_value=False):
+            with pytest.raises(ValueError, match="SSRF blocked: http://unsafe.com"):
+                await strategy.fetch("http://unsafe.com")
