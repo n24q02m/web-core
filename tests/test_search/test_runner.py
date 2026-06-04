@@ -38,6 +38,7 @@ from web_core.search.runner import (
     _try_reuse_existing,
     _wait_for_service,
     _write_discovery,
+    _write_secure_text,
 )
 
 # ---------------------------------------------------------------------------
@@ -129,6 +130,40 @@ class TestIsPidAlive:
 # ===========================================================================
 # Discovery file management
 # ===========================================================================
+
+
+# ===========================================================================
+# _write_secure_text
+# ===========================================================================
+
+
+class TestWriteSecureText:
+    def test_writes_content(self, tmp_path):
+        """Correctly writes content to a file."""
+        path = tmp_path / "test.txt"
+        _write_secure_text(path, "hello world")
+        assert path.read_text(encoding="utf-8") == "hello world"
+
+    def test_creates_parent_directories(self, tmp_path):
+        """Creates parent directories if they don't exist."""
+        path = tmp_path / "deep" / "dir" / "test.txt"
+        _write_secure_text(path, "content")
+        assert path.exists()
+        assert path.read_text(encoding="utf-8") == "content"
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions not supported on Windows")
+    def test_secure_permissions(self, tmp_path):
+        """Sets file permissions to 0o600 on POSIX."""
+        path = tmp_path / "secure.txt"
+        _write_secure_text(path, "secret")
+        assert (os.stat(path).st_mode & 0o777) == 0o600
+
+    def test_overwrites_existing_file(self, tmp_path):
+        """Overwrites an existing file."""
+        path = tmp_path / "overwrite.txt"
+        path.write_text("old content")
+        _write_secure_text(path, "new content")
+        assert path.read_text(encoding="utf-8") == "new content"
 
 
 class TestDiscovery:
