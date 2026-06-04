@@ -397,3 +397,50 @@ async def test_infer_domain_extraction_protocol_less(monkeypatch):
         llm_caller=fake_caller,
     )
     assert result == {"content": "#c"}
+
+
+# -----------------------------------------------------------------------------
+# Internal JSON parsing tests
+# -----------------------------------------------------------------------------
+
+
+def test_parse_selector_json_malformed():
+    from web_core.scraper.selector_inference import _parse_selector_json
+
+    assert _parse_selector_json("invalid { json") == {}
+    assert _parse_selector_json("") == {}
+    assert _parse_selector_json(None) == {}
+
+
+def test_parse_selector_json_not_a_dict():
+    from web_core.scraper.selector_inference import _parse_selector_json
+
+    assert _parse_selector_json("[1, 2, 3]") == {}
+    assert _parse_selector_json('"just a string"') == {}
+
+
+def test_parse_selector_json_valid_dict():
+    from web_core.scraper.selector_inference import _parse_selector_json
+
+    input_json = json.dumps({"content": ".article", "title": "h1", "next_chapter": "a.next", "other": "ignored"})
+    expected = {"content": ".article", "title": "h1", "next_chapter": "a.next"}
+    assert _parse_selector_json(input_json) == expected
+
+
+def test_parse_selector_json_partial_dict():
+    from web_core.scraper.selector_inference import _parse_selector_json
+
+    input_json = json.dumps(
+        {
+            "content": ".article",
+            "title": 123,  # Not a string, should be ignored
+        }
+    )
+    assert _parse_selector_json(input_json) == {"content": ".article"}
+
+
+def test_parse_selector_json_none_input():
+    from web_core.scraper.selector_inference import _parse_selector_json
+
+    # Test text=None specifically to cover "text or \"\"" and json.loads("") -> JSONDecodeError
+    assert _parse_selector_json(None) == {}
