@@ -151,6 +151,42 @@ class MangaDexClient:
             resp.raise_for_status()
             return resp.json()
 
+    def _parse_chapter_batch(self, items: list[dict]) -> list[ChapterInfo]:
+        """Parse a list of chapter items from the API."""
+        batch_chapters: list[ChapterInfo] = []
+        for item in items:
+            attrs = item.get("attributes", {})
+            batch_chapters.append(
+                ChapterInfo(
+                    id=item["id"],
+                    chapter=attrs.get("chapter"),
+                    title=attrs.get("title"),
+                    volume=attrs.get("volume"),
+                    language=attrs.get("translatedLanguage", ""),
+                    pages=attrs.get("pages", 0),
+                )
+            )
+        return batch_chapters
+
+    async def _fetch_chapter_batch(
+        self,
+        manga_id: str,
+        language: str,
+        offset: int,
+        limit: int,
+    ) -> list[ChapterInfo]:
+        """Fetch and parse a single page of the manga feed."""
+        data = await self._get(
+            f"/manga/{manga_id}/feed",
+            params={
+                "translatedLanguage[]": language,
+                "order[chapter]": "asc",
+                "limit": limit,
+                "offset": offset,
+            },
+        )
+        return self._parse_chapter_batch(data.get("data", []))
+
     # -- public API ---------------------------------------------------------
 
     async def search_manga(self, title: str, limit: int = 10) -> list[MangaInfo]:
@@ -206,23 +242,6 @@ class MangaDexClient:
         limit:
             Maximum number of chapters to return.
         """
-
-        def _parse_batch(items: list[dict]) -> list[ChapterInfo]:
-            batch_chapters: list[ChapterInfo] = []
-            for item in items:
-                attrs = item.get("attributes", {})
-                batch_chapters.append(
-                    ChapterInfo(
-                        id=item["id"],
-                        chapter=attrs.get("chapter"),
-                        title=attrs.get("title"),
-                        volume=attrs.get("volume"),
-                        language=attrs.get("translatedLanguage", ""),
-                        pages=attrs.get("pages", 0),
-                    )
-                )
-            return batch_chapters
-
         # Fetch first page to get total
         first_batch_limit = min(limit, 100)
         data = await self._get(
@@ -237,7 +256,7 @@ class MangaDexClient:
 
         total = data.get("total", 0)
         first_batch = data.get("data", [])
-        chapters = _parse_batch(first_batch)
+        chapters = self._parse_chapter_batch(first_batch)
 
         # Calculate remaining pages
         effective_limit = min(limit, total)
@@ -257,19 +276,9 @@ class MangaDexClient:
         if not offsets:
             return chapters[:limit]
 
-        async def fetch_page(offset: int, b_limit: int) -> list[ChapterInfo]:
-            page_data = await self._get(
-                f"/manga/{manga_id}/feed",
-                params={
-                    "translatedLanguage[]": language,
-                    "order[chapter]": "asc",
-                    "limit": b_limit,
-                    "offset": offset,
-                },
-            )
-            return _parse_batch(page_data.get("data", []))
-
-        results = await asyncio.gather(*(fetch_page(o, limit_) for o, limit_ in offsets))
+        results = await asyncio.gather(
+            *(self._fetch_chapter_batch(manga_id, language, offset, batch_limit) for offset, batch_limit in offsets)
+        )
         for batch_chapters in results:
             chapters.extend(batch_chapters)
 
