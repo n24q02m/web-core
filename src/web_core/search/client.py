@@ -67,6 +67,22 @@ def _apply_domain_cap(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return result
 
 
+def _get_safe_domains(domains: list[str], limit: int) -> list[str]:
+    """Extract up to ``limit`` unique, valid domains.
+
+    Silently skips invalid domains to prevent search operator injection.
+    """
+    seen: set[str] = set()
+    safe: list[str] = []
+    for d in domains:
+        if d not in seen and is_valid_domain(d):
+            seen.add(d)
+            safe.append(d)
+            if len(safe) >= limit:
+                break
+    return safe
+
+
 def _build_filtered_query(
     query: str,
     include_domains: list[str] | None = None,
@@ -80,31 +96,19 @@ def _build_filtered_query(
     Invalid domains (per ``is_valid_domain``) are silently skipped to
     prevent search operator injection.
     """
+
     parts = [query]
 
     if include_domains:
-        seen_include = set()
-        safe_include = []
-        for d in include_domains:
-            if d not in seen_include and is_valid_domain(d):
-                seen_include.add(d)
-                safe_include.append(d)
-                if len(safe_include) >= 5:
-                    break
+        safe_include = _get_safe_domains(include_domains, 5)
         if safe_include:
             site_filter = " OR ".join(f"site:{d}" for d in safe_include)
             parts = [f"({site_filter}) {query}"]
 
     if exclude_domains:
-        seen_exclude = set()
-        count_exclude = 0
-        for d in exclude_domains:
-            if d not in seen_exclude and is_valid_domain(d):
-                seen_exclude.add(d)
-                parts.append(f"-site:{d}")
-                count_exclude += 1
-                if count_exclude >= 10:
-                    break
+        safe_exclude = _get_safe_domains(exclude_domains, 10)
+        for d in safe_exclude:
+            parts.append(f"-site:{d}")
 
     return " ".join(parts)
 
