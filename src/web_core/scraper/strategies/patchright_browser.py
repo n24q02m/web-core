@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass, field
 from typing import Any
 
 from web_core.scraper.base import BaseStrategy, ScrapingResult
@@ -17,6 +18,16 @@ _CF_CHALLENGE_WAIT: float = 3.0
 _CF_POLL_MAX_CHECKS: int = 20
 # Khoang thoi gian giua cac lan kiem tra (giay)
 _CF_POLL_INTERVAL: float = 0.5
+
+
+@dataclass
+class PatchrightConfig:
+    """Configuration for Patchright browser strategy."""
+
+    timeout: float = 60.0
+    headless: bool = True
+    cf_wait: float = _CF_CHALLENGE_WAIT
+    launch_config: dict[str, Any] | None = field(default=None)
 
 
 class PatchrightStrategy(BaseStrategy):
@@ -36,16 +47,16 @@ class PatchrightStrategy(BaseStrategy):
 
     def __init__(
         self,
-        timeout: float = 60.0,
-        headless: bool = True,
-        cf_wait: float = _CF_CHALLENGE_WAIT,
-        launch_config: dict[str, Any] | None = None,
+        config: PatchrightConfig | None = None,
         provider: Any = None,
+        **kwargs: Any,
     ):
-        self.timeout = timeout
-        self.headless = headless
-        self.cf_wait = cf_wait
-        self.launch_config = launch_config
+        self.config = config or PatchrightConfig(
+            timeout=kwargs.get("timeout", 60.0),
+            headless=kwargs.get("headless", True),
+            cf_wait=kwargs.get("cf_wait", _CF_CHALLENGE_WAIT),
+            launch_config=kwargs.get("launch_config"),
+        )
         self._provider = provider
 
     async def _wait_for_cf_resolution(self, page: Any) -> str:
@@ -89,17 +100,17 @@ class PatchrightStrategy(BaseStrategy):
         else:
             from web_core.browsers.patchright import PatchrightProvider
 
-            provider = PatchrightProvider(headless=self.headless)
+            provider = PatchrightProvider(headless=self.config.headless)
 
         cf_challenge_type = None
 
         try:
-            browser = await provider.launch(config=self.launch_config)
+            browser = await provider.launch(config=self.config.launch_config)
             page = await browser.new_page()
 
             try:
                 # Use domcontentloaded first so we don't blind wait 60s if there's a CF challenge
-                response = await page.goto(url, wait_until="domcontentloaded", timeout=self.timeout * 1000)
+                response = await page.goto(url, wait_until="domcontentloaded", timeout=self.config.timeout * 1000)
 
                 content = await page.content()
                 cf_challenge_type = detect_cloudflare_challenge(content)
@@ -108,7 +119,7 @@ class PatchrightStrategy(BaseStrategy):
                 if cf_challenge_type is None:
                     try:
                         # Now wait for networkidle safely
-                        await page.wait_for_load_state("networkidle", timeout=self.timeout * 1000)
+                        await page.wait_for_load_state("networkidle", timeout=self.config.timeout * 1000)
                         content = await page.content()
                     except TimeoutError:
                         logger.debug("Optional networkidle wait timed out for %s", url)
@@ -170,7 +181,7 @@ class PatchrightStrategy(BaseStrategy):
             metadata={
                 "rendered": True,
                 "content_length": len(content),
-                "headless": self.headless,
+                "headless": self.config.headless,
                 "cf_challenge": cf_challenge_type,
             },
         )
