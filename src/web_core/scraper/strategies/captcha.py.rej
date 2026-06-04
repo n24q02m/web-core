@@ -1,0 +1,37 @@
+--- /dev/null
++++ /dev/null
+@@ -225,32 +225,8 @@
+                         metadata={"captcha_solved": False, "error": "capsolver_no_token"},
+                     )
+
+-                # Inject token and submit
+-                await page.evaluate(
+-                    """(token) => {
+-                    // Set CF Turnstile response token
+-                    const inputs = document.querySelectorAll('[name="cf-turnstile-response"]');
+-                    inputs.forEach(el => { el.value = token; });
+-                    // Try calling the turnstile callback if present
+-                    if (window.turnstile && window.turnstile.getResponse) {
+-                        const widgets = document.querySelectorAll('[id^="cf-turnstile"]');
+-                        widgets.forEach(w => {
+-                            try { window.turnstile.execute(w.id, { response: token }); } catch(e) {}
+-                        });
+-                    }
+-                    // Submit first form if present
+-                    const form = document.querySelector('form#challenge-form, form[action*="cdn-cgi"]');
+-                    if (form) form.submit();
+-                }""",
+-                    token,
+-                )
+-
+-                # Wait for navigation to actual page
+-                with contextlib.suppress(Exception):
+-                    await page.wait_for_load_state("networkidle", timeout=15000)
+-
++                await self._inject_and_submit_turnstile(page, token)
+                 content = await page.content()
+-                final_url = page.url
+                 return ScrapingResult(
+                     content=content,
+-                    url=final_url,
++                    url=page.url,
