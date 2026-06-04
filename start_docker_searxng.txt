@@ -1,0 +1,49 @@
+async def _start_docker_searxng(start_port: int) -> str | None:
+    """Try starting SearXNG via Docker as a fallback.
+
+    Uses a pinned port (PINNED_SEARXNG_PORT) and a cross-process filelock to
+    guarantee at most one searxng-wet container runs at any time.
+
+    Mounts a generated settings.yml so that JSON format is enabled and the
+    rate limiter is disabled -- otherwise searxng/searxng:latest default
+    config returns 403 on `/search?format=json` which makes the API
+    unusable even though `/healthz` returns 200.
+    """
+    global _searxng_docker_container, _searxng_port, _is_owner
+
+    docker_bin = shutil.which("docker")
+    if not docker_bin:
+        return None
+
+    try:
+        if not await _check_docker_daemon(docker_bin):
+            return None
+
+        port = PINNED_SEARXNG_PORT
+        container_name = f"searxng-wet-{port}"
+        url = f"http://127.0.0.1:{port}"
+
+        # Acquire cross-process filelock before inspecting/spawning container.
+        lock = await asyncio.to_thread(_get_docker_lock)
+        with lock.acquire(timeout=10):
+            if await _try_reuse_docker_container(docker_bin, container_name, url):
+                return url
+
+            await _remove_docker_container(docker_bin, container_name)
+            settings_path = await _prepare_docker_config(port)
+            if not await _run_docker_searxng(docker_bin, container_name, port, settings_path):
+                return None
+
+        if await _wait_for_service(url, timeout=45.0):
+            logger.info("SearXNG (Docker) ready at %s", url)
+            _searxng_docker_container = container_name
+            _searxng_port = port
+            _is_owner = True
+            await asyncio.to_thread(_write_discovery, port, os.getpid())
+            return url
+
+        await _remove_docker_container(docker_bin, container_name)
+        return None
+    except Exception as e:
+        logger.error("Failed to start SearXNG docker: %s", e)
+        return None
