@@ -73,7 +73,7 @@ class TestStrategyCache:
         assert StrategyCache._extract_domain("http://test.org") == "test.org"
 
     def test_extract_domain_no_scheme(self):
-        # Without scheme, urlparse puts it all in path
+        # Without scheme, urlsplit puts it all in path
         result = StrategyCache._extract_domain("example.com/page")
         assert result == "example.com"
 

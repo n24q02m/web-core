@@ -165,9 +165,9 @@ class TestIsSafeUrl:
         """Completely invalid URLs must be blocked."""
         assert is_safe_url("not-a-url") is False
 
-    def test_blocks_urlparse_exception(self):
-        """If urlparse raises a generic Exception, is_safe_url returns False."""
-        with patch("web_core.http.client.urlparse", side_effect=Exception("parse error")):
+    def test_blocks_urlsplit_exception(self):
+        """If urlsplit raises a generic Exception, is_safe_url returns False."""
+        with patch("web_core.http.client.urlsplit", side_effect=Exception("parse error")):
             assert is_safe_url("http://example.com") is False
 
     def test_blocks_generic_dns_exception(self):

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from unittest.mock import patch
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -108,10 +108,10 @@ class TestNormalizeUrl:
         assert "utm_source" not in result
         assert "fbclid" not in result
 
-    def test_urlparse_exception_returns_original(self):
-        """If urlparse raises, the original URL string is returned unchanged."""
+    def test_urlsplit_exception_returns_original(self):
+        """If urlsplit raises, the original URL string is returned unchanged."""
         raw = "https://example.com/page"
-        with patch("web_core.http.url.urlparse", side_effect=Exception("parse fail")):
+        with patch("web_core.http.url.urlsplit", side_effect=Exception("parse fail")):
             assert normalize_url(raw) == raw
 
     def test_preserves_port(self):
@@ -210,7 +210,7 @@ class TestStripTrackingParams:
         """Verify every parameter in the tracking set is correctly stripped."""
         url = f"https://example.com/page?{param}=value&keep=me"
         result = strip_tracking_params(url)
-        parsed = urlparse(result)
+        parsed = urlsplit(result)
         params = parse_qs(parsed.query)
         assert param not in params
         assert params["keep"] == ["me"]
