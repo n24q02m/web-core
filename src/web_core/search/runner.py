@@ -531,6 +531,8 @@ def _install_searxng() -> bool:  # pragma: no cover
     except Exception as e:
         logger.error("Failed to install SearXNG: %s", e)
         return False
+
+
 # ---------------------------------------------------------------------------
 
 # SearXNG settings
