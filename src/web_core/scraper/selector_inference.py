@@ -124,7 +124,6 @@ Example response:
 {{"content": "#novel_honbun", "title": ".novel_title", "next_chapter": "a.next"}}"""
 
 
-
 def _extract_domain(url: str) -> str:
     """Fast path domain extraction (~3.5x faster than urlparse)."""
     if url.startswith("//"):
@@ -193,6 +192,7 @@ def get_domain_selectors(url: str) -> dict[str, str] | None:
         _inject_domain_cookies(domain, selectors)
 
     return selectors
+
 
 def _build_prompt(url: str, html_content: str) -> str:
     """Build the selector-inference prompt, truncating HTML to first 5000 chars."""
