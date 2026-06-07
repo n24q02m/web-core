@@ -2,6 +2,7 @@ import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from web_core.scraper.strategies.patchright_browser import PatchrightStrategy
 
 NORMAL_HTML = "<html><body><h1>Hello World</h1></body></html>"
@@ -47,7 +48,7 @@ class TestPatchrightStrategy:
         assert strategy.name == "patchright"
 
     async def test_fetch_success_no_challenge(self):
-        provider, page = _make_mock_provider(NORMAL_HTML)
+        provider, _page = _make_mock_provider(NORMAL_HTML)
         strategy = PatchrightStrategy(provider=provider)
 
         result = await strategy.fetch("https://example.com")
@@ -61,7 +62,7 @@ class TestPatchrightStrategy:
 
     async def test_fetch_js_challenge_polls_and_resolves(self):
         """CF JS challenge detected, polls until resolved (line 120-125)."""
-        provider, page = _make_mock_provider(CF_JS_CHALLENGE_HTML)
+        provider, _page = _make_mock_provider(CF_JS_CHALLENGE_HTML)
 
         # After wait, content changes to normal
         content_calls = 0
@@ -73,7 +74,7 @@ class TestPatchrightStrategy:
                 return NORMAL_HTML
             return CF_JS_CHALLENGE_HTML
 
-        page.content = AsyncMock(side_effect=content_side_effect)
+        _page.content = AsyncMock(side_effect=content_side_effect)
 
         strategy = PatchrightStrategy(provider=provider)
         with patch("web_core.scraper.strategies.patchright_browser._CF_POLL_INTERVAL", 0.01):
@@ -84,7 +85,7 @@ class TestPatchrightStrategy:
 
     async def test_cf_verification_cookie_resolves(self):
         """CF JS challenge resolves when __cf_bm cookie is set (line 67-68)."""
-        provider, page = _make_mock_provider(CF_JS_CHALLENGE_HTML)
+        provider, _page = _make_mock_provider(CF_JS_CHALLENGE_HTML)
 
         # Initially no cookie, then cookie appears
         cookie_calls = 0
@@ -96,7 +97,7 @@ class TestPatchrightStrategy:
                 return [{"name": "__cf_bm", "value": "abc123"}]
             return []
 
-        page.context.cookies = AsyncMock(side_effect=cookies_side_effect)
+        _page.context.cookies = AsyncMock(side_effect=cookies_side_effect)
 
         # Content stays challenge HTML during wait, then returns normal HTML in final call
         content_calls = 0
@@ -108,7 +109,7 @@ class TestPatchrightStrategy:
                 return NORMAL_HTML
             return CF_JS_CHALLENGE_HTML
 
-        page.content = AsyncMock(side_effect=content_side_effect)
+        _page.content = AsyncMock(side_effect=content_side_effect)
 
         strategy = PatchrightStrategy(provider=provider)
         with patch("web_core.scraper.strategies.patchright_browser._CF_POLL_INTERVAL", 0.01):
@@ -118,11 +119,11 @@ class TestPatchrightStrategy:
 
     async def test_fetch_js_challenge_exhausts_polls(self):
         """CF JS challenge stays unresolved after all poll attempts (line 75)."""
-        provider, page = _make_mock_provider(CF_JS_CHALLENGE_HTML)
+        provider, _page = _make_mock_provider(CF_JS_CHALLENGE_HTML)
 
         # Content always stays challenge, no cookies
-        page.context.cookies = AsyncMock(return_value=[])
-        page.content = AsyncMock(return_value=CF_JS_CHALLENGE_HTML)
+        _page.context.cookies = AsyncMock(return_value=[])
+        _page.content = AsyncMock(return_value=CF_JS_CHALLENGE_HTML)
 
         strategy = PatchrightStrategy(provider=provider)
         with (
@@ -136,7 +137,7 @@ class TestPatchrightStrategy:
 
     async def test_fetch_managed_challenge_waits(self):
         """Managed challenge should wait and poll."""
-        provider, page = _make_mock_provider(CF_MANAGED_HTML)
+        provider, _page = _make_mock_provider(CF_MANAGED_HTML)
 
         # After wait, content changes to normal
         content_calls = 0
@@ -148,7 +149,7 @@ class TestPatchrightStrategy:
                 return NORMAL_HTML
             return CF_MANAGED_HTML
 
-        page.content = AsyncMock(side_effect=content_side_effect)
+        _page.content = AsyncMock(side_effect=content_side_effect)
 
         strategy = PatchrightStrategy(provider=provider)
         with (
@@ -242,7 +243,7 @@ class TestPatchrightStrategy:
 
     async def test_fetch_js_resolution_networkidle_timeout(self):
         """Cover lines 127-128: networkidle timeout after JS resolution."""
-        provider, page = _make_mock_provider(CF_JS_CHALLENGE_HTML)
+        provider, _page = _make_mock_provider(CF_JS_CHALLENGE_HTML)
 
         content_calls = 0
 
@@ -253,8 +254,8 @@ class TestPatchrightStrategy:
                 return NORMAL_HTML
             return CF_JS_CHALLENGE_HTML
 
-        page.content = AsyncMock(side_effect=content_side_effect)
-        page.wait_for_load_state = AsyncMock(side_effect=TimeoutError("networkidle timeout"))
+        _page.content = AsyncMock(side_effect=content_side_effect)
+        _page.wait_for_load_state = AsyncMock(side_effect=TimeoutError("networkidle timeout"))
 
         strategy = PatchrightStrategy(provider=provider)
         with patch("web_core.scraper.strategies.patchright_browser._CF_POLL_INTERVAL", 0.01):
@@ -264,7 +265,7 @@ class TestPatchrightStrategy:
 
     async def test_fetch_managed_resolution_networkidle_timeout(self):
         """Cover lines 155-156: networkidle timeout after managed resolution."""
-        provider, page = _make_mock_provider(CF_MANAGED_HTML)
+        provider, _page = _make_mock_provider(CF_MANAGED_HTML)
 
         content_calls = 0
 
@@ -275,8 +276,8 @@ class TestPatchrightStrategy:
                 return NORMAL_HTML
             return CF_MANAGED_HTML
 
-        page.content = AsyncMock(side_effect=content_side_effect)
-        page.wait_for_load_state = AsyncMock(side_effect=TimeoutError("networkidle timeout"))
+        _page.content = AsyncMock(side_effect=content_side_effect)
+        _page.wait_for_load_state = AsyncMock(side_effect=TimeoutError("networkidle timeout"))
 
         strategy = PatchrightStrategy(provider=provider, cf_wait=0.01)
         with patch("web_core.scraper.strategies.patchright_browser._CF_POLL_INTERVAL", 0.01):
@@ -286,10 +287,10 @@ class TestPatchrightStrategy:
 
     async def test_managed_challenge_unresolved_hits_navigation_and_content(self):
         """Cover lines 146-147: Managed challenge unresolved, hits domcontentloaded then content."""
-        provider, page = _make_mock_provider(CF_MANAGED_HTML)
+        provider, _page = _make_mock_provider(CF_MANAGED_HTML)
 
         # Content stays managed
-        page.content = AsyncMock(return_value=CF_MANAGED_HTML)
+        _page.content = AsyncMock(return_value=CF_MANAGED_HTML)
 
         strategy = PatchrightStrategy(provider=provider)
         with (
@@ -300,13 +301,13 @@ class TestPatchrightStrategy:
 
         assert result.metadata["cf_challenge"] == "managed"
         # Verify domcontentloaded was awaited
-        page.wait_for_load_state.assert_awaited_with("domcontentloaded", timeout=15000)
+        _page.wait_for_load_state.assert_awaited_with("domcontentloaded", timeout=15000)
 
     async def test_managed_challenge_wait_for_load_state_exception(self):
         """Managed challenge handles exception in wait_for_load_state (line 148-149)."""
-        provider, page = _make_mock_provider(CF_MANAGED_HTML)
+        provider, _page = _make_mock_provider(CF_MANAGED_HTML)
 
-        page.content = AsyncMock(return_value=CF_MANAGED_HTML)
+        _page.content = AsyncMock(return_value=CF_MANAGED_HTML)
 
         # Mock wait_for_load_state to timeout for "domcontentloaded"
         async def wait_side_effect(state, timeout=None):
@@ -314,7 +315,7 @@ class TestPatchrightStrategy:
                 raise TimeoutError("domcontentloaded timeout")
             return None
 
-        page.wait_for_load_state = AsyncMock(side_effect=wait_side_effect)
+        _page.wait_for_load_state = AsyncMock(side_effect=wait_side_effect)
 
         strategy = PatchrightStrategy(provider=provider)
         with (

@@ -1,8 +1,9 @@
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-from web_core.scraper.strategies.patchright_browser import PatchrightStrategy
-from web_core.scraper.strategies.headless import HeadlessStrategy
+
 from web_core.scraper.strategies.captcha import CaptchaStrategy
+from web_core.scraper.strategies.headless import HeadlessStrategy
+from web_core.scraper.strategies.patchright_browser import PatchrightStrategy
+
 
 @pytest.mark.asyncio
 async def test_patchright_strategy_ssrf_protection():
@@ -10,11 +11,13 @@ async def test_patchright_strategy_ssrf_protection():
     with pytest.raises(ValueError, match="SSRF blocked"):
         await strategy.fetch("http://127.0.0.1")
 
+
 @pytest.mark.asyncio
 async def test_headless_strategy_ssrf_protection():
     strategy = HeadlessStrategy()
     with pytest.raises(ValueError, match="SSRF blocked"):
         await strategy.fetch("http://127.0.0.1")
+
 
 @pytest.mark.asyncio
 async def test_captcha_strategy_ssrf_protection():
