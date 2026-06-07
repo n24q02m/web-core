@@ -118,6 +118,21 @@ class TestBuildFilteredQuery:
 
 class TestApplyDomainCap:
     """Test per-domain result limiting."""
+    def test_handles_missing_or_none_url(self):
+        """Missing, None, or empty URLs are grouped under empty domain and capped."""
+        items = [
+            {"url": None, "title": "none"},
+            {"title": "missing"},
+            {"url": "", "title": "empty"},
+            {"url": "", "title": "capped"},
+        ]
+        result = _apply_domain_cap(items)
+        # _MAX_PER_DOMAIN is 3
+        assert len(result) == 3
+        assert result[0]["title"] == "none"
+        assert result[1]["title"] == "missing"
+        assert result[2]["title"] == "empty"
+
 
     def test_caps_at_max_per_domain(self):
         items = [{"url": f"https://example.com/page{i}"} for i in range(10)]
