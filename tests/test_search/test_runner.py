@@ -35,6 +35,7 @@ from web_core.search.runner import (
     _quick_health_check,
     _read_discovery,
     _remove_discovery,
+    _start_docker_searxng,
     _try_reuse_existing,
     _wait_for_service,
     _write_discovery,
@@ -928,6 +929,181 @@ class TestGetStartupLock:
 # ===========================================================================
 # Settings template
 # ===========================================================================
+
+
+# ===========================================================================
+# _start_docker_searxng
+# ===========================================================================
+
+
+class TestStartDockerSearxng:
+    async def test_docker_binary_not_found(self):
+        """Returns None if docker binary is not in PATH."""
+        with patch("shutil.which", return_value=None):
+            url = await _start_docker_searxng(8888)
+            assert url is None
+
+    async def test_docker_daemon_not_running(self):
+        """Returns None if docker info fails (daemon not running)."""
+        mock_res = MagicMock()
+        mock_res.returncode = 1
+        with (
+            patch("shutil.which", return_value="/usr/bin/docker"),
+            patch("subprocess.run", return_value=mock_res),
+        ):
+            url = await _start_docker_searxng(8888)
+            assert url is None
+
+    async def test_reuse_healthy_container(self, tmp_config_dir):
+        """Reuses an existing container if it is healthy."""
+        import web_core.search.runner as mod
+
+        mock_res_info = MagicMock()
+        mock_res_info.returncode = 0
+
+        mock_res_ps = MagicMock()
+        mock_res_ps.stdout = "container_id_123"
+
+        mock_lock = MagicMock()
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/docker"),
+            patch("subprocess.run", side_effect=[mock_res_info, mock_res_ps]),
+            patch("web_core.search.runner._get_docker_lock", return_value=mock_lock),
+            patch("web_core.search.runner._quick_health_check", new_callable=AsyncMock, return_value=True),
+        ):
+            url = await _start_docker_searxng(8888)
+            assert url == "http://127.0.0.1:41592"
+            assert mod._searxng_docker_container == "searxng-wet-41592"
+            assert mod._is_owner is False
+
+    async def test_spawn_new_container_success(self, tmp_config_dir):
+        """Spawns a new container when none exists and it becomes healthy."""
+        import web_core.search.runner as mod
+
+        mock_res_info = MagicMock()
+        mock_res_info.returncode = 0
+
+        mock_res_ps = MagicMock()
+        mock_res_ps.stdout = ""  # No container running
+
+        mock_res_rm = MagicMock()
+
+        mock_lock = MagicMock()
+
+        mock_popen = MagicMock()
+        mock_popen.wait = AsyncMock(return_value=0)
+        mock_popen.returncode = 0
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/docker"),
+            patch("subprocess.run", side_effect=[mock_res_info, mock_res_ps, mock_res_rm]),
+            patch("web_core.search.runner._get_docker_lock", return_value=mock_lock),
+            patch("web_core.search.runner._write_secure_text") as mock_write,
+            patch("subprocess.Popen", return_value=mock_popen),
+            patch("web_core.search.runner._wait_for_service", new_callable=AsyncMock, return_value=True),
+            patch("web_core.search.runner._write_discovery", return_value=None),
+        ):
+            url = await _start_docker_searxng(8888)
+            assert url == "http://127.0.0.1:41592"
+            assert mod._searxng_docker_container == "searxng-wet-41592"
+            assert mod._is_owner is True
+            mock_write.assert_called_once()
+
+    async def test_respawn_unhealthy_container(self, tmp_config_dir):
+        """Respawns if container exists but is unhealthy."""
+        import web_core.search.runner as mod
+
+        mock_res_info = MagicMock()
+        mock_res_info.returncode = 0
+
+        mock_res_ps = MagicMock()
+        mock_res_ps.stdout = "container_id_123"
+
+        mock_res_rm = MagicMock()
+
+        mock_lock = MagicMock()
+
+        mock_popen = MagicMock()
+        mock_popen.wait = AsyncMock(return_value=0)
+        mock_popen.returncode = 0
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/docker"),
+            patch("subprocess.run", side_effect=[mock_res_info, mock_res_ps, mock_res_rm]),
+            patch("web_core.search.runner._get_docker_lock", return_value=mock_lock),
+            patch("web_core.search.runner._quick_health_check", new_callable=AsyncMock, return_value=False),
+            patch("web_core.search.runner._write_secure_text"),
+            patch("subprocess.Popen", return_value=mock_popen),
+            patch("web_core.search.runner._wait_for_service", new_callable=AsyncMock, return_value=True),
+            patch("web_core.search.runner._write_discovery", return_value=None),
+        ):
+            url = await _start_docker_searxng(8888)
+            assert url == "http://127.0.0.1:41592"
+            assert mod._is_owner is True
+
+    async def test_docker_run_failure(self, tmp_config_dir):
+        """Returns None if docker run fails."""
+        mock_res_info = MagicMock()
+        mock_res_info.returncode = 0
+        mock_res_ps = MagicMock()
+        mock_res_ps.stdout = ""
+        mock_res_rm = MagicMock()
+
+        mock_lock = MagicMock()
+
+        mock_popen = MagicMock()
+        mock_popen.wait = AsyncMock(return_value=1)
+        mock_popen.returncode = 1
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/docker"),
+            patch("subprocess.run", side_effect=[mock_res_info, mock_res_ps, mock_res_rm]),
+            patch("web_core.search.runner._get_docker_lock", return_value=mock_lock),
+            patch("web_core.search.runner._write_secure_text"),
+            patch("subprocess.Popen", return_value=mock_popen),
+        ):
+            url = await _start_docker_searxng(8888)
+            assert url is None
+
+    async def test_service_timeout_cleanup(self, tmp_config_dir):
+        """Cleans up and returns None if service never becomes healthy."""
+        mock_res_info = MagicMock()
+        mock_res_info.returncode = 0
+        mock_res_ps = MagicMock()
+        mock_res_ps.stdout = ""
+        mock_res_rm_init = MagicMock()
+        mock_res_rm_cleanup = MagicMock()
+
+        mock_lock = MagicMock()
+
+        mock_popen = MagicMock()
+        mock_popen.wait = AsyncMock(return_value=0)
+        mock_popen.returncode = 0
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/docker"),
+            patch(
+                "subprocess.run", side_effect=[mock_res_info, mock_res_ps, mock_res_rm_init, mock_res_rm_cleanup]
+            ) as mock_run,
+            patch("web_core.search.runner._get_docker_lock", return_value=mock_lock),
+            patch("web_core.search.runner._write_secure_text"),
+            patch("subprocess.Popen", return_value=mock_popen),
+            patch("web_core.search.runner._wait_for_service", new_callable=AsyncMock, return_value=False),
+        ):
+            url = await _start_docker_searxng(8888)
+            assert url is None
+            # Verify cleanup rm was called
+            assert mock_run.call_count == 4
+
+    async def test_general_exception_handling(self):
+        """Returns None and logs error on unexpected exceptions."""
+        with (
+            patch("shutil.which", return_value="/usr/bin/docker"),
+            patch("asyncio.to_thread", side_effect=Exception("unexpected")),
+        ):
+            url = await _start_docker_searxng(8888)
+            assert url is None
 
 
 class TestSettingsTemplate:
