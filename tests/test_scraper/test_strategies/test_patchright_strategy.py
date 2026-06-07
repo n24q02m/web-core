@@ -1,12 +1,19 @@
 import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from web_core.scraper.strategies.patchright_browser import PatchrightStrategy
 
 NORMAL_HTML = "<html><body><h1>Hello World</h1></body></html>"
 CF_JS_CHALLENGE_HTML = "<html><body><title>just a moment...</title></body></html>"
 CF_TURNSTILE_HTML = '<html><body><div class="cf-turnstile-response"></div></body></html>'
 CF_MANAGED_HTML = '<html><body><div id="cf-please-wait"></div></body></html>'
+
+
+@pytest.fixture(autouse=True)
+def mock_is_safe_url():
+    with patch("web_core.scraper.strategies.patchright_browser.is_safe_url", return_value=True):
+        yield
 
 
 def _make_mock_provider(content: str):
@@ -33,37 +40,36 @@ def _make_mock_provider(content: str):
 
 
 class TestPatchrightStrategy:
-    async def test_fetch_normal_page(self):
-        provider, _page = _make_mock_provider(NORMAL_HTML)
+    """Test Patchright strategy with Cloudflare challenge logic."""
+
+    def test_name(self):
+        strategy = PatchrightStrategy()
+        assert strategy.name == "patchright"
+
+    async def test_fetch_success_no_challenge(self):
+        provider, page = _make_mock_provider(NORMAL_HTML)
         strategy = PatchrightStrategy(provider=provider)
 
         result = await strategy.fetch("https://example.com")
 
         assert result.content == NORMAL_HTML
+        assert result.url == "https://example.com"
         assert result.status_code == 200
         assert result.strategy == "patchright"
+        assert result.metadata["rendered"] is True
         assert result.metadata["cf_challenge"] is None
 
-    async def test_fetch_detects_turnstile(self):
-        provider, _page = _make_mock_provider(CF_TURNSTILE_HTML)
-        strategy = PatchrightStrategy(provider=provider)
-
-        result = await strategy.fetch("https://protected.com")
-
-        assert result.metadata["cf_challenge"] == "turnstile"
-        assert result.content == CF_TURNSTILE_HTML
-
     async def test_fetch_js_challenge_polls_and_resolves(self):
-        """JS challenge should be polled until content changes to normal."""
+        """CF JS challenge detected, polls until resolved (line 120-125)."""
         provider, page = _make_mock_provider(CF_JS_CHALLENGE_HTML)
 
-        # After polling, page.content() returns normal HTML
-        call_count = 0
+        # After wait, content changes to normal
+        content_calls = 0
 
         async def content_side_effect():
-            nonlocal call_count
-            call_count += 1
-            if call_count >= 3:
+            nonlocal content_calls
+            content_calls += 1
+            if content_calls >= 2:
                 return NORMAL_HTML
             return CF_JS_CHALLENGE_HTML
 

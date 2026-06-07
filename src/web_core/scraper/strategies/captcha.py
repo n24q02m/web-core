@@ -7,7 +7,7 @@ import logging
 import re
 from typing import Any
 
-from web_core.http.client import safe_httpx_client
+from web_core.http.client import is_safe_url, safe_httpx_client
 from web_core.scraper.base import BaseStrategy, ScrapingResult
 from web_core.scraper.utils import detect_cloudflare_challenge, extract_turnstile_sitekey
 
@@ -157,6 +157,8 @@ class CaptchaStrategy(BaseStrategy):
     async def _solve_cf_turnstile_via_patchright(self, url: str) -> ScrapingResult:
         """Use Patchright to load page, extract Turnstile sitekey via Python API,
         solve with CapSolver, inject token back, and return final content."""
+        if not is_safe_url(url):
+            raise ValueError(f"SSRF blocked: {url}")
 
         from web_core.browsers.patchright import PatchrightProvider
 
@@ -241,6 +243,9 @@ class CaptchaStrategy(BaseStrategy):
         2. If capsolver_api_key set: use Patchright + CapSolver for CF Turnstile
         3. Fall back to fallback_strategy or return empty
         """
+        if not is_safe_url(url):
+            raise ValueError(f"SSRF blocked: {url}")
+
         captcha_type = (selectors or {}).get("captcha_type", RECAPTCHA_V2_PROXYLESS)
 
         # Explicit captcha solving (user-provided site_key) via fallback
