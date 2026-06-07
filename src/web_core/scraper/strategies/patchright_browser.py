@@ -6,6 +6,7 @@ import asyncio
 import logging
 from typing import Any
 
+from web_core.http.client import is_safe_url
 from web_core.scraper.base import BaseStrategy, ScrapingResult
 from web_core.scraper.utils import detect_cloudflare_challenge
 
@@ -84,6 +85,9 @@ class PatchrightStrategy(BaseStrategy):
         4. Neu Turnstile/managed: tra ve challenge HTML (de CaptchaStrategy xu ly)
         5. Neu khong co challenge: tra ve content ngay
         """
+        if not is_safe_url(url):
+            raise ValueError(f"SSRF blocked: {url}")
+
         if self._provider is not None:
             provider = self._provider
         else:

@@ -4,8 +4,16 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from web_core.scraper.base import BaseStrategy, ScrapingResult
 from web_core.scraper.strategies.captcha import CaptchaStrategy
+
+
+@pytest.fixture(autouse=True)
+def mock_is_safe_url():
+    with patch("web_core.scraper.strategies.captcha.is_safe_url", return_value=True) as mock:
+        yield mock
 
 
 class MockFallbackStrategy(BaseStrategy):
@@ -410,6 +418,13 @@ def _make_mock_patchright(page_content="<html>challenge</html>", page_url="https
 
 class TestSolveCfTurnstileViaPatchright:
     """Tests for _solve_cf_turnstile_via_patchright."""
+
+    async def test_solve_cf_turnstile_ssrf_blocked(self, mock_is_safe_url):
+        strategy = CaptchaStrategy()
+        mock_is_safe_url.return_value = False
+
+        with pytest.raises(ValueError, match=r"SSRF blocked: http://169\.254\.169\.254/latest/meta-data/"):
+            await strategy._solve_cf_turnstile_via_patchright("http://169.254.169.254/latest/meta-data/")
 
     async def test_sitekey_not_found_returns_fallback(self):
         """When sitekey cannot be extracted, returns fallback result."""

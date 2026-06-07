@@ -9,6 +9,12 @@ import pytest
 from web_core.scraper.strategies.headless import HeadlessStrategy
 
 
+@pytest.fixture(autouse=True)
+def mock_is_safe_url():
+    with patch("web_core.scraper.strategies.headless.is_safe_url", return_value=True) as mock:
+        yield mock
+
+
 class TestHeadlessStrategy:
     """Test Crawl4AI headless scraping strategy."""
 
@@ -204,6 +210,13 @@ class TestHeadlessStrategy:
         assert result.metadata["wait_for"] == "css:.loaded"
         assert result.metadata["stealth"] is True
         assert result.metadata["proxy"] is False
+
+    async def test_fetch_ssrf_blocked(self, mock_is_safe_url):
+        strategy = HeadlessStrategy()
+        mock_is_safe_url.return_value = False
+
+        with pytest.raises(ValueError, match=r"SSRF blocked: http://169\.254\.169\.254/latest/meta-data/"):
+            await strategy.fetch("http://169.254.169.254/latest/meta-data/")
 
     async def test_fetch_metadata_with_proxy(self):
         """When proxy is configured, metadata should report proxy=True."""

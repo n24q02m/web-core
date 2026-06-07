@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from web_core.http.client import is_safe_url
 from web_core.scraper.base import BaseStrategy, ScrapingResult
 
 
@@ -58,6 +59,9 @@ class HeadlessStrategy(BaseStrategy):
 
     async def fetch(self, url: str, selectors: dict[str, str] | None = None) -> ScrapingResult:
         """Fetch *url* via Crawl4AI headless browser rendering."""
+        if not is_safe_url(url):
+            raise ValueError(f"SSRF blocked: {url}")
+
         crawler_run_config = self._build_crawler_run_config()
 
         if self._crawler_factory is not None:

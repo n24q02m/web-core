@@ -1,7 +1,16 @@
 import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from web_core.scraper.strategies.patchright_browser import PatchrightStrategy
+
+
+@pytest.fixture(autouse=True)
+def mock_is_safe_url():
+    with patch("web_core.scraper.strategies.patchright_browser.is_safe_url", return_value=True) as mock:
+        yield mock
+
 
 NORMAL_HTML = "<html><body><h1>Hello World</h1></body></html>"
 CF_JS_CHALLENGE_HTML = "<html><body><title>just a moment...</title></body></html>"
@@ -295,6 +304,13 @@ class TestPatchrightStrategy:
         assert result.metadata["cf_challenge"] == "managed"
         # Verify domcontentloaded was awaited
         page.wait_for_load_state.assert_awaited_with("domcontentloaded", timeout=15000)
+
+    async def test_fetch_ssrf_blocked(self, mock_is_safe_url):
+        strategy = PatchrightStrategy()
+        mock_is_safe_url.return_value = False
+
+        with pytest.raises(ValueError, match=r"SSRF blocked: http://169\.254\.169\.254/latest/meta-data/"):
+            await strategy.fetch("http://169.254.169.254/latest/meta-data/")
 
     async def test_managed_challenge_wait_for_load_state_exception(self):
         """Managed challenge handles exception in wait_for_load_state (line 148-149)."""
