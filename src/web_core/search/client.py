@@ -67,6 +67,22 @@ def _apply_domain_cap(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return result
 
 
+def _get_safe_domains(domains: list[str] | None, limit: int) -> list[str]:
+    """Filter, deduplicate, and cap a list of domains."""
+    if not domains:
+        return []
+
+    safe = []
+    seen = set()
+    for d in domains:
+        if d not in seen and is_valid_domain(d):
+            seen.add(d)
+            safe.append(d)
+            if len(safe) >= limit:
+                break
+    return safe
+
+
 def _build_filtered_query(
     query: str,
     include_domains: list[str] | None = None,
@@ -82,29 +98,14 @@ def _build_filtered_query(
     """
     parts = [query]
 
-    if include_domains:
-        seen_include = set()
-        safe_include = []
-        for d in include_domains:
-            if d not in seen_include and is_valid_domain(d):
-                seen_include.add(d)
-                safe_include.append(d)
-                if len(safe_include) >= 5:
-                    break
-        if safe_include:
-            site_filter = " OR ".join(f"site:{d}" for d in safe_include)
-            parts = [f"({site_filter}) {query}"]
+    safe_include = _get_safe_domains(include_domains, limit=5)
+    if safe_include:
+        site_filter = " OR ".join(f"site:{d}" for d in safe_include)
+        parts = [f"({site_filter}) {query}"]
 
-    if exclude_domains:
-        seen_exclude = set()
-        count_exclude = 0
-        for d in exclude_domains:
-            if d not in seen_exclude and is_valid_domain(d):
-                seen_exclude.add(d)
-                parts.append(f"-site:{d}")
-                count_exclude += 1
-                if count_exclude >= 10:
-                    break
+    safe_exclude = _get_safe_domains(exclude_domains, limit=10)
+    for d in safe_exclude:
+        parts.append(f"-site:{d}")
 
     return " ".join(parts)
 
