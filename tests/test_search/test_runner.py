@@ -38,6 +38,7 @@ from web_core.search.runner import (
     _try_reuse_existing,
     _wait_for_service,
     _write_discovery,
+    _write_secure_text,
 )
 
 # ---------------------------------------------------------------------------
@@ -129,6 +130,27 @@ class TestIsPidAlive:
 # ===========================================================================
 # Discovery file management
 # ===========================================================================
+
+# ===========================================================================
+# _write_secure_text
+# ===========================================================================
+
+
+class TestWriteSecureText:
+    def test_write_secure_text(self, tmp_path: Path):
+        """Writes content and sets 0o600 permissions."""
+        test_dir = tmp_path / "subdir"
+        test_file = test_dir / "test.txt"
+        content = "hello world"
+
+        _write_secure_text(test_file, content)
+
+        assert test_file.exists()
+        assert test_file.read_text(encoding="utf-8") == content
+
+        if sys.platform != "win32":
+            assert (test_file.stat().st_mode & 0o777) == 0o600
+
 
 
 class TestDiscovery:

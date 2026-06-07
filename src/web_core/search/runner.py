@@ -250,6 +250,7 @@ def _read_discovery() -> dict | None:
 
 def _write_secure_text(path: Path, content: str) -> None:
     """Write text to a file with restrictive permissions (0o600)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         f.write(content)
@@ -258,7 +259,6 @@ def _write_secure_text(path: Path, content: str) -> None:
 def _write_discovery(port: int, pid: int) -> None:
     """Write SearXNG discovery file for other instances to find."""
     try:
-        _DISCOVERY_FILE.parent.mkdir(parents=True, exist_ok=True)
         content = _json.dumps(
             {
                 "pid": pid,
@@ -267,9 +267,7 @@ def _write_discovery(port: int, pid: int) -> None:
                 "started_at": time.time(),
             }
         )
-        fd = os.open(_DISCOVERY_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w") as f:
-            f.write(content)
+        _write_secure_text(_DISCOVERY_FILE, content)
     except Exception as e:
         logger.debug("Failed to write discovery file: %s", e)
 
