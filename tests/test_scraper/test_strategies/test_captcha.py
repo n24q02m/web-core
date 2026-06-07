@@ -314,14 +314,14 @@ class TestExtractTurnstileSitekey:
         mock_page.wait_for_selector = AsyncMock()
         mock_page.query_selector = AsyncMock(return_value=None)  # no data-sitekey element
 
-        mock_page.evaluate = AsyncMock(
-            side_effect=[
-                [
-                    "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/0x4AAAAAAADnPIDROrmt1Wwj/light/normal"
-                ],  # iframes
-                [],  # scripts (won't be called if iframe matches)
-            ]
+        mock_iframe = AsyncMock()
+        mock_iframe.get_attribute = AsyncMock(
+            return_value="https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/0x4AAAAAAADnPIDROrmt1Wwj/light/normal"
         )
+        mock_page.query_selector_all = AsyncMock(return_value=[mock_iframe])
+
+        # scripts won't be called if iframe matches
+        mock_page.evaluate = AsyncMock(return_value=[])
 
         strategy = CaptchaStrategy(capsolver_api_key="key")
         result = await strategy._extract_turnstile_sitekey(mock_page)
@@ -333,12 +333,11 @@ class TestExtractTurnstileSitekey:
         mock_page.wait_for_selector = AsyncMock()
         mock_page.query_selector = AsyncMock(return_value=None)
 
-        mock_page.evaluate = AsyncMock(
-            side_effect=[
-                ["https://example.com/no-sitekey"],  # iframes
-                ["turnstile.render({sitekey: '0x4AAAA_script_key'})"],  # scripts
-            ]
-        )
+        mock_iframe = AsyncMock()
+        mock_iframe.get_attribute = AsyncMock(return_value="https://example.com/no-sitekey")
+        mock_page.query_selector_all = AsyncMock(return_value=[mock_iframe])
+
+        mock_page.evaluate = AsyncMock(return_value=["turnstile.render({sitekey: '0x4AAAA_script_key'})"])
 
         strategy = CaptchaStrategy(capsolver_api_key="key")
         result = await strategy._extract_turnstile_sitekey(mock_page)
@@ -373,12 +372,12 @@ class TestExtractTurnstileSitekey:
         mock_page.wait_for_selector = AsyncMock()
         mock_page.query_selector = AsyncMock(return_value=None)
 
-        mock_page.evaluate = AsyncMock(
-            side_effect=[
-                ["https://challenges.cloudflare.com/LongAlphanumericString12/light/normal"],
-                [],
-            ]
+        mock_iframe = AsyncMock()
+        mock_iframe.get_attribute = AsyncMock(
+            return_value="https://challenges.cloudflare.com/LongAlphanumericString12/light/normal"
         )
+        mock_page.query_selector_all = AsyncMock(return_value=[mock_iframe])
+        mock_page.evaluate = AsyncMock(return_value=[])
 
         strategy = CaptchaStrategy(capsolver_api_key="key")
         result = await strategy._extract_turnstile_sitekey(mock_page)
@@ -499,14 +498,12 @@ class TestCaptchaCoverageEnhancement:
         mock_page.wait_for_selector = AsyncMock()
         mock_page.query_selector = AsyncMock(return_value=None)
 
-        # Strategy 2: /0x is present but it's not followed by hex chars as expected by _RE_CF_IFRAME_0X
-        # _RE_CF_IFRAME_0X = re.compile(r"/(0x[A-Za-z0-9]+)[/&]")
-        mock_page.evaluate = AsyncMock(
-            side_effect=[
-                ["https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/0x/invalid"],  # iframes
-                [],  # scripts
-            ]
+        mock_iframe = AsyncMock()
+        mock_iframe.get_attribute = AsyncMock(
+            return_value="https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/0x/invalid"
         )
+        mock_page.query_selector_all = AsyncMock(return_value=[mock_iframe])
+        mock_page.evaluate = AsyncMock(return_value=[])
 
         strategy = CaptchaStrategy(capsolver_api_key="key")
         result = await strategy._extract_turnstile_sitekey(mock_page)

@@ -17,8 +17,6 @@ logger = logging.getLogger(__name__)
 RECAPTCHA_V2_PROXYLESS = "ReCaptchaV2TaskProxyLess"
 TURNSTILE_PROXYLESS = "AntiTurnstileTaskProxyLess"
 
-_RE_CF_IFRAME_0X = re.compile(r"/(0x[A-Za-z0-9]+)[/&]")
-_RE_CF_IFRAME_LONG = re.compile(r"/([A-Za-z0-9]{20,})/(?:light|dark|auto)")
 _RE_SCRIPT_SITEKEY = re.compile(r"""sitekey['"\s:=]+['"]([A-Za-z0-9_-]{10,})['"]""", re.IGNORECASE)
 
 # Token extraction keys per captcha type (CapSolver API response format)
@@ -125,19 +123,19 @@ class CaptchaStrategy(BaseStrategy):
         # Strategy 1: data-sitekey attribute (static Turnstile)
         el = await page.query_selector("[data-sitekey]")
         if el:
-            return await el.get_attribute("data-sitekey")
+            sitekey = await el.get_attribute("data-sitekey")
+            if sitekey:
+                return sitekey
 
         # Strategy 2: Extract 0x-prefix key from CF Turnstile iframe src
         # e.g. /cdn-cgi/.../0x4AAAAAAADnPIDROrmt1Wwj/light/...
-        iframe_srcs = await page.evaluate("() => Array.from(document.querySelectorAll('iframe')).map(f => f.src || '')")
-        for src in iframe_srcs:
-            if "/0x" in src:
-                m = _RE_CF_IFRAME_0X.search(src)
-                if m:
-                    return m.group(1)
-            m2 = _RE_CF_IFRAME_LONG.search(src)
-            if m2:
-                return m2.group(1)
+        iframes = await page.query_selector_all("iframe")
+        for iframe in iframes:
+            src = await iframe.get_attribute("src")
+            if src:
+                sitekey = extract_turnstile_sitekey(src)
+                if sitekey:
+                    return sitekey
 
         # Strategy 3: Inline script sitekey
         script_texts = await page.evaluate(
