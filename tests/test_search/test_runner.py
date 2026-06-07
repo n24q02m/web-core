@@ -973,3 +973,80 @@ class TestModuleExports:
 
         assert "ensure_searxng" in all_exports
         assert "shutdown_searxng" in all_exports
+
+
+# ===========================================================================
+# Docker SearXNG
+# ===========================================================================
+
+
+class TestDockerSearXNG:
+    @pytest.mark.asyncio
+    async def test_check_docker_daemon_success(self):
+        with patch("asyncio.to_thread", new_callable=AsyncMock) as mock_thread:
+            mock_res = MagicMock()
+            mock_res.returncode = 0
+            mock_thread.return_value = mock_res
+            from web_core.search.runner import _check_docker_daemon
+
+            assert await _check_docker_daemon("docker") is True
+
+    @pytest.mark.asyncio
+    async def test_check_docker_daemon_failure(self):
+        with patch("asyncio.to_thread", new_callable=AsyncMock) as mock_thread:
+            mock_res = MagicMock()
+            mock_res.returncode = 1
+            mock_thread.return_value = mock_res
+            from web_core.search.runner import _check_docker_daemon
+
+            assert await _check_docker_daemon("docker") is False
+
+    @pytest.mark.asyncio
+    async def test_try_reuse_docker_container_success(self):
+        with (
+            patch("asyncio.to_thread", new_callable=AsyncMock) as mock_thread,
+            patch("web_core.search.runner._quick_health_check", new_callable=AsyncMock) as mock_health,
+        ):
+            mock_res = MagicMock()
+            mock_res.stdout = b"container_id\n"
+            mock_thread.return_value = mock_res
+            mock_health.return_value = True
+            from web_core.search.runner import _try_reuse_docker_container
+
+            assert await _try_reuse_docker_container("docker", "name", "http://url") is True
+
+    @pytest.mark.asyncio
+    async def test_remove_docker_container(self):
+        with patch("asyncio.to_thread", new_callable=AsyncMock) as mock_thread:
+            from web_core.search.runner import _remove_docker_container
+
+            await _remove_docker_container("docker", "name")
+            mock_thread.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_start_docker_searxng_success(self, tmp_config_dir):
+        with (
+            patch("shutil.which", return_value="/usr/bin/docker"),
+            patch("web_core.search.runner._check_docker_daemon", new_callable=AsyncMock, return_value=True),
+            patch("web_core.search.runner._get_docker_lock") as mock_lock_func,
+            patch("web_core.search.runner._try_reuse_docker_container", new_callable=AsyncMock, return_value=False),
+            patch("web_core.search.runner._remove_docker_container", new_callable=AsyncMock),
+            patch(
+                "web_core.search.runner._prepare_docker_settings",
+                new_callable=AsyncMock,
+                return_value=Path("/tmp/s.yml"),
+            ),
+            patch("web_core.search.runner._run_docker_container", new_callable=AsyncMock, return_value=True),
+            patch("web_core.search.runner._wait_for_service", new_callable=AsyncMock, return_value=True),
+            patch("web_core.search.runner._write_discovery", new_callable=AsyncMock),
+            patch(
+                "asyncio.to_thread",
+                side_effect=lambda f, *args: f(*args),
+            ),
+        ):
+            mock_lock = MagicMock()
+            mock_lock_func.return_value = mock_lock
+            from web_core.search.runner import PINNED_SEARXNG_PORT, _start_docker_searxng
+
+            url = await _start_docker_searxng(18888)
+            assert url == f"http://127.0.0.1:{PINNED_SEARXNG_PORT}"
