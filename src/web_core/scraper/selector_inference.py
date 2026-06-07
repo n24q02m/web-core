@@ -124,6 +124,58 @@ Example response:
 {{"content": "#novel_honbun", "title": ".novel_title", "next_chapter": "a.next"}}"""
 
 
+
+def _extract_domain(url: str) -> str:
+    """Fast path domain extraction (~3.5x faster than urlparse)."""
+    if url.startswith("//"):
+        return url[2:].partition("/")[0].partition("?")[0].partition("#")[0].lower()
+
+    _, sep, rest = url.partition("://")
+    domain_part = rest if sep else url
+    return domain_part.partition("/")[0].partition("?")[0].partition("#")[0].lower()
+
+
+def _lookup_hardcoded_selectors(domain: str, url: str) -> dict[str, str] | None:
+    """Look up hardcoded selectors for a domain (exact or wildcard)."""
+    # Exact match
+    if domain in DOMAIN_CONFIGS:
+        selectors = DOMAIN_CONFIGS[domain].copy()
+        logger.info(
+            "domain_selector_hit",
+            extra={"domain": domain, "tier": "hardcoded", "url": url},
+        )
+        return selectors
+
+    # Wildcard match (e.g. example*.com pattern in DOMAIN_CONFIGS)
+    for pattern_re, config in _WILDCARD_CONFIGS:
+        if pattern_re.match(domain):
+            selectors = config.copy()
+            logger.info(
+                "domain_selector_hit",
+                extra={
+                    "domain": domain,
+                    "tier": "hardcoded_wildcard",
+                    "pattern": pattern_re.pattern,
+                    "url": url,
+                },
+            )
+            return selectors
+
+    # Log unknown domain — candidate for future hardcoding
+    logger.info(
+        "domain_selector_miss",
+        extra={"domain": domain, "tier": "unknown", "url": url},
+    )
+    return None
+
+
+def _inject_domain_cookies(domain: str, selectors: dict[str, Any]) -> None:
+    """Inject domain-specific cookies into the selectors dict."""
+    cookies = DOMAIN_COOKIES.get(domain)
+    if cookies:
+        selectors["cookies"] = cookies
+
+
 def get_domain_selectors(url: str) -> dict[str, str] | None:
     """Return built-in selectors for a known domain, or None.
 
@@ -134,54 +186,13 @@ def get_domain_selectors(url: str) -> dict[str, str] | None:
     Logs domain usage for analytics — enabling the Tiered Scraping
     feedback loop (track unknown domains → hardcode popular ones).
     """
-    # Fast path domain extraction (~3.5x faster than urlparse)
-    if url.startswith("//"):
-        domain = url[2:].partition("/")[0].partition("?")[0].partition("#")[0].lower()
-    else:
-        _, sep, rest = url.partition("://")
-        domain_part = rest if sep else url
-        domain = domain_part.partition("/")[0].partition("?")[0].partition("#")[0].lower()
+    domain = _extract_domain(url)
+    selectors = _lookup_hardcoded_selectors(domain, url)
 
-    selectors: dict[str, str] | None = None
-
-    # Exact match
-    if domain in DOMAIN_CONFIGS:
-        selectors = DOMAIN_CONFIGS[domain].copy()
-        logger.info(
-            "domain_selector_hit",
-            extra={"domain": domain, "tier": "hardcoded", "url": url},
-        )
-    else:
-        # Wildcard match (e.g. example*.com pattern in DOMAIN_CONFIGS)
-        for pattern_re, config in _WILDCARD_CONFIGS:
-            if pattern_re.match(domain):
-                selectors = config.copy()
-                logger.info(
-                    "domain_selector_hit",
-                    extra={
-                        "domain": domain,
-                        "tier": "hardcoded_wildcard",
-                        "pattern": pattern_re.pattern,
-                        "url": url,
-                    },
-                )
-                break
-
-    # Log unknown domain — candidate for future hardcoding
-    if selectors is None:
-        logger.info(
-            "domain_selector_miss",
-            extra={"domain": domain, "tier": "unknown", "url": url},
-        )
-
-    # Inject domain-specific cookies
     if selectors is not None:
-        cookies = DOMAIN_COOKIES.get(domain)
-        if cookies:
-            selectors["cookies"] = cookies  # type: ignore[assignment]
+        _inject_domain_cookies(domain, selectors)
 
     return selectors
-
 
 def _build_prompt(url: str, html_content: str) -> str:
     """Build the selector-inference prompt, truncating HTML to first 5000 chars."""
@@ -414,13 +425,7 @@ async def infer_selectors_with_llm(
         logger.warning("LLM selector inference returned unexpected type: %s", type(raw))
         return {}
 
-    # Fast path domain extraction (~3.5x faster than urlparse)
-    if url.startswith("//"):
-        domain = url[2:].partition("/")[0].partition("?")[0].partition("#")[0].lower()
-    else:
-        _, sep, rest = url.partition("://")
-        domain_part = rest if sep else url
-        domain = domain_part.partition("/")[0].partition("?")[0].partition("#")[0].lower()
+    domain = _extract_domain(url)
     provider_name = getattr(llm_caller, "__web_core_provider__", provider or "custom")
     resolved_model = getattr(llm_caller, "__web_core_model__", model)
     logger.info(
