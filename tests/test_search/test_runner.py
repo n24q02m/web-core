@@ -23,6 +23,7 @@ from web_core.search.runner import (
     _SETTINGS_TEMPLATE,
     _cleanup_process,
     _find_available_port,
+    _get_docker_lock,
     _get_pip_command,
     _get_process_kwargs,
     _get_settings_path,
@@ -55,6 +56,7 @@ def _reset_module_state():
     mod._last_restart_time = 0.0
     mod._is_owner = False
     mod._startup_lock = None
+    mod._DOCKER_LOCK = None
 
 
 @pytest.fixture(autouse=True)
@@ -973,3 +975,34 @@ class TestModuleExports:
 
         assert "ensure_searxng" in all_exports
         assert "shutdown_searxng" in all_exports
+
+
+# ===========================================================================
+# _get_docker_lock
+# ===========================================================================
+
+
+class TestGetDockerLock:
+    def test_returns_filelock(self, tmp_config_dir):
+        """Returns a filelock.FileLock instance."""
+        import filelock
+
+        lock = _get_docker_lock()
+        assert isinstance(lock, filelock.FileLock)
+        assert Path(lock.lock_file).name == "searxng_docker.lock"
+
+    def test_returns_same_lock(self, tmp_config_dir):
+        """Returns the same lock on subsequent calls."""
+        lock1 = _get_docker_lock()
+        lock2 = _get_docker_lock()
+        assert lock1 is lock2
+
+    def test_creates_config_dir(self, tmp_path, monkeypatch):
+        """Creates the config directory if it does not exist."""
+        config_dir = tmp_path / "new-config-dir"
+        monkeypatch.setattr("web_core.search.runner._CONFIG_DIR", config_dir)
+        monkeypatch.setattr("web_core.search.runner._DOCKER_LOCK", None)
+
+        assert not config_dir.exists()
+        _get_docker_lock()
+        assert config_dir.exists()
