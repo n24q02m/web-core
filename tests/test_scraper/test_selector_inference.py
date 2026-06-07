@@ -398,6 +398,7 @@ async def test_infer_domain_extraction_protocol_less(monkeypatch):
     )
     assert result == {"content": "#c"}
 
+
 def test_parse_selector_json_valid():
     text = json.dumps({"content": "#c", "title": ".t", "next_chapter": "a"})
     assert selector_inference._parse_selector_json(text) == {"content": "#c", "title": ".t", "next_chapter": "a"}
