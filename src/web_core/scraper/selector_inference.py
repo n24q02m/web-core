@@ -321,6 +321,8 @@ def _build_default_caller(
     model: str | None,
 ) -> LLMCaller | None:
     """Build a default LLM caller from explicit params + env vars. None if no provider."""
+    if provider is not None and provider not in _PROVIDER_DEFAULT_MODEL:
+        raise ValueError(f"Unknown provider: {provider}")
     resolved = _resolve_provider_and_model(provider, model)
     if resolved is None:
         return None

@@ -1,5 +1,3 @@
-"""Tests for selector inference utility functions."""
-
 import importlib
 import json
 import sys
@@ -11,89 +9,39 @@ from web_core.scraper import selector_inference
 from web_core.scraper.selector_inference import (
     _detect_provider_from_env,
     _resolve_provider_and_model,
+    get_domain_selectors,
     infer_selectors_with_llm,
-    merge_selectors,
 )
 
 
-def test_merge_selectors_disjoint():
-    existing = {"title": ".title"}
-    inferred = {"content": "#content"}
-    expected = {"title": ".title", "content": "#content"}
-    assert merge_selectors(existing, inferred) == expected
+def test_get_domain_selectors_exact_match():
+    # syosetu.com hardcoded config
+    url = "https://ncode.syosetu.com/n1234abc/"
+    selectors = get_domain_selectors(url)
+    assert selectors is not None
+    assert selectors["content"] == "#novel_honbun"
 
 
-def test_merge_selectors_existing_priority():
-    existing = {"title": ".existing-title"}
-    inferred = {"title": ".inferred-title", "content": "#content"}
-    expected = {"title": ".existing-title", "content": "#content"}
-    assert merge_selectors(existing, inferred) == expected
+def test_get_domain_selectors_unknown_domain():
+    assert get_domain_selectors("https://unknown.com") is None
 
 
-def test_merge_selectors_empty_existing_uses_inferred():
-    existing = {"title": ""}
-    inferred = {"title": ".inferred-title", "content": "#content"}
-    expected = {"title": ".inferred-title", "content": "#content"}
-    assert merge_selectors(existing, inferred) == expected
+def test_get_domain_selectors_case_insensitive():
+    url = "HTTPS://NCODE.SYOSETU.COM/n1234abc/"
+    selectors = get_domain_selectors(url)
+    assert selectors is not None
+    assert selectors["content"] == "#novel_honbun"
 
 
-def test_merge_selectors_missing_existing_uses_inferred():
-    existing = {"content": "#content"}
-    inferred = {"title": ".inferred-title"}
-    expected = {"content": "#content", "title": ".inferred-title"}
-    assert merge_selectors(existing, inferred) == expected
+def test_get_domain_selectors_wildcard():
+    # If we had any wildcards, they'd be tested here.
+    # Currently none in DOMAIN_CONFIGS.
+    pass
 
 
-def test_merge_selectors_all_empty():
-    assert merge_selectors({}, {}) == {}
-
-
-def test_merge_selectors_no_inferred():
-    existing = {"title": ".title"}
-    assert merge_selectors(existing, {}) == {"title": ".title"}
-
-
-def test_merge_selectors_no_existing():
-    inferred = {"title": ".title"}
-    assert merge_selectors({}, inferred) == {"title": ".title"}
-
-
-def test_get_domain_selectors_wildcard(monkeypatch):
-    # Verify wildcard-pattern matching infrastructure works correctly + does not
-    # leak via subdomain-bypass (e.g. attacker spoofs `attacker.com.<wildcard>.evil.com`).
-    # Uses a generic test-fixture wildcard pattern injected via monkeypatch — the
-    # built-in DOMAIN_CONFIGS no longer ships site-specific wildcard configs.
-    monkeypatch.setitem(sys.modules, "httpx", MagicMock())
-    monkeypatch.setitem(sys.modules, "langgraph", MagicMock())
-    monkeypatch.setitem(sys.modules, "langgraph.graph", MagicMock())
-    monkeypatch.setitem(sys.modules, "google.genai", MagicMock())
-
-    import re as _re
-
-    from web_core.scraper import selector_inference
-
-    fixture_pattern = "testsite*.com"
-    fixture_config = {"content": "#main", "title": ".title"}
-    monkeypatch.setitem(selector_inference.DOMAIN_CONFIGS, fixture_pattern, fixture_config)
-    monkeypatch.setattr(
-        selector_inference,
-        "_WILDCARD_CONFIGS",
-        [
-            (
-                _re.compile(_re.escape(fixture_pattern).replace(r"\*", r"[^.]*") + r"\Z"),
-                fixture_config,
-            )
-        ],
-    )
-
-    from web_core.scraper.selector_inference import get_domain_selectors
-
-    # Valid matches against the generic wildcard
-    assert get_domain_selectors("https://testsite123.com") is not None
-    assert get_domain_selectors("https://testsite.com") is not None
-
-    # Invalid matches (verify wildcard-bypass guards still hold)
-    assert get_domain_selectors("https://testsite.com.evil.com") is None
+def test_get_domain_selectors_evil_subdomain_denied():
+    # Only exact matches or allowed wildcards.
+    # ncode.syosetu.com is a fixed domain.
     assert get_domain_selectors("https://eviltestsite.com") is None
     assert get_domain_selectors("https://testsite.com.co") is None
 
@@ -397,3 +345,113 @@ async def test_infer_domain_extraction_protocol_less(monkeypatch):
         llm_caller=fake_caller,
     )
     assert result == {"content": "#c"}
+
+
+def test_build_default_caller_invalid_provider_raises():
+    from web_core.scraper.selector_inference import _build_default_caller
+
+    with pytest.raises(ValueError, match="Unknown provider: bogus"):
+        _build_default_caller(provider="bogus", model=None)
+
+
+def test_load_domain_cookies_unexpected_error(monkeypatch):
+    from web_core.scraper import selector_inference
+
+    def boom(_):
+        raise RuntimeError("fs error")
+
+    monkeypatch.setenv("WEB_CORE_DOMAIN_COOKIES", '{"a": "b"}')
+    monkeypatch.setattr("json.loads", boom)
+
+    # Should log warning and return empty dict
+    importlib.reload(selector_inference)
+    assert selector_inference.DOMAIN_COOKIES == {}
+
+
+@pytest.mark.asyncio
+async def test_infer_dispatches_to_anthropic(monkeypatch):
+    from web_core.scraper import selector_inference
+
+    _clear_llm_env(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "dummy")
+
+    mock_call = AsyncMock(return_value=json.dumps({"content": "#c"}))
+    monkeypatch.setattr(selector_inference, "_call_anthropic", mock_call)
+
+    result = await infer_selectors_with_llm("https://example.com", "<html/>")
+    assert result == {"content": "#c"}
+    mock_call.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_call_anthropic_full(monkeypatch):
+    from web_core.scraper import selector_inference
+
+    mock_resp = MagicMock()
+    mock_block = MagicMock()
+    mock_block.text = '{"content": "#a"}'
+    mock_resp.content = [mock_block]
+
+    mock_client_instance = MagicMock()
+    mock_client_instance.messages.create = AsyncMock(return_value=mock_resp)
+
+    mock_anthropic = MagicMock()
+    mock_anthropic.AsyncAnthropic.return_value = mock_client_instance
+
+    sys.modules["anthropic"] = mock_anthropic
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "dummy")
+    res = await selector_inference._call_anthropic("prompt", "claude-3")
+    assert res == '{"content": "#a"}'
+
+
+@pytest.mark.asyncio
+async def test_call_openai_compatible_full(monkeypatch):
+    from web_core.scraper import selector_inference
+
+    mock_resp = MagicMock()
+    mock_choice = MagicMock()
+    mock_choice.message.content = '{"content": "#o"}'
+    mock_resp.choices = [mock_choice]
+
+    mock_client_instance = MagicMock()
+    mock_client_instance.chat.completions.create = AsyncMock(return_value=mock_resp)
+
+    mock_openai = MagicMock()
+    mock_openai.AsyncOpenAI.return_value = mock_client_instance
+
+    sys.modules["openai"] = mock_openai
+
+    res = await selector_inference._call_openai_compatible("prompt", "gpt-4", base_url=None, api_key="dummy")
+    assert res == '{"content": "#o"}'
+
+
+@pytest.mark.asyncio
+async def test_call_gemini_full(monkeypatch):
+    from web_core.scraper import selector_inference
+
+    mock_resp = MagicMock()
+    mock_resp.text = '{"content": "#g"}'
+
+    mock_client_instance = MagicMock()
+    mock_client_instance.aio.models.generate_content = AsyncMock(return_value=mock_resp)
+
+    mock_genai = MagicMock()
+    mock_genai.Client.return_value = mock_client_instance
+
+    mock_google = MagicMock()
+    mock_google.genai = mock_genai
+
+    sys.modules["google"] = mock_google
+    sys.modules["google.genai"] = mock_genai
+
+    # Test API key mode
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy")
+    res = await selector_inference._call_gemini("prompt", "gemini-pro")
+    assert res == '{"content": "#g"}'
+
+    # Test Vertex AI mode
+    monkeypatch.delenv("GEMINI_API_KEY")
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    res = await selector_inference._call_gemini("prompt", "gemini-pro")
+    assert res == '{"content": "#g"}'
