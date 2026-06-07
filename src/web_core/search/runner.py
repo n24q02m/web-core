@@ -712,6 +712,70 @@ async def _force_kill_process(proc: subprocess.Popen) -> None:  # pragma: no cov
         logger.debug("Error killing SearXNG process: %s", e)
 
 
+
+async def _kill_stale_port_win32(port: int) -> None:  # pragma: no cover
+    """Windows-specific stale port cleanup using netstat."""
+    try:
+        result = await asyncio.to_thread(
+            subprocess.run,
+            ["netstat", "-ano"],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        # result.stdout is str because text=True, but ty can't infer through asyncio.to_thread.
+        stdout_text = result.stdout if isinstance(result.stdout, str) else result.stdout.decode(errors="replace")
+        for line in stdout_text.splitlines():
+            if f"127.0.0.1:{port}" in line and "LISTENING" in line:
+                parts = line.split()
+                pid_str = parts[-1]
+                try:
+                    pid = int(pid_str)
+                    if pid > 0:
+                        await _sigterm_then_kill(pid, f"stale port {port}")
+                except (ValueError, ProcessLookupError, PermissionError) as e:
+                    logger.debug("Could not kill process %s on port %d: %s", pid_str, port, e)
+    except Exception as e:
+        logger.debug("Error finding processes on port %d using netstat: %s", port, e)
+
+
+
+async def _kill_stale_port_unix(port: int) -> None:  # pragma: no cover
+    """Unix-specific stale port cleanup using lsof or fuser."""
+    try:
+        result = await asyncio.to_thread(
+            subprocess.run,
+            ["lsof", "-ti", f":{port}"],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            for pid_str in result.stdout.strip().splitlines():
+                try:
+                    pid = int(pid_str.strip())
+                    if pid > 0 and pid != os.getpid():
+                        await _sigterm_then_kill(pid, f"stale port {port}")
+                except (ValueError, ProcessLookupError, PermissionError) as e:
+                    logger.debug("Could not kill process %s on port %d: %s", pid_str, port, e)
+    except FileNotFoundError:
+        # lsof not available, try fuser.
+        try:
+            await asyncio.to_thread(
+                subprocess.run,
+                ["fuser", "-k", f"{port}/tcp"],
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                timeout=5,
+            )
+        except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+            logger.debug("Could not free port %d using fuser: %s", port, e)
+    except Exception as e:
+        logger.debug("Error finding processes on port %d using lsof: %s", port, e)
+
+
 async def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
     """Kill any process still holding the target port.
 
@@ -722,61 +786,9 @@ async def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
         return
 
     if sys.platform == "win32":
-        try:
-            result = await asyncio.to_thread(
-                subprocess.run,
-                ["netstat", "-ano"],
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            # result.stdout is str because text=True, but ty can't infer through asyncio.to_thread.
-            stdout_text = result.stdout if isinstance(result.stdout, str) else result.stdout.decode(errors="replace")
-            for line in stdout_text.splitlines():
-                if f"127.0.0.1:{port}" in line and "LISTENING" in line:
-                    parts = line.split()
-                    pid_str = parts[-1]
-                    try:
-                        pid = int(pid_str)
-                        if pid > 0:
-                            await _sigterm_then_kill(pid, f"stale port {port}")
-                    except (ValueError, ProcessLookupError, PermissionError) as e:
-                        logger.debug("Could not kill process %s on port %d: %s", pid_str, port, e)
-        except Exception as e:
-            logger.debug("Error finding processes on port %d using netstat: %s", port, e)
+        await _kill_stale_port_win32(port)
     else:
-        try:
-            result = await asyncio.to_thread(
-                subprocess.run,
-                ["lsof", "-ti", f":{port}"],
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                for pid_str in result.stdout.strip().splitlines():
-                    try:
-                        pid = int(pid_str.strip())
-                        if pid > 0 and pid != os.getpid():
-                            await _sigterm_then_kill(pid, f"stale port {port}")
-                    except (ValueError, ProcessLookupError, PermissionError) as e:
-                        logger.debug("Could not kill process %s on port %d: %s", pid_str, port, e)
-        except FileNotFoundError:
-            # lsof not available, try fuser.
-            try:
-                await asyncio.to_thread(
-                    subprocess.run,
-                    ["fuser", "-k", f"{port}/tcp"],
-                    stdin=subprocess.DEVNULL,
-                    capture_output=True,
-                    timeout=5,
-                )
-            except (FileNotFoundError, subprocess.TimeoutExpired) as e:
-                logger.debug("Could not free port %d using fuser: %s", port, e)
-        except Exception as e:
-            logger.debug("Error finding processes on port %d using lsof: %s", port, e)
+        await _kill_stale_port_unix(port)
 
 
 def _get_process_kwargs() -> dict:  # pragma: no cover
