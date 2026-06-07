@@ -13,6 +13,7 @@ import time
 from typing import Any
 
 from langgraph.graph import END, START, StateGraph
+from pydantic import BaseModel, Field
 
 from web_core.scraper.cache import StrategyCache
 from web_core.scraper.robots import RobotsCache, RobotsDisallowedError
@@ -23,6 +24,15 @@ from web_core.scraper.selector_inference import (
 )
 from web_core.scraper.state import ScrapingError, ScrapingState
 from web_core.scraper.utils import is_cloudflare_challenge
+
+
+class ScraperConfig(BaseModel):
+    """Configuration for ScrapingAgent."""
+
+    max_retries: int = Field(default=5, ge=0)
+    min_content_length: int = Field(default=100, ge=0)
+    enable_selector_inference: bool = True
+    respect_robots: bool = True
 
 
 class ScrapingAgent:
@@ -41,67 +51,67 @@ class ScrapingAgent:
         strategies: dict[str, Any] | None = None,
         strategy_cache: StrategyCache | None = None,
         robots_cache: RobotsCache | None = None,
-        max_retries: int = 5,
-        min_content_length: int = 100,
-        enable_selector_inference: bool = True,
-        respect_robots: bool = True,
+        config: ScraperConfig | None = None,
     ):
         self.strategies = strategies or {}
         self.strategy_cache = strategy_cache or StrategyCache()
         self.robots_cache = robots_cache or RobotsCache()
-        self.max_retries = max_retries
-        self.min_content_length = min_content_length
-        self.enable_selector_inference = enable_selector_inference
-        self.respect_robots = respect_robots
+        self.config = config or ScraperConfig()
         self._graph = self._build_graph()
 
     def _build_graph(self):
         """Construct the LangGraph state machine.
 
-        Flow:
-        START → check_cache → select_strategy → execute → validate
-          ├─ (success) → extract → update_cache → END
-          └─ (fail) → infer_selectors (optional) → escalate
-              ├─ (more strategies) → select_strategy (loop)
-              └─ (exhausted) → update_cache → END
+        Nodes:
+        - check_cache: Recommends strategy order
+        - execute: Runs current strategy
+        - validate: Checks content length and CF presence
+        - extract: Terminal success state
+        - infer_selectors: Uses LLM to find new selectors on validation fail
+        - escalate: Advances to next strategy
+        - update_cache: Records results
         """
-        graph = StateGraph(ScrapingState)
+        builder = StateGraph(ScrapingState)
 
-        graph.add_node("check_cache", self._check_cache_node)
-        graph.add_node("select_strategy", self._select_strategy_node)
-        graph.add_node("execute", self._execute_node)
-        graph.add_node("validate", self._validate_node)
-        graph.add_node("extract", self._extract_node)
-        graph.add_node("infer_selectors", self._infer_selectors_node)
-        graph.add_node("escalate", self._escalate_node)
-        graph.add_node("update_cache", self._update_cache_node)
+        builder.add_node("check_cache", self._check_cache_node)
+        builder.add_node("select_strategy", self._select_strategy_node)
+        builder.add_node("execute", self._execute_node)
+        builder.add_node("validate", self._validate_node)
+        builder.add_node("extract", self._extract_node)
+        builder.add_node("infer_selectors", self._infer_selectors_node)
+        builder.add_node("escalate", self._escalate_node)
+        builder.add_node("update_cache", self._update_cache_node)
 
-        graph.add_edge(START, "check_cache")
-        graph.add_edge("check_cache", "select_strategy")
-        graph.add_edge("select_strategy", "execute")
-        graph.add_edge("execute", "validate")
-        graph.add_conditional_edges(
+        builder.add_edge(START, "check_cache")
+        builder.add_edge("check_cache", "select_strategy")
+        builder.add_edge("select_strategy", "execute")
+        builder.add_edge("execute", "validate")
+
+        builder.add_conditional_edges(
             "validate",
             self._route_after_validate,
             {"extract": "extract", "infer_selectors": "infer_selectors", "escalate": "escalate"},
         )
-        graph.add_edge("extract", "update_cache")
-        graph.add_conditional_edges(
+
+        builder.add_conditional_edges(
             "infer_selectors",
             self._route_after_infer,
             {"execute": "execute", "escalate": "escalate"},
         )
-        graph.add_conditional_edges(
+
+        builder.add_conditional_edges(
             "escalate",
             self._route_after_escalate,
             {"select_strategy": "select_strategy", "update_cache": "update_cache"},
         )
-        graph.add_edge("update_cache", END)
 
-        return graph.compile()
+        builder.add_edge("extract", "update_cache")
+        builder.add_edge("update_cache", END)
+
+        return builder.compile()
 
     # ------------------------------------------------------------------
-    # Node implementations
+    # Graph Nodes & Routing
     # ------------------------------------------------------------------
 
     async def _check_cache_node(self, state: ScrapingState) -> ScrapingState:
@@ -216,7 +226,7 @@ class ScrapingAgent:
         errors = list(state.get("errors", []))
 
         status_ok = 200 <= status_code < 400
-        length_ok = len(content) >= self.min_content_length
+        length_ok = len(content) >= self.config.min_content_length
         cf_challenge = is_cloudflare_challenge(content) if content else False
 
         if cf_challenge:
@@ -234,7 +244,7 @@ class ScrapingAgent:
         # and we haven't tried LLM inference yet, try it
         content = state.get("content", "")
         if (
-            self.enable_selector_inference
+            self.config.enable_selector_inference
             and content
             and len(content) > 50
             and not state.get("selector_inference_attempted", False)
@@ -302,7 +312,7 @@ class ScrapingAgent:
         idx = state.get("current_strategy_idx", 0)
         order = state.get("strategy_order", [])
         tried_count = len(state.get("strategies_tried", []))
-        if idx < len(order) and tried_count < self.max_retries:
+        if idx < len(order) and tried_count < self.config.max_retries:
             return "select_strategy"
         return "update_cache"
 
@@ -330,10 +340,10 @@ class ScrapingAgent:
     async def scrape(self, url: str, selectors: dict[str, str] | None = None) -> str:
         """Scrape *url*, returning content on success or raising ScrapingError.
 
-        If ``respect_robots`` is enabled (default), checks robots.txt first and
-        raises ``RobotsDisallowedError`` when the target URL is disallowed.
+        If respect_robots is enabled (default), checks robots.txt first and
+        raises RobotsDisallowedError when the target URL is disallowed.
         """
-        if self.respect_robots and not await self.robots_cache.is_allowed(url):
+        if self.config.respect_robots and not await self.robots_cache.is_allowed(url):
             raise RobotsDisallowedError(url=url, user_agent=self.robots_cache.user_agent)
 
         initial_state: ScrapingState = {
