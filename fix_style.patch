@@ -1,0 +1,11 @@
+<<<<<<< SEARCH
+    except (socket.gaierror, Exception):
+        return False
+# ---------------------------------------------------------------------------
+=======
+    except (socket.gaierror, Exception):
+        return False
+
+
+# ---------------------------------------------------------------------------
+>>>>>>> REPLACE
