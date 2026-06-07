@@ -110,6 +110,36 @@ class TestBuildFilteredQuery:
         result = _build_filtered_query("test", include_domains=["!!!"])
         assert result == "test"
 
+    def test_duplicate_domains_deduplicated(self):
+        # include_domains deduplication
+        result = _build_filtered_query("q", include_domains=["a.com", "a.com", "b.com"])
+        assert result.count("site:a.com") == 1
+        assert result == "(site:a.com OR site:b.com) q"
+
+        # exclude_domains deduplication
+        result = _build_filtered_query("q", exclude_domains=["a.com", "a.com", "b.com"])
+        assert result.count("-site:a.com") == 1
+        assert result == "q -site:a.com -site:b.com"
+
+    def test_empty_query_handles_gracefully(self):
+        result = _build_filtered_query("", include_domains=["a.com"])
+        assert result == "(site:a.com) "
+
+    def test_whitespace_query_handles_gracefully(self):
+        result = _build_filtered_query("   ", include_domains=["a.com"])
+        assert result == "(site:a.com)    "
+
+    def test_query_with_special_characters(self):
+        # Quotes and parentheses should be preserved in the query part
+        query = "\"exact phrase\" (extra)"
+        result = _build_filtered_query(query, include_domains=["a.com"])
+        assert result == f"(site:a.com) {query}"
+
+    def test_extremely_long_query(self):
+        long_query = "a" * 5000
+        result = _build_filtered_query(long_query, include_domains=["a.com"])
+        assert result == f"(site:a.com) {long_query}"
+
 
 # ---------------------------------------------------------------------------
 # _apply_domain_cap
