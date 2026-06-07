@@ -2,6 +2,98 @@
 
 <!-- version list -->
 
+## v2.2.0-beta.1 (2026-06-07)
+
+### Bug Fixes
+
+- Add captcha coverage tests for safe client and sitekey extraction
+  ([#308](https://github.com/n24q02m/web-core/pull/308),
+  [`17f8bfc`](https://github.com/n24q02m/web-core/commit/17f8bfc2cdc01ef34f3505ed610a66aa33721fb3))
+
+- Add cookie-passing tests for basic HTTP strategy
+  ([#309](https://github.com/n24q02m/web-core/pull/309),
+  [`d83c9b1`](https://github.com/n24q02m/web-core/commit/d83c9b1902a2d9803d1c2d915621477d63fb7724))
+
+- Add cookies and max-redirects tests for TLS spoof strategy
+  ([#302](https://github.com/n24q02m/web-core/pull/302),
+  [`8845b8b`](https://github.com/n24q02m/web-core/commit/8845b8b29d295cd499de0505024d58a72bf038d9))
+
+- Add invalid-json and protocol-less url tests for selector inference
+  ([#292](https://github.com/n24q02m/web-core/pull/292),
+  [`91aad9c`](https://github.com/n24q02m/web-core/commit/91aad9c5b43fbb5d0dedbea3a633e3e2e65b2356))
+
+- Add is_safe_url dns cache tests ([#307](https://github.com/n24q02m/web-core/pull/307),
+  [`b3134a0`](https://github.com/n24q02m/web-core/commit/b3134a070c1305ff71c6c137abedf3db60e8dd62))
+
+- Add normalize_url edge case tests ([#291](https://github.com/n24q02m/web-core/pull/291),
+  [`2932859`](https://github.com/n24q02m/web-core/commit/2932859fc685ec7bed254512a187693d01582562))
+
+- Add shared client reuse and dedup branch tests for search
+  ([#300](https://github.com/n24q02m/web-core/pull/300),
+  [`15391af`](https://github.com/n24q02m/web-core/commit/15391af7414437b73538009d6319a3d36ee82f2f))
+
+- Add SSRF block and DNS cache expiry tests for safe http client
+  ([#301](https://github.com/n24q02m/web-core/pull/301),
+  [`3f5cd79`](https://github.com/n24q02m/web-core/commit/3f5cd79c8e17ffcad13afd5d862d99093d5943aa))
+
+- Add strip_tracking_params coverage tests ([#313](https://github.com/n24q02m/web-core/pull/313),
+  [`00035ad`](https://github.com/n24q02m/web-core/commit/00035ad1a0653a385d0bcfe7389de22d3d14de15))
+
+- Add turnstile sitekey extraction variation tests
+  ([#287](https://github.com/n24q02m/web-core/pull/287),
+  [`94c091c`](https://github.com/n24q02m/web-core/commit/94c091c80f8455b02f5d5ba91d97f8029d6fae5d))
+
+- Add unix lsof/fuser fallback tests for stale port kill
+  ([#295](https://github.com/n24q02m/web-core/pull/295),
+  [`8afb3e6`](https://github.com/n24q02m/web-core/commit/8afb3e6f06b1a1cfed2f6d47e178dc834f8016be))
+
+- Update ghcr.io/astral-sh/uv Docker digest to 03bdc89
+  ([#321](https://github.com/n24q02m/web-core/pull/321),
+  [`add3c69`](https://github.com/n24q02m/web-core/commit/add3c69865c995025ae8048c12c6a1a5323071cc))
+
+- Update non-major dependencies ([#322](https://github.com/n24q02m/web-core/pull/322),
+  [`f5b64c0`](https://github.com/n24q02m/web-core/commit/f5b64c099a22eca111168c108527c28ba88fbcd8))
+
+- Uv lock file maintenance ([#323](https://github.com/n24q02m/web-core/pull/323),
+  [`e7ae1b1`](https://github.com/n24q02m/web-core/commit/e7ae1b1a3838d92bf9bb49294deb46962bda91ee))
+
+- **deps**: Bump aiohttp in the uv group across 1 directory
+  ([#332](https://github.com/n24q02m/web-core/pull/332),
+  [`b5d67a3`](https://github.com/n24q02m/web-core/commit/b5d67a34a99e2552078db951a0ef3a133f9ed6d2))
+
+- **deps**: Update actions/checkout digest to df4cb1c
+  ([`57df1a1`](https://github.com/n24q02m/web-core/commit/57df1a1c8c9d063fb10bcdcad8cd5fb63d7b7a34))
+
+- **deps**: Update ghcr.io/astral-sh/uv Docker digest to b46b03d
+  ([`8a5cd5a`](https://github.com/n24q02m/web-core/commit/8a5cd5a5da7fbba2919131d24cae34d3ae2d2ea4))
+
+- **deps**: Update github/codeql-action digest to 8aad20d
+  ([`aadde8a`](https://github.com/n24q02m/web-core/commit/aadde8a71c01f34d6cb07c8e2bc0eaf48e626209))
+
+- **deps**: Update non-major dependencies
+  ([`83f2348`](https://github.com/n24q02m/web-core/commit/83f234829029c1fb9e681b8e37ab27ad7aa84dd0))
+
+- **search**: Fix SSRF vulnerability in service wait and search client
+  ([`fa180c5`](https://github.com/n24q02m/web-core/commit/fa180c5054a23983994672de6d6c29441503eaf2))
+
+### Features
+
+- Add error-condition tests for _find_available_port
+  ([`2494421`](https://github.com/n24q02m/web-core/commit/2494421e9a1080ad0e7cd50da05b46be11520a90))
+
+- Add test for mangadex download_image failure
+  ([`2c5930c`](https://github.com/n24q02m/web-core/commit/2c5930ccfb85dd13ed5fe868d5de6c8493bb3308))
+
+- Add tests for _build_filtered_query error handling
+  ([`57a3c7c`](https://github.com/n24q02m/web-core/commit/57a3c7cffef1206e1687ab6e70f603edee6ad562))
+
+- Add tests for _get_docker_lock
+  ([`6b70e75`](https://github.com/n24q02m/web-core/commit/6b70e753f6d3993ff7a4c063f4a5481880c640a8))
+
+- Add tests for SearXNG Docker startup logic
+  ([`c2deb20`](https://github.com/n24q02m/web-core/commit/c2deb20dea0baa8729c9d5942ec960fbbde8992f))
+
+
 ## v2.1.1 (2026-05-28)
 
 ### Bug Fixes
