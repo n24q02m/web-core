@@ -191,10 +191,13 @@ async def search(
             # Performance Optimization: Combining extraction and deduplication loops
             # avoids creating an intermediate list of formatted dicts, saving ~25%
             # processing time for large result sets.
+            url_to_norm: dict[str, str] = {}
             seen: dict[str, dict[str, Any]] = {}
             for r in results:
                 url = r.get("url", "")
-                norm_url = normalize_url(url)
+                norm_url = url_to_norm.get(url)
+                if norm_url is None:
+                    norm_url = url_to_norm[url] = normalize_url(url)
 
                 source = r.get("engine", "")
                 snippet = r.get("content", "")
