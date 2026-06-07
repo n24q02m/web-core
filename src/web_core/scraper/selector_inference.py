@@ -366,10 +366,7 @@ def _process_llm_raw_output(raw: Any) -> dict[str, str]:
             logger.warning("LLM selector inference returned invalid JSON: %s", e)
             return {}
     if isinstance(raw, dict):
-        return {
-            k: v for k, v in raw.items()
-            if k in {"content", "title", "next_chapter"} and isinstance(v, str)
-        }
+        return {k: v for k, v in raw.items() if k in {"content", "title", "next_chapter"} and isinstance(v, str)}
     logger.warning("LLM selector inference returned unexpected type: %s", type(raw))
     return {}
 
