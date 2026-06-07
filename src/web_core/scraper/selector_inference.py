@@ -64,9 +64,7 @@ def _load_domain_cookies() -> dict[str, dict[str, str]]:
         return {}
 
     return {
-        domain: domain_cookies
-        for domain, domain_cookies in env_cookies.items()
-        if isinstance(domain_cookies, dict)
+        domain: domain_cookies for domain, domain_cookies in env_cookies.items() if isinstance(domain_cookies, dict)
     }
 
 
