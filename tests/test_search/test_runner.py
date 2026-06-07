@@ -20,7 +20,6 @@ import pytest
 
 from web_core.search import ensure_searxng, shutdown_searxng
 from web_core.search.runner import (
-    _start_docker_searxng,
     _SETTINGS_TEMPLATE,
     _cleanup_process,
     _find_available_port,
@@ -36,6 +35,7 @@ from web_core.search.runner import (
     _quick_health_check,
     _read_discovery,
     _remove_discovery,
+    _start_docker_searxng,
     _try_reuse_existing,
     _wait_for_service,
     _write_discovery,
@@ -931,7 +931,6 @@ class TestGetStartupLock:
 # ===========================================================================
 
 
-
 # ===========================================================================
 # _start_docker_searxng
 # ===========================================================================
@@ -955,10 +954,10 @@ class TestStartDockerSearxng:
             url = await _start_docker_searxng(8888)
             assert url is None
 
-
     async def test_reuse_healthy_container(self, tmp_config_dir):
         """Reuses an existing container if it is healthy."""
         import web_core.search.runner as mod
+
         mock_res_info = MagicMock()
         mock_res_info.returncode = 0
 
@@ -981,11 +980,12 @@ class TestStartDockerSearxng:
     async def test_spawn_new_container_success(self, tmp_config_dir):
         """Spawns a new container when none exists and it becomes healthy."""
         import web_core.search.runner as mod
+
         mock_res_info = MagicMock()
         mock_res_info.returncode = 0
 
         mock_res_ps = MagicMock()
-        mock_res_ps.stdout = "" # No container running
+        mock_res_ps.stdout = ""  # No container running
 
         mock_res_rm = MagicMock()
 
@@ -1013,6 +1013,7 @@ class TestStartDockerSearxng:
     async def test_respawn_unhealthy_container(self, tmp_config_dir):
         """Respawns if container exists but is unhealthy."""
         import web_core.search.runner as mod
+
         mock_res_info = MagicMock()
         mock_res_info.returncode = 0
 
@@ -1082,7 +1083,9 @@ class TestStartDockerSearxng:
 
         with (
             patch("shutil.which", return_value="/usr/bin/docker"),
-            patch("subprocess.run", side_effect=[mock_res_info, mock_res_ps, mock_res_rm_init, mock_res_rm_cleanup]) as mock_run,
+            patch(
+                "subprocess.run", side_effect=[mock_res_info, mock_res_ps, mock_res_rm_init, mock_res_rm_cleanup]
+            ) as mock_run,
             patch("web_core.search.runner._get_docker_lock", return_value=mock_lock),
             patch("web_core.search.runner._write_secure_text"),
             patch("subprocess.Popen", return_value=mock_popen),
@@ -1101,6 +1104,7 @@ class TestStartDockerSearxng:
         ):
             url = await _start_docker_searxng(8888)
             assert url is None
+
 
 class TestSettingsTemplate:
     def test_template_has_placeholders(self):
