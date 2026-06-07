@@ -1,7 +1,10 @@
 import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from web_core.scraper.strategies.patchright_browser import PatchrightStrategy
+from web_core.scraper.strategies.patchright_browser import (
+    PatchrightConfig,
+    PatchrightStrategy,
+)
 
 NORMAL_HTML = "<html><body><h1>Hello World</h1></body></html>"
 CF_JS_CHALLENGE_HTML = "<html><body><title>just a moment...</title></body></html>"
@@ -176,7 +179,7 @@ class TestPatchrightStrategy:
 
     async def test_custom_timeout(self):
         provider, page = _make_mock_provider(NORMAL_HTML)
-        strategy = PatchrightStrategy(provider=provider, timeout=30.0)
+        strategy = PatchrightStrategy(provider=provider, config=PatchrightConfig(timeout=30.0))
 
         await strategy.fetch("https://example.com")
 
@@ -272,7 +275,7 @@ class TestPatchrightStrategy:
         page.content = AsyncMock(side_effect=content_side_effect)
         page.wait_for_load_state = AsyncMock(side_effect=TimeoutError("networkidle timeout"))
 
-        strategy = PatchrightStrategy(provider=provider, cf_wait=0.01)
+        strategy = PatchrightStrategy(provider=provider, config=PatchrightConfig(cf_wait=0.01))
         with patch("web_core.scraper.strategies.patchright_browser._CF_POLL_INTERVAL", 0.01):
             result = await strategy.fetch("https://managed-resolve-timeout.com")
 
