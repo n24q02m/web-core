@@ -397,3 +397,30 @@ async def test_infer_domain_extraction_protocol_less(monkeypatch):
         llm_caller=fake_caller,
     )
     assert result == {"content": "#c"}
+
+def test_parse_selector_json_valid():
+    text = json.dumps({"content": "#c", "title": ".t", "next_chapter": "a"})
+    assert selector_inference._parse_selector_json(text) == {"content": "#c", "title": ".t", "next_chapter": "a"}
+
+
+def test_parse_selector_json_extra_keys():
+    text = json.dumps({"content": "#c", "unrelated": "ignored"})
+    assert selector_inference._parse_selector_json(text) == {"content": "#c"}
+
+
+def test_parse_selector_json_non_string_values():
+    text = json.dumps({"content": 123, "title": None, "next_chapter": ["a"]})
+    assert selector_inference._parse_selector_json(text) == {}
+
+
+def test_parse_selector_json_malformed():
+    assert selector_inference._parse_selector_json("invalid { json") == {}
+
+
+def test_parse_selector_json_empty_string():
+    assert selector_inference._parse_selector_json("") == {}
+
+
+def test_parse_selector_json_none():
+    # text or "" handles None if passed (though type hint says str)
+    assert selector_inference._parse_selector_json(None) == {}

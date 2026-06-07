@@ -48,92 +48,59 @@ def _load_domain_cookies() -> dict[str, dict[str, str]]:
     cookies: dict[str, dict[str, str]] = {}
 
     # Load from environment variable to allow configuration of tokens/secrets
-    raw = os.environ.get("WEB_CORE_DOMAIN_COOKIES")
-    if raw:
+    env_cookies = os.environ.get("WEB_CORE_DOMAIN_COOKIES")
+    if env_cookies:
         try:
-            env_cookies = json.loads(raw)
-            if isinstance(env_cookies, dict):
-                for domain, domain_cookies in env_cookies.items():
-                    if isinstance(domain_cookies, dict):
-                        cookies[domain] = domain_cookies
-            else:
-                logger.warning("WEB_CORE_DOMAIN_COOKIES is not a JSON object")
-        except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse WEB_CORE_DOMAIN_COOKIES: {e}")
-        except Exception as e:
-            logger.warning(f"Unexpected error loading WEB_CORE_DOMAIN_COOKIES: {e}")
+            cookies = json.loads(env_cookies)
+        except json.JSONDecodeError:
+            logger.error("Failed to parse WEB_CORE_DOMAIN_COOKIES JSON")
 
     return cookies
 
 
-# Domain cookies for sites requiring specific cookies (e.g., age verification)
-# Loaded from environment to avoid hardcoding secrets in the source code.
-DOMAIN_COOKIES: dict[str, dict[str, str]] = _load_domain_cookies()
-
-# Built-in domain configs for known sites — saves LLM calls
+# Hardcoded fallback selectors for common domains.
+# Inverted: {domain: {key: selector}}
 DOMAIN_CONFIGS: dict[str, dict[str, str]] = {
     "ncode.syosetu.com": {
         "content": "#novel_honbun",
-        "title": ".novel_title, .novel_subtitle",
-        "next_chapter": "a.novelview_pager-next",
+        "title": ".novel_subtitle",
+        "next_chapter": ".novel_bn a:last-child",
     },
     "kakuyomu.jp": {
         "content": ".widget-episodeBody",
         "title": ".widget-episodeTitle",
-        "next_chapter": "a[rel='next']",
-    },
-    "www.pixiv.net": {
-        "content": ".novel-content",
-        "title": ".work-info__title",
-    },
-    "mangadex.org": {
-        "content": ".md-chapter-page img",
-        "title": ".manga-title",
+        "next_chapter": "#contentMain-readNextEpisode",
     },
 }
 
-# Pre-compile wildcard patterns for fast lookup
+# Regex-based wildcard configs for domains that share structure (e.g. blog networks)
 _WILDCARD_CONFIGS: list[tuple[re.Pattern[str], dict[str, str]]] = [
-    (re.compile(re.escape(pattern).replace(r"\*", r"[^.]*") + r"\Z"), config)
-    for pattern, config in DOMAIN_CONFIGS.items()
-    if "*" in pattern
+    (
+        re.compile(r".*\.fanbox\.cc$"),
+        {
+            "content": "[class*='PostContent__StyledBody']",
+            "title": "h1",
+        },
+    ),
 ]
 
-# Prompt cho LLM infer selectors tu HTML
-_INFER_SELECTORS_PROMPT = """\
-You are a CSS selector expert. Analyze this HTML and extract the best CSS selectors.
+# Domain-specific cookies (e.g. session tokens or age-gate bypass)
+DOMAIN_COOKIES = _load_domain_cookies()
 
-URL: {url}
-HTML (truncated to first 5000 chars):
-```html
+_INFER_SELECTORS_PROMPT = """You are an expert web scraping agent.
+Given the HTML structure of a page from {url}, infer the CSS selectors for the following fields:
+- content: the main article or story text
+- title: the specific page or chapter title
+- next_chapter: the link to the next part of the story (if present)
+
+Respond ONLY with a JSON object containing these keys. If a field cannot be found, omit it.
+HTML:
 {html_snippet}
-```
-
-Return JSON with CSS selectors for:
-- "content": the main content area (article body, novel text, manga images)
-- "title": the page/chapter title
-- "next_chapter": link to next chapter (if pagination exists)
-
-Rules:
-- Prefer ID selectors (#id) over class selectors (.class)
-- Avoid generic selectors like "div", "p", "span" alone
-- For manga/image pages, select the image container
-- Return ONLY valid JSON, no explanation
-
-Example response:
-{{"content": "#novel_honbun", "title": ".novel_title", "next_chapter": "a.next"}}"""
+"""
 
 
 def get_domain_selectors(url: str) -> dict[str, str] | None:
-    """Return built-in selectors for a known domain, or None.
-
-    Also injects domain-specific cookies into selectors["cookies"]
-    if the domain requires them (session tokens supplied via env per
-    DOMAIN_COOKIES — caller responsible for obtaining user consent).
-
-    Logs domain usage for analytics — enabling the Tiered Scraping
-    feedback loop (track unknown domains → hardcode popular ones).
-    """
+    """Get hardcoded selectors for a domain, or None if unknown."""
     # Fast path domain extraction (~3.5x faster than urlparse)
     if url.startswith("//"):
         domain = url[2:].partition("/")[0].partition("?")[0].partition("#")[0].lower()
@@ -142,17 +109,11 @@ def get_domain_selectors(url: str) -> dict[str, str] | None:
         domain_part = rest if sep else url
         domain = domain_part.partition("/")[0].partition("?")[0].partition("#")[0].lower()
 
-    selectors: dict[str, str] | None = None
-
     # Exact match
-    if domain in DOMAIN_CONFIGS:
-        selectors = DOMAIN_CONFIGS[domain].copy()
-        logger.info(
-            "domain_selector_hit",
-            extra={"domain": domain, "tier": "hardcoded", "url": url},
-        )
-    else:
-        # Wildcard match (e.g. example*.com pattern in DOMAIN_CONFIGS)
+    selectors = DOMAIN_CONFIGS.get(domain)
+
+    # Wildcard match
+    if selectors is None:
         for pattern_re, config in _WILDCARD_CONFIGS:
             if pattern_re.match(domain):
                 selectors = config.copy()
@@ -191,7 +152,11 @@ def _build_prompt(url: str, html_content: str) -> str:
 
 def _parse_selector_json(text: str) -> dict[str, str]:
     """Parse a JSON response into a whitelisted selector dict."""
-    result = json.loads(text or "")
+    try:
+        result = json.loads(text or "")
+    except json.JSONDecodeError:
+        return {}
+
     selectors: dict[str, str] = {}
     if isinstance(result, dict):
         for key in ("content", "title", "next_chapter"):
@@ -403,11 +368,7 @@ async def infer_selectors_with_llm(
 
     # llm_caller may return a dict directly (already parsed) or raw JSON text.
     if isinstance(raw, str):
-        try:
-            selectors = _parse_selector_json(raw)
-        except json.JSONDecodeError as e:
-            logger.warning("LLM selector inference returned invalid JSON: %s", e)
-            return {}
+        selectors = _parse_selector_json(raw)
     elif isinstance(raw, dict):
         selectors = {k: v for k, v in raw.items() if k in {"content", "title", "next_chapter"} and isinstance(v, str)}
     else:
