@@ -314,6 +314,32 @@ class TestFindAvailablePort:
         assert isinstance(port, int)
         assert port >= 18888
 
+    def test_invalid_start_port_falls_back(self):
+        """Falls back to dynamic range if start_port is invalid."""
+        # Using a privileged port should trigger fallback to 49152+
+        port = _find_available_port(80, max_tries=50)
+        assert 49152 <= port <= 65535
+
+    def test_socket_instantiation_fails_continues(self):
+        """Continues to next port if socket creation fails."""
+        with patch("socket.socket") as mock_socket_cls:
+            # First call fails on instantiation, second call succeeds
+            mock_socket = MagicMock()
+            mock_socket.__enter__ = MagicMock(return_value=mock_socket)
+            mock_socket.__exit__ = MagicMock(return_value=False)
+
+            mock_socket_cls.side_effect = [OSError("Socket creation failed"), mock_socket]
+
+            port = _find_available_port(18888, max_tries=50)
+            assert isinstance(port, int)
+            assert mock_socket_cls.call_count == 2
+
+    def test_requested_range_at_boundary(self):
+        """Handles start_port near the upper boundary of 65535."""
+        # This covers the 'if (start_port + i) <= 65535' condition
+        port = _find_available_port(65530, max_tries=20)
+        assert 1024 <= port <= 65535
+
 
 # ===========================================================================
 # _wait_for_service
