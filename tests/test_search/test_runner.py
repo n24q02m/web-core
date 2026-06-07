@@ -152,7 +152,6 @@ class TestWriteSecureText:
             assert (test_file.stat().st_mode & 0o777) == 0o600
 
 
-
 class TestDiscovery:
     def test_read_discovery_no_file(self, tmp_discovery):
         """Returns None when discovery file doesn't exist."""
