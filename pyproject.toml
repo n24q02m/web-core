@@ -22,9 +22,9 @@ classifiers = [
 dependencies = [
     "httpx>=0.28.1",
     "curl-cffi>=0.15.0",
-    "crawl4ai>=0.8.6",
-    "langgraph>=1.2.2",
-    "patchright>=1.60.0",
+    "crawl4ai>=0.8.9",
+    "langgraph>=1.2.4",
+    "patchright>=1.60.1",
     "browserforge>=1.2.4",
     "capsolver>=1.0.7",
     "pydantic>=2.12.5",
@@ -38,8 +38,8 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "pytest-timeout>=2.4.0",
-    "ruff>=0.15.15",
-    "ty>=0.0.40",
+    "ruff>=0.15.16",
+    "ty>=0.0.44",
 ]
 
 [project.urls]
