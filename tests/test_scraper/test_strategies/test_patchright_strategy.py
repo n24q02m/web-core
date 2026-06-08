@@ -1,7 +1,20 @@
 import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from web_core.scraper.strategies.patchright_browser import PatchrightStrategy
+
+
+@pytest.fixture(autouse=True)
+def mock_is_safe_url_all():
+    with (
+        patch("web_core.scraper.strategies.patchright_browser.is_safe_url", return_value=True),
+        patch("web_core.scraper.strategies.captcha.is_safe_url", return_value=True),
+        patch("web_core.scraper.strategies.headless.is_safe_url", return_value=True),
+    ):
+        yield
+
 
 NORMAL_HTML = "<html><body><h1>Hello World</h1></body></html>"
 CF_JS_CHALLENGE_HTML = "<html><body><title>just a moment...</title></body></html>"

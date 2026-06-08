@@ -4,8 +4,20 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from web_core.scraper.base import BaseStrategy, ScrapingResult
 from web_core.scraper.strategies.captcha import CaptchaStrategy
+
+
+@pytest.fixture(autouse=True)
+def mock_is_safe_url_all():
+    with (
+        patch("web_core.scraper.strategies.patchright_browser.is_safe_url", return_value=True),
+        patch("web_core.scraper.strategies.captcha.is_safe_url", return_value=True),
+        patch("web_core.scraper.strategies.headless.is_safe_url", return_value=True),
+    ):
+        yield
 
 
 class MockFallbackStrategy(BaseStrategy):

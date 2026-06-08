@@ -9,6 +9,16 @@ import pytest
 from web_core.scraper.strategies.headless import HeadlessStrategy
 
 
+@pytest.fixture(autouse=True)
+def mock_is_safe_url_all():
+    with (
+        patch("web_core.scraper.strategies.patchright_browser.is_safe_url", return_value=True),
+        patch("web_core.scraper.strategies.captcha.is_safe_url", return_value=True),
+        patch("web_core.scraper.strategies.headless.is_safe_url", return_value=True),
+    ):
+        yield
+
+
 class TestHeadlessStrategy:
     """Test Crawl4AI headless scraping strategy."""
 
