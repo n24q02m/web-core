@@ -236,6 +236,18 @@ class TestApplyDomainCap:
         result = _apply_domain_cap(items)
         assert len(result) == _MAX_PER_DOMAIN
 
+    def test_none_url_treated_as_empty(self):
+        """None url value should not crash and be treated as empty."""
+        items = [{"url": None}, {"url": "https://a.com/1"}]
+        result = _apply_domain_cap(items)
+        assert len(result) == 2
+
+    def test_missing_urls_are_capped(self):
+        """Multiple items without a url key are correctly limited to _MAX_PER_DOMAIN."""
+        items = [{"title": f"no url {i}"} for i in range(_MAX_PER_DOMAIN + 2)]
+        result = _apply_domain_cap(items)
+        assert len(result) == _MAX_PER_DOMAIN
+
 
 class TestSearch:
     """Test the main search function."""
