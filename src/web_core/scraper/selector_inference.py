@@ -124,6 +124,15 @@ Example response:
 {{"content": "#novel_honbun", "title": ".novel_title", "next_chapter": "a.next"}}"""
 
 
+def _extract_domain(url: str) -> str:
+    """Fast path domain extraction (~3.5x faster than urlparse)."""
+    if url.startswith("//"):
+        return url[2:].partition("/")[0].partition("?")[0].partition("#")[0].lower()
+    _, sep, rest = url.partition("://")
+    domain_part = rest if sep else url
+    return domain_part.partition("/")[0].partition("?")[0].partition("#")[0].lower()
+
+
 def get_domain_selectors(url: str) -> dict[str, str] | None:
     """Return built-in selectors for a known domain, or None.
 
@@ -134,13 +143,7 @@ def get_domain_selectors(url: str) -> dict[str, str] | None:
     Logs domain usage for analytics — enabling the Tiered Scraping
     feedback loop (track unknown domains → hardcode popular ones).
     """
-    # Fast path domain extraction (~3.5x faster than urlparse)
-    if url.startswith("//"):
-        domain = url[2:].partition("/")[0].partition("?")[0].partition("#")[0].lower()
-    else:
-        _, sep, rest = url.partition("://")
-        domain_part = rest if sep else url
-        domain = domain_part.partition("/")[0].partition("?")[0].partition("#")[0].lower()
+    domain = _extract_domain(url)
 
     selectors: dict[str, str] | None = None
 
@@ -199,6 +202,37 @@ def _parse_selector_json(text: str) -> dict[str, str]:
             if isinstance(value, str):
                 selectors[key] = value
     return selectors
+
+
+def _process_llm_raw_output(raw: Any) -> dict[str, str]:
+    """Process raw LLM output (JSON string or dict) into whitelisted selectors."""
+    if isinstance(raw, str):
+        try:
+            return _parse_selector_json(raw)
+        except json.JSONDecodeError as e:
+            logger.warning("LLM selector inference returned invalid JSON: %s", e)
+            return {}
+    if isinstance(raw, dict):
+        return {k: v for k, v in raw.items() if k in {"content", "title", "next_chapter"} and isinstance(v, str)}
+    if raw is not None:
+        logger.warning("LLM selector inference returned unexpected type: %s", type(raw))
+    return {}
+
+
+async def _execute_llm_inference(
+    llm_caller: LLMCaller,
+    prompt: str,
+    html_content: str,
+) -> Any:
+    """Execute LLM call and handle common SDK/network errors."""
+    try:
+        return await llm_caller(prompt, html_content)
+    except ImportError as e:
+        logger.debug("selector_inference: provider SDK not installed (%s), skipping", e)
+        return None
+    except Exception as e:
+        logger.warning("LLM selector inference failed: %s", e)
+        return None
 
 
 def _detect_provider_from_env() -> str | None:
@@ -391,36 +425,13 @@ async def infer_selectors_with_llm(
         return {}
 
     prompt = _build_prompt(url, html_content)
+    raw = await _execute_llm_inference(llm_caller, prompt, html_content)
+    selectors = _process_llm_raw_output(raw)
 
-    try:
-        raw = await llm_caller(prompt, html_content)
-    except ImportError as e:
-        logger.debug("selector_inference: provider SDK not installed (%s), skipping", e)
-        return {}
-    except Exception as e:
-        logger.warning("LLM selector inference failed: %s", e)
+    if not selectors:
         return {}
 
-    # llm_caller may return a dict directly (already parsed) or raw JSON text.
-    if isinstance(raw, str):
-        try:
-            selectors = _parse_selector_json(raw)
-        except json.JSONDecodeError as e:
-            logger.warning("LLM selector inference returned invalid JSON: %s", e)
-            return {}
-    elif isinstance(raw, dict):
-        selectors = {k: v for k, v in raw.items() if k in {"content", "title", "next_chapter"} and isinstance(v, str)}
-    else:
-        logger.warning("LLM selector inference returned unexpected type: %s", type(raw))
-        return {}
-
-    # Fast path domain extraction (~3.5x faster than urlparse)
-    if url.startswith("//"):
-        domain = url[2:].partition("/")[0].partition("?")[0].partition("#")[0].lower()
-    else:
-        _, sep, rest = url.partition("://")
-        domain_part = rest if sep else url
-        domain = domain_part.partition("/")[0].partition("?")[0].partition("#")[0].lower()
+    domain = _extract_domain(url)
     provider_name = getattr(llm_caller, "__web_core_provider__", provider or "custom")
     resolved_model = getattr(llm_caller, "__web_core_model__", model)
     logger.info(
