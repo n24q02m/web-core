@@ -154,6 +154,27 @@ class CaptchaStrategy(BaseStrategy):
 
         return None
 
+    async def _inject_and_submit_turnstile(self, page: Any, token: str) -> None:
+        """Inject Turnstile token and submit the challenge form."""
+        await page.evaluate(
+            """(token) => {
+            // Set CF Turnstile response token
+            const inputs = document.querySelectorAll('[name="cf-turnstile-response"]');
+            inputs.forEach(el => { el.value = token; });
+            // Try calling the turnstile callback if present
+            if (window.turnstile && window.turnstile.getResponse) {
+                const widgets = document.querySelectorAll('[id^="cf-turnstile"]');
+                widgets.forEach(w => {
+                    try { window.turnstile.execute(w.id, { response: token }); } catch(e) {}
+                });
+            }
+            // Submit first form if present
+            const form = document.querySelector('form#challenge-form, form[action*="cdn-cgi"]');
+            if (form) form.submit();
+        }""",
+            token,
+        )
+
     async def _solve_cf_turnstile_via_patchright(self, url: str) -> ScrapingResult:
         """Use Patchright to load page, extract Turnstile sitekey via Python API,
         solve with CapSolver, inject token back, and return final content."""
@@ -196,24 +217,7 @@ class CaptchaStrategy(BaseStrategy):
                     )
 
                 # Inject token and submit
-                await page.evaluate(
-                    """(token) => {
-                    // Set CF Turnstile response token
-                    const inputs = document.querySelectorAll('[name="cf-turnstile-response"]');
-                    inputs.forEach(el => { el.value = token; });
-                    // Try calling the turnstile callback if present
-                    if (window.turnstile && window.turnstile.getResponse) {
-                        const widgets = document.querySelectorAll('[id^="cf-turnstile"]');
-                        widgets.forEach(w => {
-                            try { window.turnstile.execute(w.id, { response: token }); } catch(e) {}
-                        });
-                    }
-                    // Submit first form if present
-                    const form = document.querySelector('form#challenge-form, form[action*="cdn-cgi"]');
-                    if (form) form.submit();
-                }""",
-                    token,
-                )
+                await self._inject_and_submit_turnstile(page, token)
 
                 # Wait for navigation to actual page
                 with contextlib.suppress(Exception):
