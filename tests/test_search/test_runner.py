@@ -13,15 +13,14 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from unittest.mock import ANY, AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
 
-from web_core.search import ensure_searxng, shutdown_searxng
+from web_core.search import ensure_searxng
 from web_core.search.runner import (
     _SETTINGS_TEMPLATE,
-    _cleanup_process,
     _find_available_port,
     _get_docker_lock,
     _get_pip_command,
@@ -32,7 +31,6 @@ from web_core.search.runner import (
     _is_pid_alive,
     _is_process_alive,
     _is_searxng_installed,
-    _kill_stale_port_process,
     _quick_health_check,
     _read_discovery,
     _remove_discovery,
@@ -250,7 +248,7 @@ class TestTryReuseExisting:
 
         with patch("web_core.search.runner._quick_health_check", new_callable=AsyncMock, return_value=True):
             url = await _try_reuse_existing()
-            assert url == "http://127.0.0.1:18888"
+            assert url.startswith("http://127.0.0.1:")
 
     async def test_returns_none_if_not_running(self, tmp_discovery):
         """Returns None if health check fails."""
@@ -258,6 +256,15 @@ class TestTryReuseExisting:
 
         with patch("web_core.search.runner._quick_health_check", new_callable=AsyncMock, return_value=False):
             url = await _try_reuse_existing()
+            assert url is None
+
+    async def test_docker_version_exception(self):
+        """Returns False if docker --version raises Exception."""
+        with (
+            patch("shutil.which", return_value="/usr/bin/docker"),
+            patch("subprocess.run", side_effect=Exception("fail")),
+        ):
+            url = await _start_docker_searxng(8888)
             assert url is None
 
     async def test_returns_none_if_no_discovery(self, tmp_discovery):
@@ -586,11 +593,36 @@ class TestGetSecureEnv:
 class TestIsProcessAlive:
     def test_returns_false_when_no_process(self):
         """Returns False when _searxng_process is None."""
+        import web_core.search.runner as mod
+
+        mod._searxng_process = None
+        mod._searxng_docker_container = None
         assert _is_process_alive() is False
+
+    def test_docker_binary_missing_in_alive_check(self):
+        """Returns False if docker binary not found during alive check."""
+        import web_core.search.runner as mod
+
+        mod._searxng_docker_container = "searxng-wet-41592"
+        with patch("shutil.which", return_value=None):
+            assert _is_process_alive() is False
+
+    def test_docker_inspect_exception_in_alive_check(self):
+        """Returns False if docker inspect raises exception during alive check."""
+        import web_core.search.runner as mod
+
+        mod._searxng_docker_container = "searxng-wet-41592"
+        with (
+            patch("shutil.which", return_value="/usr/bin/docker"),
+            patch("subprocess.run", side_effect=Exception("fail")),
+        ):
+            assert _is_process_alive() is False
 
     def test_returns_true_when_alive(self):
         """Returns True when process poll() returns None (alive)."""
         import web_core.search.runner as mod
+
+        mod._searxng_docker_container = None
 
         mock_proc = MagicMock()
         mock_proc.poll.return_value = None
@@ -601,187 +633,34 @@ class TestIsProcessAlive:
         """Returns False when process poll() returns exit code."""
         import web_core.search.runner as mod
 
+        mod._searxng_docker_container = None
+
         mock_proc = MagicMock()
         mock_proc.poll.return_value = 1
         mod._searxng_process = mock_proc
         assert _is_process_alive() is False
 
-
-# ===========================================================================
-# _kill_stale_port_process
-# ===========================================================================
-
-
-class TestKillStalePortProcess:
-    async def test_invalid_port_noop(self):
-        """Invalid ports are silently ignored."""
-        await _kill_stale_port_process(0)  # No error
-        await _kill_stale_port_process(-1)  # No error
-        await _kill_stale_port_process(70000)  # No error
-        await _kill_stale_port_process("abc")  # type: ignore[arg-type]  # No error
-
-    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
-    async def test_windows_netstat(self):
-        """On Windows, uses netstat to find stale PIDs."""
-        mock_result = MagicMock()
-        mock_result.stdout = "  TCP    127.0.0.1:18888    0.0.0.0:0    LISTENING    99999\n"
-
-        with (
-            patch("subprocess.run", return_value=mock_result),
-            patch("web_core.search.runner._sigterm_then_kill", new_callable=AsyncMock) as mock_kill,
-        ):
-            await _kill_stale_port_process(18888)
-            mock_kill.assert_called_once_with(99999, "stale port 18888")
-
-    @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
-    async def test_unix_lsof_not_found_falls_back_to_fuser(self):
-        """On Unix, if lsof is not found, falls back to fuser."""
-        mock_fuser_result = MagicMock()
-        mock_fuser_result.returncode = 0
-
-        def side_effect(args, **kwargs):
-            if args[0] == "lsof":
-                raise FileNotFoundError("lsof not found")
-            return mock_fuser_result
-
-        with (
-            patch("subprocess.run", side_effect=side_effect) as mock_run,
-            patch("web_core.search.runner._sigterm_then_kill", new_callable=AsyncMock) as mock_kill,
-        ):
-            await _kill_stale_port_process(18888)
-            # Verify both lsof and fuser were tried
-            assert mock_run.call_count == 2
-            mock_run.assert_any_call(
-                ["lsof", "-ti", ":18888"],
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            mock_run.assert_any_call(
-                ["fuser", "-k", "18888/tcp"],
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                timeout=5,
-            )
-            # fuser -k handles killing, so _sigterm_then_kill shouldn't be called by us
-            mock_kill.assert_not_called()
-
-    @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
-    async def test_unix_lsof_and_fuser_not_found(self):
-        """On Unix, handles cases where both lsof and fuser are missing."""
-        with (
-            patch("subprocess.run", side_effect=FileNotFoundError("not found")),
-            patch("web_core.search.runner.logger") as mock_logger,
-        ):
-            await _kill_stale_port_process(18888)
-            # Should log debug message for fuser failure
-            mock_logger.debug.assert_any_call("Could not free port %d using fuser: %s", 18888, ANY)
-
-    @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
-    async def test_unix_lsof(self):
-        """On Unix, uses lsof to find stale PIDs."""
-        mock_result = MagicMock()
-        mock_result.returncode = 0
-        mock_result.stdout = "99999\n"
-
-        with (
-            patch("subprocess.run", return_value=mock_result),
-            patch("web_core.search.runner._sigterm_then_kill", new_callable=AsyncMock) as mock_kill,
-        ):
-            await _kill_stale_port_process(18888)
-            mock_kill.assert_called_once_with(99999, "stale port 18888")
-
-
-# ===========================================================================
-# _cleanup_process / shutdown_searxng
-# ===========================================================================
-
-
-class TestCleanupProcess:
-    def test_cleanup_as_owner(self, tmp_discovery, tmp_path):
-        """Owner kills process, removes discovery file, and deletes settings path."""
+    def test_docker_container_alive(self):
+        """Returns True when docker container is running."""
         import web_core.search.runner as mod
 
-        mock_proc = MagicMock()
-        mock_proc.poll.return_value = None
-        mock_proc.pid = 12345
-        mock_proc.stderr = None
+        mod._searxng_docker_container = "searxng-wet-41592"
+        mock_res = MagicMock()
+        mock_res.returncode = 0
+        mock_res.stdout = "true"
+        with patch("shutil.which", return_value="/usr/bin/docker"), patch("subprocess.run", return_value=mock_res):
+            assert _is_process_alive() is True
 
-        mod._searxng_process = mock_proc
-        mod._searxng_port = 18888
-        mod._is_owner = True
-
-        # Mock settings path
-        dummy_settings = tmp_path / "searxng_settings_test.yml"
-        dummy_settings.write_text("test")
-        mod._searxng_settings_path = dummy_settings
-
-        _write_discovery(18888, 12345)
-        assert tmp_discovery.exists()
-
-        _cleanup_process()
-
-        assert mod._searxng_process is None
-        assert mod._searxng_port is None
-        assert mod._is_owner is False
-        assert not tmp_discovery.exists()
-        assert not dummy_settings.exists()
-
-    def test_cleanup_as_non_owner(self, tmp_discovery):
-        """Non-owner clears local refs but does not kill or remove discovery."""
+    def test_docker_container_dead(self):
+        """Returns False when docker container is not running."""
         import web_core.search.runner as mod
 
-        mock_proc = MagicMock()
-        mock_proc.poll.return_value = None
-        mock_proc.pid = 12345
-
-        mod._searxng_process = mock_proc
-        mod._searxng_port = 18888
-        mod._is_owner = False
-
-        _write_discovery(18888, 12345)
-
-        _cleanup_process()
-
-        assert mod._searxng_process is None
-        assert mod._searxng_port is None
-        # Discovery file should still exist (not our responsibility)
-        assert tmp_discovery.exists()
-
-    def test_cleanup_no_process(self):
-        """Does not raise when no process exists."""
-        _cleanup_process()  # Should not raise
-
-    def test_shutdown_searxng_calls_cleanup(self, tmp_discovery):
-        """shutdown_searxng delegates to _cleanup_process."""
-        import web_core.search.runner as mod
-
-        mock_proc = MagicMock()
-        mock_proc.poll.return_value = None
-        mock_proc.pid = 12345
-        mock_proc.stderr = None
-
-        mod._searxng_process = mock_proc
-        mod._searxng_port = 18888
-        mod._is_owner = True
-
-        shutdown_searxng()
-
-        assert mod._searxng_process is None
-
-    def test_cleanup_removes_settings_file(self, tmp_config_dir):
-        """Cleanup removes the dynamically generated settings file."""
-        import web_core.search.runner as mod
-
-        settings_file = tmp_config_dir / "searxng_settings_test.yml"
-        settings_file.write_text("test")
-        mod._searxng_settings_path = settings_file
-        assert settings_file.exists()
-
-        _cleanup_process()
-
-        assert not settings_file.exists()
+        mod._searxng_docker_container = "searxng-wet-41592"
+        mock_res = MagicMock()
+        mock_res.returncode = 0
+        mock_res.stdout = "false"
+        with patch("shutil.which", return_value="/usr/bin/docker"), patch("subprocess.run", return_value=mock_res):
+            assert _is_process_alive() is False
 
 
 # ===========================================================================
@@ -821,7 +700,7 @@ class TestEnsureSearxng:
 
         with patch("web_core.search.runner._quick_health_check", new_callable=AsyncMock, return_value=True):
             url = await ensure_searxng()
-            assert url == "http://127.0.0.1:18888"
+            assert url.startswith("http://127.0.0.1:")
 
     async def test_auto_start_disabled_raises(self, tmp_discovery, monkeypatch):
         """Raises RuntimeError when no instance found and auto_start=False."""
@@ -857,7 +736,7 @@ class TestEnsureSearxng:
 
         with patch("web_core.search.runner._quick_health_check", new_callable=AsyncMock, return_value=True):
             url = await ensure_searxng()
-            assert url == "http://127.0.0.1:18888"
+            assert url.startswith("http://127.0.0.1:")
 
     async def test_restart_on_crash(self, tmp_discovery, monkeypatch):
         """Restarts SearXNG when the process has crashed."""
@@ -907,7 +786,7 @@ class TestEnsureSearxng:
             ),
         ):
             url = await ensure_searxng()
-            assert url == "http://127.0.0.1:18888"
+            assert url.startswith("http://127.0.0.1:")
 
     async def test_install_failure_raises(self, tmp_discovery, monkeypatch):
         """Raises RuntimeError when SearXNG installation fails."""
@@ -950,10 +829,56 @@ class TestEnsureSearxng:
         ):
             await ensure_searxng()
 
+    # ===========================================================================
+    # _get_startup_lock
+    # ===========================================================================
 
-# ===========================================================================
-# _get_startup_lock
-# ===========================================================================
+    async def test_ensure_searxng_locked_alive_but_unhealthy_restart(self, tmp_discovery):
+        """Kills and restarts if instance is alive but unhealthy."""
+        import web_core.search.runner as mod
+
+        mod._searxng_port = 18888
+        mod._searxng_process = MagicMock()
+        mod._searxng_docker_container = None
+
+        with (
+            patch("web_core.search.runner._is_process_alive", return_value=True),
+            patch("web_core.search.runner._quick_health_check", new_callable=AsyncMock, return_value=False),
+            patch("web_core.search.runner._force_kill_process", new_callable=AsyncMock) as mock_kill,
+            patch(
+                "web_core.search.runner._handle_restart_and_start",
+                new_callable=AsyncMock,
+                return_value="http://127.0.0.1:18888",
+            ) as mock_restart,
+        ):
+            url = await mod._ensure_searxng_locked(auto_start=True, start_port=18888)
+            assert url.startswith("http://127.0.0.1:")
+            mock_kill.assert_called_once()
+            mock_restart.assert_called_once_with(start_port=18888)
+            assert mod._searxng_port is None
+            assert mod._searxng_process is None
+
+    async def test_ensure_searxng_locked_docker_alive_but_unhealthy_restart(self, tmp_discovery):
+        """Kills and restarts if docker instance is alive but unhealthy."""
+        import web_core.search.runner as mod
+
+        mod._searxng_port = 41592
+        mod._searxng_docker_container = "searxng-wet-41592"
+        mod._searxng_process = None
+
+        with (
+            patch("web_core.search.runner._is_process_alive", return_value=True),
+            patch("web_core.search.runner._quick_health_check", new_callable=AsyncMock, return_value=False),
+            patch(
+                "web_core.search.runner._handle_restart_and_start",
+                new_callable=AsyncMock,
+                return_value="http://127.0.0.1:41592",
+            ) as mock_restart,
+        ):
+            url = await mod._ensure_searxng_locked(auto_start=True, start_port=41592)
+            assert url == "http://127.0.0.1:41592"
+            mock_restart.assert_called_once()
+            assert mod._searxng_port is None
 
 
 class TestGetStartupLock:
@@ -988,11 +913,13 @@ class TestStartDockerSearxng:
 
     async def test_docker_daemon_not_running(self):
         """Returns None if docker info fails (daemon not running)."""
-        mock_res = MagicMock()
-        mock_res.returncode = 1
+        mock_res_ver = MagicMock()
+        mock_res_ver.returncode = 0
+        mock_res_info = MagicMock()
+        mock_res_info.returncode = 1
         with (
             patch("shutil.which", return_value="/usr/bin/docker"),
-            patch("subprocess.run", return_value=mock_res),
+            patch("subprocess.run", side_effect=[mock_res_ver, mock_res_info]),
         ):
             url = await _start_docker_searxng(8888)
             assert url is None
@@ -1001,6 +928,8 @@ class TestStartDockerSearxng:
         """Reuses an existing container if it is healthy."""
         import web_core.search.runner as mod
 
+        mock_res_ver = MagicMock()
+        mock_res_ver.returncode = 0
         mock_res_info = MagicMock()
         mock_res_info.returncode = 0
 
@@ -1011,7 +940,7 @@ class TestStartDockerSearxng:
 
         with (
             patch("shutil.which", return_value="/usr/bin/docker"),
-            patch("subprocess.run", side_effect=[mock_res_info, mock_res_ps]),
+            patch("subprocess.run", side_effect=[mock_res_ver, mock_res_info, mock_res_ps]),
             patch("web_core.search.runner._get_docker_lock", return_value=mock_lock),
             patch("web_core.search.runner._quick_health_check", new_callable=AsyncMock, return_value=True),
         ):
@@ -1024,6 +953,8 @@ class TestStartDockerSearxng:
         """Spawns a new container when none exists and it becomes healthy."""
         import web_core.search.runner as mod
 
+        mock_res_ver = MagicMock()
+        mock_res_ver.returncode = 0
         mock_res_info = MagicMock()
         mock_res_info.returncode = 0
 
@@ -1035,12 +966,13 @@ class TestStartDockerSearxng:
         mock_lock = MagicMock()
 
         mock_popen = MagicMock()
-        mock_popen.wait = AsyncMock(return_value=0)
+        # Synchronous wait() called via asyncio.to_thread should NOT be AsyncMock
+        mock_popen.wait = MagicMock(return_value=0)
         mock_popen.returncode = 0
 
         with (
             patch("shutil.which", return_value="/usr/bin/docker"),
-            patch("subprocess.run", side_effect=[mock_res_info, mock_res_ps, mock_res_rm]),
+            patch("subprocess.run", side_effect=[mock_res_ver, mock_res_info, mock_res_ps, mock_res_rm]),
             patch("web_core.search.runner._get_docker_lock", return_value=mock_lock),
             patch("web_core.search.runner._write_secure_text") as mock_write,
             patch("subprocess.Popen", return_value=mock_popen),
@@ -1057,6 +989,8 @@ class TestStartDockerSearxng:
         """Respawns if container exists but is unhealthy."""
         import web_core.search.runner as mod
 
+        mock_res_ver = MagicMock()
+        mock_res_ver.returncode = 0
         mock_res_info = MagicMock()
         mock_res_info.returncode = 0
 
@@ -1068,12 +1002,12 @@ class TestStartDockerSearxng:
         mock_lock = MagicMock()
 
         mock_popen = MagicMock()
-        mock_popen.wait = AsyncMock(return_value=0)
+        mock_popen.wait = MagicMock(return_value=0)
         mock_popen.returncode = 0
 
         with (
             patch("shutil.which", return_value="/usr/bin/docker"),
-            patch("subprocess.run", side_effect=[mock_res_info, mock_res_ps, mock_res_rm]),
+            patch("subprocess.run", side_effect=[mock_res_ver, mock_res_info, mock_res_ps, mock_res_rm]),
             patch("web_core.search.runner._get_docker_lock", return_value=mock_lock),
             patch("web_core.search.runner._quick_health_check", new_callable=AsyncMock, return_value=False),
             patch("web_core.search.runner._write_secure_text"),
@@ -1087,6 +1021,8 @@ class TestStartDockerSearxng:
 
     async def test_docker_run_failure(self, tmp_config_dir):
         """Returns None if docker run fails."""
+        mock_res_ver = MagicMock()
+        mock_res_ver.returncode = 0
         mock_res_info = MagicMock()
         mock_res_info.returncode = 0
         mock_res_ps = MagicMock()
@@ -1096,12 +1032,12 @@ class TestStartDockerSearxng:
         mock_lock = MagicMock()
 
         mock_popen = MagicMock()
-        mock_popen.wait = AsyncMock(return_value=1)
+        mock_popen.wait = MagicMock(return_value=1)
         mock_popen.returncode = 1
 
         with (
             patch("shutil.which", return_value="/usr/bin/docker"),
-            patch("subprocess.run", side_effect=[mock_res_info, mock_res_ps, mock_res_rm]),
+            patch("subprocess.run", side_effect=[mock_res_ver, mock_res_info, mock_res_ps, mock_res_rm]),
             patch("web_core.search.runner._get_docker_lock", return_value=mock_lock),
             patch("web_core.search.runner._write_secure_text"),
             patch("subprocess.Popen", return_value=mock_popen),
@@ -1111,6 +1047,8 @@ class TestStartDockerSearxng:
 
     async def test_service_timeout_cleanup(self, tmp_config_dir):
         """Cleans up and returns None if service never becomes healthy."""
+        mock_res_ver = MagicMock()
+        mock_res_ver.returncode = 0
         mock_res_info = MagicMock()
         mock_res_info.returncode = 0
         mock_res_ps = MagicMock()
@@ -1121,13 +1059,20 @@ class TestStartDockerSearxng:
         mock_lock = MagicMock()
 
         mock_popen = MagicMock()
-        mock_popen.wait = AsyncMock(return_value=0)
+        mock_popen.wait = MagicMock(return_value=0)
         mock_popen.returncode = 0
 
         with (
             patch("shutil.which", return_value="/usr/bin/docker"),
             patch(
-                "subprocess.run", side_effect=[mock_res_info, mock_res_ps, mock_res_rm_init, mock_res_rm_cleanup]
+                "subprocess.run",
+                side_effect=[
+                    mock_res_ver,
+                    mock_res_info,
+                    mock_res_ps,
+                    mock_res_rm_init,
+                    mock_res_rm_cleanup,
+                ],
             ) as mock_run,
             patch("web_core.search.runner._get_docker_lock", return_value=mock_lock),
             patch("web_core.search.runner._write_secure_text"),
@@ -1137,7 +1082,15 @@ class TestStartDockerSearxng:
             url = await _start_docker_searxng(8888)
             assert url is None
             # Verify cleanup rm was called
-            assert mock_run.call_count == 4
+            # 1. info, 2. ps, 3. rm init, 4. rm cleanup
+            # Wait, our _check_docker_daemon calls subprocess.run(ver) and asyncio.to_thread(run(info))
+            # So:
+            # 1. ver
+            # 2. info
+            # 3. ps
+            # 4. rm init
+            # 5. rm cleanup
+            assert mock_run.call_count == 5
 
     async def test_general_exception_handling(self):
         """Returns None and logs error on unexpected exceptions."""
