@@ -314,17 +314,17 @@ class TestExtractTurnstileSitekey:
         mock_page.wait_for_selector = AsyncMock()
         mock_page.query_selector = AsyncMock(return_value=None)  # no data-sitekey element
 
-        mock_page.evaluate = AsyncMock(
-            side_effect=[
-                [
-                    "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/0x4AAAAAAADnPIDROrmt1Wwj/light/normal"
-                ],  # iframes
-                [],  # scripts (won't be called if iframe matches)
-            ]
+        mock_iframe = AsyncMock()
+        mock_iframe.get_attribute = AsyncMock(
+            return_value="https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/0x4AAAAAAADnPIDROrmt1Wwj/light/normal"
         )
+        mock_page.query_selector_all = AsyncMock(side_effect=[[mock_iframe], []])
+
+        mock_page.evaluate = AsyncMock(return_value=[])
 
         strategy = CaptchaStrategy(capsolver_api_key="key")
         result = await strategy._extract_turnstile_sitekey(mock_page)
+        assert result == "0x4AAAAAAADnPIDROrmt1Wwj"
         assert result == "0x4AAAAAAADnPIDROrmt1Wwj"
 
     async def test_extract_from_inline_script(self):
@@ -333,15 +333,15 @@ class TestExtractTurnstileSitekey:
         mock_page.wait_for_selector = AsyncMock()
         mock_page.query_selector = AsyncMock(return_value=None)
 
-        mock_page.evaluate = AsyncMock(
-            side_effect=[
-                ["https://example.com/no-sitekey"],  # iframes
-                ["turnstile.render({sitekey: '0x4AAAA_script_key'})"],  # scripts
-            ]
-        )
+        mock_iframe = AsyncMock()
+        mock_iframe.get_attribute = AsyncMock(return_value="https://example.com/no-sitekey")
+        mock_page.query_selector_all = AsyncMock(side_effect=[[mock_iframe], []])
+
+        mock_page.evaluate = AsyncMock(return_value=["turnstile.render({sitekey: '0x4AAAA_script_key'})"])
 
         strategy = CaptchaStrategy(capsolver_api_key="key")
         result = await strategy._extract_turnstile_sitekey(mock_page)
+        assert result == "0x4AAAA_script_key"
         assert result == "0x4AAAA_script_key"
 
     async def test_extract_returns_none_when_not_found(self):
@@ -373,15 +373,17 @@ class TestExtractTurnstileSitekey:
         mock_page.wait_for_selector = AsyncMock()
         mock_page.query_selector = AsyncMock(return_value=None)
 
-        mock_page.evaluate = AsyncMock(
-            side_effect=[
-                ["https://challenges.cloudflare.com/LongAlphanumericString12/light/normal"],
-                [],
-            ]
+        mock_iframe = AsyncMock()
+        mock_iframe.get_attribute = AsyncMock(
+            return_value="https://challenges.cloudflare.com/LongAlphanumericString12/light/normal"
         )
+        mock_page.query_selector_all = AsyncMock(side_effect=[[mock_iframe], []])
+
+        mock_page.evaluate = AsyncMock(return_value=[])
 
         strategy = CaptchaStrategy(capsolver_api_key="key")
         result = await strategy._extract_turnstile_sitekey(mock_page)
+        assert result == "LongAlphanumericString12"
         assert result == "LongAlphanumericString12"
 
 

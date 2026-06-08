@@ -30,6 +30,9 @@ _CF_MANAGED_STRINGS = [
 ]
 
 _CF_SITEKEY_PATTERNS = [
+    # Extract from Turnstile iframe src (0x-prefix or long alphanumeric)
+    re.compile(r"/cdn-cgi/challenge-platform/h/[^/]+/(0x[A-Za-z0-9]+)[/&]"),
+    re.compile(r"/cdn-cgi/challenge-platform/h/[^/]+/([A-Za-z0-9]{20,})/(?:light|dark|auto)"),
     re.compile(r'data-sitekey=["\']([0-9a-zA-Z_-]{20,})["\']'),
     re.compile(r"sitekey=([0-9a-zA-Z_-]{20,})"),
     re.compile(r'turnstileSiteKey["\s:]+["\']([0-9a-zA-Z_-]{20,})["\']'),
@@ -76,7 +79,12 @@ def extract_turnstile_sitekey(html: str) -> str | None:
     # Speeds up processing of normal pages significantly.
     # Performance Optimization: Using exact case checks avoids a full `html.lower()`
     # string allocation which is expensive for large non-challenge pages.
-    if "sitekey" not in html and "siteKey" not in html:
+    if (
+        "sitekey" not in html
+        and "siteKey" not in html
+        and "challenges.cloudflare.com" not in html
+        and "/cdn-cgi/challenge-platform/" not in html
+    ):
         return None
 
     for pattern in _CF_SITEKEY_PATTERNS:

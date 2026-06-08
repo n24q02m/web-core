@@ -164,3 +164,13 @@ def test_is_cf_challenge_true():
 def test_is_cf_challenge_false():
     assert is_cloudflare_challenge(NORMAL_HTML) is False
     assert is_cloudflare_challenge("") is False
+
+
+def test_extract_sitekey_from_iframe_src_0x():
+    html = '<iframe src="https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/g/0x4AAAAAAADnPIDROrmt1Wwj/light/normal"></iframe>'
+    assert extract_turnstile_sitekey(html) == "0x4AAAAAAADnPIDROrmt1Wwj"
+
+
+def test_extract_sitekey_from_iframe_src_long():
+    html = '<iframe src="https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/LongAlphanumericString123/dark/normal"></iframe>'
+    assert extract_turnstile_sitekey(html) == "LongAlphanumericString123"
