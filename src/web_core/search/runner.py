@@ -326,9 +326,9 @@ async def _try_reuse_existing() -> str | None:
         return None
 
     # Check if the SearXNG process is still alive
-    if not _is_pid_alive(pid):
+    if not await asyncio.to_thread(_is_pid_alive, pid):
         logger.debug("Discovery file points to dead process (PID=%d), cleaning up", pid)
-        _remove_discovery()
+        await asyncio.to_thread(_remove_discovery)
         return None
 
     # Health check the existing instance
@@ -337,7 +337,7 @@ async def _try_reuse_existing() -> str | None:
         return url
 
     logger.debug("Discovery file points to unhealthy instance at %s, cleaning up", url)
-    _remove_discovery()
+    await asyncio.to_thread(_remove_discovery)
     return None
 
 
