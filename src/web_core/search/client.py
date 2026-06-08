@@ -109,6 +109,77 @@ def _build_filtered_query(
     return " ".join(parts)
 
 
+def _prepare_search_params(
+    query: str,
+    categories: str,
+    time_range: str | None = None,
+    language: str | None = None,
+    include_domains: list[str] | None = None,
+    exclude_domains: list[str] | None = None,
+) -> dict[str, str]:
+    """Prepare parameters for the SearXNG search request."""
+    effective_query = _build_filtered_query(query, include_domains, exclude_domains)
+    params: dict[str, str] = {
+        "q": effective_query,
+        "format": "json",
+        "categories": categories,
+    }
+    if time_range and time_range in ("day", "week", "month", "year"):
+        params["time_range"] = time_range
+    if language:
+        params["language"] = language
+    return params
+
+
+def _process_search_results(
+    raw_results: list[dict[str, Any]],
+    max_results: int,
+) -> list[SearchResult]:
+    """Deduplicate, merge sources, and cap search results."""
+    # Deduplicate directly from raw results: merge sources, keep longest snippet
+    seen: dict[str, dict[str, Any]] = {}
+    for r in raw_results:
+        url = r.get("url", "")
+        norm_url = normalize_url(url)
+
+        source = r.get("engine", "")
+        snippet = r.get("content", "")
+        title = r.get("title", "")
+
+        if norm_url in seen:
+            existing = seen[norm_url]
+            if source:
+                existing["source"].add(source)
+            if len(snippet) > len(existing["snippet"]):
+                existing["snippet"] = snippet
+                if title:
+                    existing["title"] = title
+        else:
+            seen[norm_url] = {
+                "url": url,
+                "title": title,
+                "snippet": snippet,
+                "source": {source} if source else set(),
+            }
+
+    # Convert sets back to sorted strings
+    for value in seen.values():
+        value["source"] = ", ".join(sorted(value["source"]))
+
+    # Domain cap + final limit
+    capped = _apply_domain_cap(list(seen.values()))[:max_results]
+
+    return [
+        SearchResult(
+            url=r["url"],
+            title=r["title"],
+            snippet=r["snippet"],
+            source=r["source"],
+        )
+        for r in capped
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -159,23 +230,18 @@ async def search(
     SearchError
         On 4xx (non-retryable) or after all retries are exhausted.
     """
-    effective_query = _build_filtered_query(query, include_domains, exclude_domains)
-    params: dict[str, str] = {
-        "q": effective_query,
-        "format": "json",
-        "categories": categories,
-    }
-    if time_range and time_range in ("day", "week", "month", "year"):
-        params["time_range"] = time_range
-    if language:
-        params["language"] = language
+    params = _prepare_search_params(
+        query=query,
+        categories=categories,
+        time_range=time_range,
+        language=language,
+        include_domains=include_domains,
+        exclude_domains=exclude_domains,
+    )
 
     last_error: str | None = None
-
-    # SearXNG is a trusted local service — bypass SSRF protection.
-    # SSRF-safe client blocks localhost/private IPs by design, but SearXNG
-    # runs on localhost. External URL fetching still uses safe_httpx_client.
     client = _get_shared_client()
+
     for attempt in range(1, max_retries + 1):
         try:
             response = await client.get(
@@ -185,59 +251,12 @@ async def search(
             )
             response.raise_for_status()
             data = response.json()
-            results = data.get("results", [])[: max_results * 2]
-
-            # Deduplicate directly from raw results: merge sources, keep longest snippet
-            # Performance Optimization: Combining extraction and deduplication loops
-            # avoids creating an intermediate list of formatted dicts, saving ~25%
-            # processing time for large result sets.
-            seen: dict[str, dict[str, Any]] = {}
-            for r in results:
-                url = r.get("url", "")
-                norm_url = normalize_url(url)
-
-                source = r.get("engine", "")
-                snippet = r.get("content", "")
-                title = r.get("title", "")
-
-                if norm_url in seen:
-                    existing = seen[norm_url]
-                    if source:
-                        existing["source"].add(source)
-                    if len(snippet) > len(existing["snippet"]):
-                        existing["snippet"] = snippet
-                        if title:
-                            existing["title"] = title
-                else:
-                    seen[norm_url] = {
-                        "url": url,
-                        "title": title,
-                        "snippet": snippet,
-                        "source": {source} if source else set(),
-                    }
-
-            # Convert sets back to sorted strings
-            for value in seen.values():
-                value["source"] = ", ".join(sorted(value["source"]))
-
-            # Domain cap + final limit
-            capped = _apply_domain_cap(list(seen.values()))[:max_results]
-
-            return [
-                SearchResult(
-                    url=r["url"],
-                    title=r["title"],
-                    snippet=r["snippet"],
-                    source=r["source"],
-                )
-                for r in capped
-            ]
+            return _process_search_results(data.get("results", []), max_results)
 
         except httpx.HTTPStatusError as e:
             status = e.response.status_code
             last_error = f"HTTP {status}"
             if status < 500:
-                # 4xx errors are non-retryable
                 logger.warning("Non-retryable HTTP %d for query '%s'", status, query)
                 raise SearchError(query, last_error) from e
             logger.warning(
