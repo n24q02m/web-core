@@ -902,7 +902,15 @@ async def _check_docker_daemon(docker_bin: str) -> bool:
     """Check if Docker is installed and the daemon is running."""
     try:
         # Basic existence check
-        subprocess.run([docker_bin, "--version"], check=False, stdout=subprocess.DEVNULL)
+        await asyncio.to_thread(
+            subprocess.run,
+            [docker_bin, "--version"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=10,
+        )
     except Exception:
         return False
 

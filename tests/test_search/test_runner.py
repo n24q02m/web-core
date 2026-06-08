@@ -51,6 +51,8 @@ def _reset_module_state():
 
     mod._searxng_process = None
     mod._searxng_port = None
+    mod._searxng_docker_container = None
+    mod._searxng_settings_path = None
     mod._restart_count = 0
     mod._last_restart_time = 0.0
     mod._is_owner = False
@@ -622,8 +624,6 @@ class TestIsProcessAlive:
         """Returns True when process poll() returns None (alive)."""
         import web_core.search.runner as mod
 
-        mod._searxng_docker_container = None
-
         mock_proc = MagicMock()
         mock_proc.poll.return_value = None
         mod._searxng_process = mock_proc
@@ -632,8 +632,6 @@ class TestIsProcessAlive:
     def test_returns_false_when_dead(self):
         """Returns False when process poll() returns exit code."""
         import web_core.search.runner as mod
-
-        mod._searxng_docker_container = None
 
         mock_proc = MagicMock()
         mock_proc.poll.return_value = 1
