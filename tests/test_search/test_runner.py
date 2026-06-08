@@ -23,6 +23,7 @@ from web_core.search.runner import (
     _SETTINGS_TEMPLATE,
     _cleanup_process,
     _find_available_port,
+    _get_config_dir,
     _get_docker_lock,
     _get_pip_command,
     _get_process_kwargs,
@@ -57,7 +58,7 @@ def _reset_module_state():
     mod._last_restart_time = 0.0
     mod._is_owner = False
     mod._startup_lock = None
-    mod._DOCKER_LOCK = None
+    mod._docker_lock = None
 
 
 @pytest.fixture(autouse=True)
@@ -1199,14 +1200,32 @@ class TestModuleExports:
 # ===========================================================================
 
 
+class TestGetConfigDir:
+    def test_creates_dir_and_sets_permissions(self, tmp_path, monkeypatch):
+        """Creates the directory and sets 0o700 permissions on non-Windows."""
+        import sys
+
+        config_dir = tmp_path / "my-config"
+        monkeypatch.setattr("web_core.search.runner._CONFIG_DIR", config_dir)
+
+        assert not config_dir.exists()
+        path = _get_config_dir()
+        assert path == config_dir
+        assert config_dir.exists()
+
+        if sys.platform != "win32":
+            assert (config_dir.stat().st_mode & 0o777) == 0o700
+
+
 class TestGetDockerLock:
-    def test_returns_filelock(self, tmp_config_dir):
-        """Returns a filelock.FileLock instance."""
+    def test_returns_filelock_with_timeout(self, tmp_config_dir):
+        """Returns a filelock.FileLock instance with 60s timeout."""
         import filelock
 
         lock = _get_docker_lock()
         assert isinstance(lock, filelock.FileLock)
-        assert Path(lock.lock_file).name == "searxng_docker.lock"
+        assert Path(lock.lock_file).name == "docker_startup.lock"
+        assert lock.timeout == 60.0
 
     def test_returns_same_lock(self, tmp_config_dir):
         """Returns the same lock on subsequent calls."""
@@ -1214,11 +1233,11 @@ class TestGetDockerLock:
         lock2 = _get_docker_lock()
         assert lock1 is lock2
 
-    def test_creates_config_dir(self, tmp_path, monkeypatch):
-        """Creates the config directory if it does not exist."""
+    def test_lazy_init_creates_config_dir(self, tmp_path, monkeypatch):
+        """Lazy init of docker lock creates the config directory."""
         config_dir = tmp_path / "new-config-dir"
         monkeypatch.setattr("web_core.search.runner._CONFIG_DIR", config_dir)
-        monkeypatch.setattr("web_core.search.runner._DOCKER_LOCK", None)
+        monkeypatch.setattr("web_core.search.runner._docker_lock", None)
 
         assert not config_dir.exists()
         _get_docker_lock()

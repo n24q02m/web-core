@@ -33,12 +33,12 @@ def _reset_docker_state():
     mod._searxng_docker_container = None
     mod._searxng_port = None
     mod._is_owner = False
-    mod._DOCKER_LOCK = None  # Reset lazy filelock so tmp_path dir is used
+    mod._docker_lock = None  # Reset lazy filelock so tmp_path dir is used
     yield
     mod._searxng_docker_container = None
     mod._searxng_port = None
     mod._is_owner = False
-    mod._DOCKER_LOCK = None
+    mod._docker_lock = None
 
 
 # ---------------------------------------------------------------------------

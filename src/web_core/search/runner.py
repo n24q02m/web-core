@@ -47,16 +47,24 @@ logger = logging.getLogger(__name__)
 PINNED_SEARXNG_PORT = 41592
 
 # Cross-process filelock preventing concurrent Docker spawn races.
-_DOCKER_LOCK: filelock.FileLock | None = None
+_docker_lock: filelock.FileLock | None = None
+
+
+def _get_config_dir() -> Path:
+    """Get or create the configuration directory with correct permissions."""
+    _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    if sys.platform != "win32":
+        _CONFIG_DIR.chmod(0o700)
+    return _CONFIG_DIR
 
 
 def _get_docker_lock() -> filelock.FileLock:
     """Get or create the Docker spawn filelock (lazy init for config dir creation)."""
-    global _DOCKER_LOCK
-    if _DOCKER_LOCK is None:
-        _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        _DOCKER_LOCK = filelock.FileLock(str(_CONFIG_DIR / "searxng_docker.lock"))
-    return _DOCKER_LOCK
+    global _docker_lock
+    if _docker_lock is None:
+        lock_path = _get_config_dir() / "docker_startup.lock"
+        _docker_lock = filelock.FileLock(str(lock_path), timeout=60.0)
+    return _docker_lock
 
 
 # Maximum number of restart attempts before giving up.
@@ -530,8 +538,7 @@ def _get_settings_path(port: int) -> Path:
     from the bundled template.
     """
     global _searxng_settings_path
-    _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    _CONFIG_DIR.chmod(0o700)
+    _get_config_dir()
 
     secret = secrets.token_hex(32)
     enable_http2 = "false" if sys.platform == "win32" else "true"
@@ -544,7 +551,7 @@ def _get_settings_path(port: int) -> Path:
 
     import contextlib
 
-    fd, path_str = tempfile.mkstemp(prefix="searxng_settings_", suffix=".yml", dir=_CONFIG_DIR, text=True)
+    fd, path_str = tempfile.mkstemp(prefix="searxng_settings_", suffix=".yml", dir=_get_config_dir(), text=True)
 
     settings_file = Path(path_str)
     _searxng_settings_path = settings_file
@@ -977,8 +984,8 @@ async def _start_docker_searxng(start_port: int) -> str | None:
 
             # Write Docker-specific settings (JSON format + limiter off) so the
             # container exposes a usable /search JSON API.
-            settings_path = _CONFIG_DIR / f"searxng_docker_{port}.yml"
-            await asyncio.to_thread(_CONFIG_DIR.mkdir, parents=True, exist_ok=True)
+            settings_path = _get_config_dir() / f"searxng_docker_{port}.yml"
+            await asyncio.to_thread(_get_config_dir)
             await asyncio.to_thread(
                 _write_secure_text,
                 settings_path,
