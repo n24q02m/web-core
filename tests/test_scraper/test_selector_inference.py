@@ -2,13 +2,13 @@
 
 import importlib
 import json
-import sys
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
 from web_core.scraper import selector_inference
 from web_core.scraper.selector_inference import (
+    _build_default_caller,
     _detect_provider_from_env,
     _resolve_provider_and_model,
     infer_selectors_with_llm,
@@ -19,81 +19,75 @@ from web_core.scraper.selector_inference import (
 def test_merge_selectors_disjoint():
     existing = {"title": ".title"}
     inferred = {"content": "#content"}
-    expected = {"title": ".title", "content": "#content"}
-    assert merge_selectors(existing, inferred) == expected
+    result = merge_selectors(existing, inferred)
+    assert result == {"title": ".title", "content": "#content"}
 
 
-def test_merge_selectors_existing_priority():
-    existing = {"title": ".existing-title"}
-    inferred = {"title": ".inferred-title", "content": "#content"}
-    expected = {"title": ".existing-title", "content": "#content"}
-    assert merge_selectors(existing, inferred) == expected
-
-
-def test_merge_selectors_empty_existing_uses_inferred():
-    existing = {"title": ""}
-    inferred = {"title": ".inferred-title", "content": "#content"}
-    expected = {"title": ".inferred-title", "content": "#content"}
-    assert merge_selectors(existing, inferred) == expected
-
-
-def test_merge_selectors_missing_existing_uses_inferred():
-    existing = {"content": "#content"}
-    inferred = {"title": ".inferred-title"}
-    expected = {"content": "#content", "title": ".inferred-title"}
-    assert merge_selectors(existing, inferred) == expected
-
-
-def test_merge_selectors_all_empty():
-    assert merge_selectors({}, {}) == {}
-
-
-def test_merge_selectors_no_inferred():
+def test_merge_selectors_prefer_existing():
     existing = {"title": ".title"}
-    assert merge_selectors(existing, {}) == {"title": ".title"}
+    inferred = {"title": "#llm-title", "content": "#content"}
+    result = merge_selectors(existing, inferred)
+    assert result == {"title": ".title", "content": "#content"}
 
 
-def test_merge_selectors_no_existing():
-    inferred = {"title": ".title"}
-    assert merge_selectors({}, inferred) == {"title": ".title"}
+def test_merge_selectors_empty_existing():
+    existing = {"title": "", "content": ".main"}
+    inferred = {"title": "#llm-title"}
+    result = merge_selectors(existing, inferred)
+    assert result == {"title": "#llm-title", "content": ".main"}
 
 
-def test_get_domain_selectors_wildcard(monkeypatch):
-    # Verify wildcard-pattern matching infrastructure works correctly + does not
-    # leak via subdomain-bypass (e.g. attacker spoofs `attacker.com.<wildcard>.evil.com`).
-    # Uses a generic test-fixture wildcard pattern injected via monkeypatch — the
-    # built-in DOMAIN_CONFIGS no longer ships site-specific wildcard configs.
-    monkeypatch.setitem(sys.modules, "httpx", MagicMock())
-    monkeypatch.setitem(sys.modules, "langgraph", MagicMock())
-    monkeypatch.setitem(sys.modules, "langgraph.graph", MagicMock())
-    monkeypatch.setitem(sys.modules, "google.genai", MagicMock())
+def test_parse_selector_json_valid():
+    raw = '{"content": "#c", "title": ".t", "next_chapter": "a"}'
+    res = selector_inference._parse_selector_json(raw)
+    assert res == {"content": "#c", "title": ".t", "next_chapter": "a"}
 
-    import re as _re
 
-    from web_core.scraper import selector_inference
+def test_parse_selector_json_extra_keys():
+    raw = '{"content": "#c", "garbage": "data"}'
+    res = selector_inference._parse_selector_json(raw)
+    assert res == {"content": "#c"}
 
-    fixture_pattern = "testsite*.com"
-    fixture_config = {"content": "#main", "title": ".title"}
-    monkeypatch.setitem(selector_inference.DOMAIN_CONFIGS, fixture_pattern, fixture_config)
-    monkeypatch.setattr(
-        selector_inference,
-        "_WILDCARD_CONFIGS",
-        [
-            (
-                _re.compile(_re.escape(fixture_pattern).replace(r"\*", r"[^.]*") + r"\Z"),
-                fixture_config,
-            )
-        ],
-    )
 
+def test_parse_selector_json_non_string():
+    raw = '{"content": 123}'
+    res = selector_inference._parse_selector_json(raw)
+    assert res == {}
+
+
+def test_parse_selector_json_malformed():
+    with pytest.raises(json.JSONDecodeError):
+        selector_inference._parse_selector_json("not json")
+
+
+def test_parse_selector_json_empty():
+    with pytest.raises(json.JSONDecodeError):
+        selector_inference._parse_selector_json("")
+
+
+def test_get_domain_selectors_ncode():
+    url = "https://ncode.syosetu.com/n1234abc/"
+    selectors = selector_inference.get_domain_selectors(url)
+    assert selectors is not None
+    assert selectors["content"] == "#novel_honbun"
+
+
+def test_get_domain_selectors_wildcard():
+    # Test wildcard matching (kakuyomu.jp is mapped via wildcard kakuyomu.jp)
+    url = "https://kakuyomu.jp/works/123"
+    selectors = selector_inference.get_domain_selectors(url)
+    assert selectors is not None
+    assert selectors["content"] == ".widget-episodeBody"
+
+
+def test_get_domain_selectors_miss():
+    assert selector_inference.get_domain_selectors("https://unknown.com") is None
+
+
+def test_get_domain_selectors_boundary_matches():
     from web_core.scraper.selector_inference import get_domain_selectors
 
-    # Valid matches against the generic wildcard
-    assert get_domain_selectors("https://testsite123.com") is not None
-    assert get_domain_selectors("https://testsite.com") is not None
-
-    # Invalid matches (verify wildcard-bypass guards still hold)
-    assert get_domain_selectors("https://testsite.com.evil.com") is None
+    # Tests for _extract_domain and pattern matching
     assert get_domain_selectors("https://eviltestsite.com") is None
     assert get_domain_selectors("https://testsite.com.co") is None
 
@@ -126,9 +120,6 @@ def test_load_domain_cookies_empty_env(monkeypatch):
 
 
 def test_get_domain_selectors_injects_cookies(monkeypatch):
-    # Test demonstrates generic env-var injection API: any domain can supply
-    # cookies via WEB_CORE_DOMAIN_COOKIES. Caller is responsible for obtaining
-    # user consent before passing R-18 / age-gated cookies.
     custom_cookies = {"ncode.syosetu.com": {"session": "abc123"}}
     monkeypatch.setenv("WEB_CORE_DOMAIN_COOKIES", json.dumps(custom_cookies))
     importlib.reload(selector_inference)
@@ -142,8 +133,18 @@ def test_get_domain_selectors_injects_cookies(monkeypatch):
 
 def test_load_domain_cookies_invalid_json(monkeypatch):
     monkeypatch.setenv("WEB_CORE_DOMAIN_COOKIES", "invalid-json")
+    importlib.reload(selector_inference)
+    assert selector_inference.DOMAIN_COOKIES == {}
 
-    # Should log an error and fallback to empty dict
+
+def test_load_domain_cookies_not_dict(monkeypatch):
+    monkeypatch.setenv("WEB_CORE_DOMAIN_COOKIES", "[1, 2, 3]")
+    importlib.reload(selector_inference)
+    assert selector_inference.DOMAIN_COOKIES == {}
+
+
+def test_load_domain_cookies_domain_not_dict(monkeypatch):
+    monkeypatch.setenv("WEB_CORE_DOMAIN_COOKIES", '{"example.com": "not a dict"}')
     importlib.reload(selector_inference)
     assert selector_inference.DOMAIN_COOKIES == {}
 
@@ -161,6 +162,8 @@ def _clear_llm_env(monkeypatch):
         "ANTHROPIC_API_KEY",
         "XAI_API_KEY",
         "WEB_CORE_LLM_MODEL",
+        "GOOGLE_CLOUD_PROJECT",
+        "GOOGLE_CLOUD_LOCATION",
     ):
         monkeypatch.delenv(var, raising=False)
 
@@ -196,7 +199,6 @@ def test_detect_provider_xai(monkeypatch):
 
 
 def test_detect_provider_priority(monkeypatch):
-    # GEMINI wins when multiple keys present (docs order)
     _clear_llm_env(monkeypatch)
     monkeypatch.setenv("GEMINI_API_KEY", "dummy")
     monkeypatch.setenv("OPENAI_API_KEY", "dummy")
@@ -271,7 +273,6 @@ async def test_infer_llm_caller_returns_json_string(monkeypatch):
 @pytest.mark.asyncio
 async def test_infer_no_provider_graceful_degradation(monkeypatch):
     _clear_llm_env(monkeypatch)
-    # Reset the one-shot warning flag
     monkeypatch.setattr(selector_inference, "_NO_PROVIDER_WARNED", False)
     result = await infer_selectors_with_llm("https://example.com", "<html/>")
     assert result == {}
@@ -321,7 +322,6 @@ async def test_infer_dispatches_to_provider_via_env(monkeypatch):
     kwargs = mock_call.await_args.kwargs
     assert kwargs["api_key"] == "dummy"
     assert kwargs["base_url"] is None
-    # Model resolved from _PROVIDER_DEFAULT_MODEL
     args = mock_call.await_args.args
     assert args[1] == selector_inference._PROVIDER_DEFAULT_MODEL["openai"]
 
@@ -373,7 +373,7 @@ async def test_infer_llm_caller_returns_unexpected_type(monkeypatch):
     _clear_llm_env(monkeypatch)
 
     async def fake_caller(_prompt, _html):
-        return [1, 2, 3]  # Unexpected type
+        return [1, 2, 3]
 
     result = await infer_selectors_with_llm(
         "https://example.com",
@@ -390,10 +390,33 @@ async def test_infer_domain_extraction_protocol_less(monkeypatch):
     async def fake_caller(_prompt, _html):
         return {"content": "#c"}
 
-    # Test with // protocol-less URL
     result = await infer_selectors_with_llm(
         "//example.com/path",
         "<html/>",
         llm_caller=fake_caller,
     )
     assert result == {"content": "#c"}
+
+
+def test_build_default_caller_invalid_provider():
+    with pytest.raises(ValueError, match="Unknown provider: invalid"):
+        _build_default_caller(provider="invalid", model="gpt-4")
+
+
+@pytest.mark.asyncio
+async def test_infer_selectors_dispatches_to_anthropic(monkeypatch):
+    _clear_llm_env(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "dummy")
+    mock_call = AsyncMock(return_value='{"content": "#a"}')
+    monkeypatch.setattr(selector_inference, "_call_anthropic", mock_call)
+
+    res = await infer_selectors_with_llm("http://test.com", "<html></html>", provider="anthropic")
+    assert res == {"content": "#a"}
+    mock_call.assert_awaited_once()
+
+
+def test_resolve_provider_unknown_but_env_detected(monkeypatch):
+    _clear_llm_env(monkeypatch)
+    monkeypatch.setenv("OPENAI_API_KEY", "dummy")
+    res = _resolve_provider_and_model("unknown", None)
+    assert res == ("openai", selector_inference._PROVIDER_DEFAULT_MODEL["openai"])

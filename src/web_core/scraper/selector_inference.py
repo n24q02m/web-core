@@ -99,40 +99,25 @@ _WILDCARD_CONFIGS: list[tuple[re.Pattern[str], dict[str, str]]] = [
     if "*" in pattern
 ]
 
-# Prompt cho LLM infer selectors tu HTML
-_INFER_SELECTORS_PROMPT = """\
-You are a CSS selector expert. Analyze this HTML and extract the best CSS selectors.
+_INFER_SELECTORS_PROMPT = """You are an expert at web scraping. \
+Given the URL and a snippet of HTML, your goal is to find CSS selectors for:
+1. The main content of the article or chapter.
+2. The title of the article or chapter.
+3. The "Next Chapter" link, if present.
 
 URL: {url}
-HTML (truncated to first 5000 chars):
-```html
+
+HTML snippet:
 {html_snippet}
-```
 
-Return JSON with CSS selectors for:
-- "content": the main content area (article body, novel text, manga images)
-- "title": the page/chapter title
-- "next_chapter": link to next chapter (if pagination exists)
-
-Rules:
-- Prefer ID selectors (#id) over class selectors (.class)
-- Avoid generic selectors like "div", "p", "span" alone
-- For manga/image pages, select the image container
-- Return ONLY valid JSON, no explanation
-
-Example response:
-{{"content": "#novel_honbun", "title": ".novel_title", "next_chapter": "a.next"}}"""
+Respond ONLY with a JSON object containing keys: "content", "title", "next_chapter". Use clean, efficient CSS selectors.
+"""
 
 
 def get_domain_selectors(url: str) -> dict[str, str] | None:
-    """Return built-in selectors for a known domain, or None.
+    """Retrieve pre-configured selectors for a domain, or None if unknown.
 
-    Also injects domain-specific cookies into selectors["cookies"]
-    if the domain requires them (session tokens supplied via env per
-    DOMAIN_COOKIES — caller responsible for obtaining user consent).
-
-    Logs domain usage for analytics — enabling the Tiered Scraping
-    feedback loop (track unknown domains → hardcode popular ones).
+    Uses exact domain matches first, then falls back to wildcard patterns.
     """
     # Fast path domain extraction (~3.5x faster than urlparse)
     if url.startswith("//"):
@@ -142,17 +127,11 @@ def get_domain_selectors(url: str) -> dict[str, str] | None:
         domain_part = rest if sep else url
         domain = domain_part.partition("/")[0].partition("?")[0].partition("#")[0].lower()
 
-    selectors: dict[str, str] | None = None
-
     # Exact match
-    if domain in DOMAIN_CONFIGS:
-        selectors = DOMAIN_CONFIGS[domain].copy()
-        logger.info(
-            "domain_selector_hit",
-            extra={"domain": domain, "tier": "hardcoded", "url": url},
-        )
-    else:
-        # Wildcard match (e.g. example*.com pattern in DOMAIN_CONFIGS)
+    selectors = DOMAIN_CONFIGS.get(domain)
+
+    # Wildcard match
+    if selectors is None:
         for pattern_re, config in _WILDCARD_CONFIGS:
             if pattern_re.match(domain):
                 selectors = config.copy()
@@ -321,6 +300,9 @@ def _build_default_caller(
     model: str | None,
 ) -> LLMCaller | None:
     """Build a default LLM caller from explicit params + env vars. None if no provider."""
+    if provider is not None and provider not in _PROVIDER_DEFAULT_MODEL:
+        raise ValueError(f"Unknown provider: {provider}")
+
     resolved = _resolve_provider_and_model(provider, model)
     if resolved is None:
         return None
