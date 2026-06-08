@@ -9,6 +9,7 @@ Enhanced with:
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Any
 
@@ -313,14 +314,19 @@ class ScrapingAgent:
         tried = state.get("strategies_tried", [])
         elapsed_ms = state.get("metadata", {}).get("last_elapsed_ms", 0.0)
 
+        tasks = []
         for strategy_name in tried:
             is_success = success and strategy_name == tried[-1]
-            await self.strategy_cache.record(
-                url=url,
-                strategy_name=strategy_name,
-                success=is_success,
-                time_ms=elapsed_ms if is_success else 0.0,
+            tasks.append(
+                self.strategy_cache.record(
+                    url=url,
+                    strategy_name=strategy_name,
+                    success=is_success,
+                    time_ms=elapsed_ms if is_success else 0.0,
+                )
             )
+        if tasks:
+            await asyncio.gather(*tasks)
         return state
 
     # ------------------------------------------------------------------
