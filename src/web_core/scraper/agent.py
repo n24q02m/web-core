@@ -13,6 +13,7 @@ import time
 from typing import Any
 
 from langgraph.graph import END, START, StateGraph
+from pydantic import BaseModel, Field
 
 from web_core.scraper.cache import StrategyCache
 from web_core.scraper.robots import RobotsCache, RobotsDisallowedError
@@ -23,6 +24,15 @@ from web_core.scraper.selector_inference import (
 )
 from web_core.scraper.state import ScrapingError, ScrapingState
 from web_core.scraper.utils import is_cloudflare_challenge
+
+
+class ScraperConfig(BaseModel):
+    """Configuration for the ScrapingAgent."""
+
+    max_retries: int = Field(default=5, ge=1)
+    min_content_length: int = Field(default=100, ge=0)
+    enable_selector_inference: bool = True
+    respect_robots: bool = True
 
 
 class ScrapingAgent:
@@ -41,18 +51,12 @@ class ScrapingAgent:
         strategies: dict[str, Any] | None = None,
         strategy_cache: StrategyCache | None = None,
         robots_cache: RobotsCache | None = None,
-        max_retries: int = 5,
-        min_content_length: int = 100,
-        enable_selector_inference: bool = True,
-        respect_robots: bool = True,
+        config: ScraperConfig | None = None,
     ):
         self.strategies = strategies or {}
         self.strategy_cache = strategy_cache or StrategyCache()
         self.robots_cache = robots_cache or RobotsCache()
-        self.max_retries = max_retries
-        self.min_content_length = min_content_length
-        self.enable_selector_inference = enable_selector_inference
-        self.respect_robots = respect_robots
+        self.config = config or ScraperConfig()
         self._graph = self._build_graph()
 
     def _build_graph(self):
@@ -216,7 +220,7 @@ class ScrapingAgent:
         errors = list(state.get("errors", []))
 
         status_ok = 200 <= status_code < 400
-        length_ok = len(content) >= self.min_content_length
+        length_ok = len(content) >= self.config.min_content_length
         cf_challenge = is_cloudflare_challenge(content) if content else False
 
         if cf_challenge:
@@ -234,7 +238,7 @@ class ScrapingAgent:
         # and we haven't tried LLM inference yet, try it
         content = state.get("content", "")
         if (
-            self.enable_selector_inference
+            self.config.enable_selector_inference
             and content
             and len(content) > 50
             and not state.get("selector_inference_attempted", False)
@@ -302,7 +306,7 @@ class ScrapingAgent:
         idx = state.get("current_strategy_idx", 0)
         order = state.get("strategy_order", [])
         tried_count = len(state.get("strategies_tried", []))
-        if idx < len(order) and tried_count < self.max_retries:
+        if idx < len(order) and tried_count < self.config.max_retries:
             return "select_strategy"
         return "update_cache"
 
@@ -333,7 +337,7 @@ class ScrapingAgent:
         If ``respect_robots`` is enabled (default), checks robots.txt first and
         raises ``RobotsDisallowedError`` when the target URL is disallowed.
         """
-        if self.respect_robots and not await self.robots_cache.is_allowed(url):
+        if self.config.respect_robots and not await self.robots_cache.is_allowed(url):
             raise RobotsDisallowedError(url=url, user_agent=self.robots_cache.user_agent)
 
         initial_state: ScrapingState = {

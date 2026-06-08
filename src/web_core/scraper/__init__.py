@@ -1,6 +1,6 @@
 """Multi-strategy web scraping with LangGraph orchestration."""
 
-from web_core.scraper.agent import ScrapingAgent
+from web_core.scraper.agent import ScraperConfig, ScrapingAgent
 from web_core.scraper.base import BaseStrategy, ScrapingResult
 from web_core.scraper.cache import StrategyCache, StrategyStats
 from web_core.scraper.robots import RobotsCache, RobotsDisallowedError
@@ -10,6 +10,7 @@ __all__ = [
     "BaseStrategy",
     "RobotsCache",
     "RobotsDisallowedError",
+    "ScraperConfig",
     "ScrapingAgent",
     "ScrapingError",
     "ScrapingResult",

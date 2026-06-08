@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from web_core.scraper.agent import ScrapingAgent
+from web_core.scraper.agent import ScraperConfig, ScrapingAgent
 from web_core.scraper.base import BaseStrategy, ScrapingResult
 from web_core.scraper.cache import StrategyCache
 from web_core.scraper.state import ScrapingError
@@ -64,7 +64,7 @@ class TestScrapingAgent:
     async def test_scrape_returns_content(self):
         """scrape should return the page content on success."""
         strategy = MockStrategy(name="basic", content="A" * 200)
-        agent = ScrapingAgent(strategies={"basic": strategy}, min_content_length=50)
+        agent = ScrapingAgent(strategies={"basic": strategy}, config=ScraperConfig(min_content_length=50))
 
         result = await agent.scrape("https://example.com")
 
@@ -99,10 +99,7 @@ class TestScrapingAgent:
         """Agent should escalate when content is shorter than min_content_length."""
         short = MockStrategy(name="short", content="hi")
         long = MockStrategy(name="long", content="x" * 200)
-        agent = ScrapingAgent(
-            strategies={"short": short, "long": long},
-            min_content_length=100,
-        )
+        agent = ScrapingAgent(strategies={"short": short, "long": long}, config=ScraperConfig(min_content_length=100))
 
         content = await agent.scrape("https://example.com")
 
@@ -114,10 +111,7 @@ class TestScrapingAgent:
         """Agent should escalate when status code is not 2xx/3xx."""
         bad = MockStrategy(name="bad", content="x" * 200, status_code=403)
         good = MockStrategy(name="good", content="y" * 200)
-        agent = ScrapingAgent(
-            strategies={"bad": bad, "good": good},
-            min_content_length=50,
-        )
+        agent = ScrapingAgent(strategies={"bad": bad, "good": good}, config=ScraperConfig(min_content_length=50))
 
         content = await agent.scrape("https://example.com")
 
@@ -166,7 +160,7 @@ class TestScrapingAgent:
     async def test_max_retries_limits_attempts(self):
         """Agent should not try more strategies than max_retries."""
         strategies = {f"s{i}": MockStrategy(name=f"s{i}", should_fail=True) for i in range(10)}
-        agent = ScrapingAgent(strategies=strategies, max_retries=3)
+        agent = ScrapingAgent(strategies=strategies, config=ScraperConfig(max_retries=3))
 
         with pytest.raises(ScrapingError) as exc_info:
             await agent.scrape("https://example.com")
@@ -250,16 +244,16 @@ class TestScrapingAgent:
     async def test_min_content_length_default(self):
         """Default min_content_length should be 100."""
         agent = ScrapingAgent()
-        assert agent.min_content_length == 100
+        assert agent.config.min_content_length == 100
 
     async def test_custom_min_content_length(self):
-        agent = ScrapingAgent(min_content_length=50)
-        assert agent.min_content_length == 50
+        agent = ScrapingAgent(config=ScraperConfig(min_content_length=50))
+        assert agent.config.min_content_length == 50
 
     async def test_validate_accepts_3xx_status(self):
         """Status codes in 200-399 range should be considered valid."""
         strategy = MockStrategy(name="redirect", content="x" * 200, status_code=301)
-        agent = ScrapingAgent(strategies={"redirect": strategy}, min_content_length=50)
+        agent = ScrapingAgent(strategies={"redirect": strategy}, config=ScraperConfig(min_content_length=50))
 
         content = await agent.scrape("https://example.com")
 
@@ -337,7 +331,9 @@ class TestScrapingAgent:
         """Agent should trigger LLM inference when content is too short."""
         # Content length 60 is > 50 (min to trigger inference) but < 100 (min_content_length)
         strategy = MockStrategy(name="basic", content="A" * 60)
-        agent = ScrapingAgent(strategies={"basic": strategy}, min_content_length=100, enable_selector_inference=True)
+        agent = ScrapingAgent(
+            strategies={"basic": strategy}, config=ScraperConfig(min_content_length=100, enable_selector_inference=True)
+        )
 
         inferred = {"content": ".new-selector"}
         with (
