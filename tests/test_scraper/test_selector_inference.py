@@ -397,3 +397,28 @@ async def test_infer_domain_extraction_protocol_less(monkeypatch):
         llm_caller=fake_caller,
     )
     assert result == {"content": "#c"}
+
+
+def test_load_domain_cookies_not_a_dict(monkeypatch):
+    monkeypatch.setenv("WEB_CORE_DOMAIN_COOKIES", json.dumps([1, 2, 3]))
+    importlib.reload(selector_inference)
+    assert selector_inference.DOMAIN_COOKIES == {}
+
+
+def test_load_domain_cookies_mixed_values(monkeypatch):
+    custom_cookies = {"test.com": {"cookie_name": "cookie_value"}, "invalid.com": "not-a-dict"}
+    monkeypatch.setenv("WEB_CORE_DOMAIN_COOKIES", json.dumps(custom_cookies))
+    importlib.reload(selector_inference)
+    assert selector_inference.DOMAIN_COOKIES == {"test.com": {"cookie_name": "cookie_value"}}
+
+
+def test_load_domain_cookies_unexpected_exception(monkeypatch):
+    import json
+
+    def mock_loads(s):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(json, "loads", mock_loads)
+    monkeypatch.setenv("WEB_CORE_DOMAIN_COOKIES", "{}")
+    importlib.reload(selector_inference)
+    assert selector_inference.DOMAIN_COOKIES == {}
