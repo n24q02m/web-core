@@ -9,6 +9,21 @@ import pytest
 from web_core.scraper.strategies.headless import HeadlessStrategy
 
 
+@pytest.fixture(autouse=True)
+def mock_is_safe_url():
+    with patch("web_core.scraper.strategies.headless.is_safe_url", return_value=True):
+        yield
+
+    async def test_fetch_ssrf_protection(self):
+        """fetch() should raise ValueError for unsafe URLs."""
+        strategy = HeadlessStrategy()
+        with (
+            patch("web_core.scraper.strategies.headless.is_safe_url", return_value=False),
+            pytest.raises(ValueError, match="SSRF blocked"),
+        ):
+            await strategy.fetch("http://127.0.0.1")
+
+
 class TestHeadlessStrategy:
     """Test Crawl4AI headless scraping strategy."""
 

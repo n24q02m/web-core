@@ -1,11 +1,21 @@
 import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from web_core.scraper.strategies.patchright_browser import PatchrightStrategy
 
 NORMAL_HTML = "<html><body><h1>Hello World</h1></body></html>"
 CF_JS_CHALLENGE_HTML = "<html><body><title>just a moment...</title></body></html>"
 CF_TURNSTILE_HTML = '<html><body><div class="cf-turnstile-response"></div></body></html>'
+
+
+@pytest.fixture(autouse=True)
+def mock_is_safe_url():
+    with patch("web_core.scraper.strategies.patchright_browser.is_safe_url", return_value=True):
+        yield
+
+
 CF_MANAGED_HTML = '<html><body><div id="cf-please-wait"></div></body></html>'
 
 
@@ -33,6 +43,16 @@ def _make_mock_provider(content: str):
 
 
 class TestPatchrightStrategy:
+    async def test_fetch_ssrf_protection(self):
+        """fetch() should raise ValueError for unsafe URLs."""
+        strategy = PatchrightStrategy()
+        # We need to un-mock for this specific test
+        with (
+            patch("web_core.scraper.strategies.patchright_browser.is_safe_url", return_value=False),
+            pytest.raises(ValueError, match="SSRF blocked"),
+        ):
+            await strategy.fetch("http://127.0.0.1")
+
     async def test_fetch_normal_page(self):
         provider, _page = _make_mock_provider(NORMAL_HTML)
         strategy = PatchrightStrategy(provider=provider)

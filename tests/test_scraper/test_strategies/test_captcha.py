@@ -4,8 +4,16 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from web_core.scraper.base import BaseStrategy, ScrapingResult
 from web_core.scraper.strategies.captcha import CaptchaStrategy
+
+
+@pytest.fixture(autouse=True)
+def mock_is_safe_url():
+    with patch("web_core.scraper.strategies.captcha.is_safe_url", return_value=True):
+        yield
 
 
 class MockFallbackStrategy(BaseStrategy):
@@ -28,6 +36,15 @@ class MockFallbackStrategy(BaseStrategy):
 
 
 class TestCaptchaStrategy:
+    async def test_solve_cf_turnstile_via_patchright_ssrf_protection(self):
+        """_solve_cf_turnstile_via_patchright should raise ValueError for unsafe URLs."""
+        strategy = CaptchaStrategy(capsolver_api_key="test-key")
+        with (
+            patch("web_core.scraper.strategies.captcha.is_safe_url", return_value=False),
+            pytest.raises(ValueError, match="SSRF blocked"),
+        ):
+            await strategy._solve_cf_turnstile_via_patchright("http://127.0.0.1")
+
     """Test CapSolver CAPTCHA strategy."""
 
     def test_name(self):

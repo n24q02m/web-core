@@ -7,7 +7,7 @@ import logging
 import re
 from typing import Any
 
-from web_core.http.client import safe_httpx_client
+from web_core.http.client import is_safe_url, safe_httpx_client
 from web_core.scraper.base import BaseStrategy, ScrapingResult
 from web_core.scraper.utils import detect_cloudflare_challenge, extract_turnstile_sitekey
 
@@ -159,6 +159,9 @@ class CaptchaStrategy(BaseStrategy):
         solve with CapSolver, inject token back, and return final content."""
 
         from web_core.browsers.patchright import PatchrightProvider
+
+        if not is_safe_url(url):
+            raise ValueError(f"SSRF blocked: {url}")
 
         provider = PatchrightProvider(headless=True)
         try:
