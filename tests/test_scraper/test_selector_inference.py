@@ -397,3 +397,37 @@ async def test_infer_domain_extraction_protocol_less(monkeypatch):
         llm_caller=fake_caller,
     )
     assert result == {"content": "#c"}
+
+
+# -----------------------------------------------------------------------------
+# _parse_selector_json (issue [TEST])
+# -----------------------------------------------------------------------------
+
+
+def test_parse_selector_json_valid():
+    text = json.dumps({"content": "#c", "title": ".t", "next_chapter": "a"})
+    assert selector_inference._parse_selector_json(text) == {"content": "#c", "title": ".t", "next_chapter": "a"}
+
+
+def test_parse_selector_json_extra_keys():
+    text = json.dumps({"content": "#c", "extra": "ignored"})
+    assert selector_inference._parse_selector_json(text) == {"content": "#c"}
+
+
+def test_parse_selector_json_non_string_values():
+    text = json.dumps({"content": 123, "title": None, "next_chapter": ["a"]})
+    assert selector_inference._parse_selector_json(text) == {}
+
+
+def test_parse_selector_json_not_dict():
+    text = json.dumps(["not", "a", "dict"])
+    assert selector_inference._parse_selector_json(text) == {}
+
+
+def test_parse_selector_json_malformed():
+    assert selector_inference._parse_selector_json("invalid { json") == {}
+
+
+def test_parse_selector_json_empty_or_none():
+    assert selector_inference._parse_selector_json("") == {}
+    assert selector_inference._parse_selector_json(None) == {}

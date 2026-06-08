@@ -191,7 +191,10 @@ def _build_prompt(url: str, html_content: str) -> str:
 
 def _parse_selector_json(text: str) -> dict[str, str]:
     """Parse a JSON response into a whitelisted selector dict."""
-    result = json.loads(text or "")
+    try:
+        result = json.loads(text or "")
+    except json.JSONDecodeError:
+        return {}
     selectors: dict[str, str] = {}
     if isinstance(result, dict):
         for key in ("content", "title", "next_chapter"):
