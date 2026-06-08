@@ -114,3 +114,97 @@ class TestRobotsDisallowedError:
 
     def test_is_exception(self):
         assert issubclass(RobotsDisallowedError, Exception)
+
+
+class TestSharedClient:
+    """Tests for the shared HTTP client lazy-init and caching."""
+
+    async def test_get_shared_client_caching(self):
+        """Re-initialization if already set but closed (shared client pattern)."""
+        from unittest.mock import MagicMock, patch
+
+        from web_core.scraper import robots as robots_mod
+        from web_core.scraper.robots import _get_shared_client
+
+        # Reset global state for testing
+        old_client = robots_mod._shared_client
+        robots_mod._shared_client = None
+
+        try:
+            with patch("web_core.scraper.robots.safe_httpx_client") as mock_factory:
+                m1 = MagicMock()
+                m1.is_closed = False
+                m2 = MagicMock()
+                m2.is_closed = False
+
+                mock_factory.side_effect = [m1, m2]
+
+                # 1. First call creates it
+                c1 = _get_shared_client()
+                assert c1 is m1
+                mock_factory.assert_called_once_with(timeout=10.0)
+
+                # 2. Second call reuses it
+                c2 = _get_shared_client()
+                assert c2 is c1
+                assert mock_factory.call_count == 1
+
+                # 3. If closed, creates new one
+                m1.is_closed = True
+                c3 = _get_shared_client()
+                assert c3 is m2
+                assert c3 is not c1
+                assert mock_factory.call_count == 2
+                mock_factory.assert_called_with(timeout=10.0)
+        finally:
+            robots_mod._shared_client = old_client
+
+    async def test_fetch_robots_txt_success(self):
+        """Success case for the real _fetch_robots_txt implementation."""
+        from unittest.mock import MagicMock, patch
+
+        from web_core.scraper.robots import RobotsCache
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = "User-agent: *\nAllow: /"
+
+        mock_client = MagicMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+
+        cache = RobotsCache()
+        with patch("web_core.scraper.robots._get_shared_client", return_value=mock_client):
+            content = await cache._fetch_robots_txt("https://example.com/robots.txt")
+            assert content == "User-agent: *\nAllow: /"
+            mock_client.get.assert_called_once_with("https://example.com/robots.txt", follow_redirects=True)
+
+    async def test_fetch_robots_txt_error_status(self):
+        """Non-200 status should return None."""
+        from unittest.mock import MagicMock, patch
+
+        from web_core.scraper.robots import RobotsCache
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 404
+
+        mock_client = MagicMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+
+        cache = RobotsCache()
+        with patch("web_core.scraper.robots._get_shared_client", return_value=mock_client):
+            content = await cache._fetch_robots_txt("https://example.com/robots.txt")
+            assert content is None
+
+    async def test_fetch_robots_txt_exception(self):
+        """Exception during fetch should return None."""
+        from unittest.mock import MagicMock, patch
+
+        from web_core.scraper.robots import RobotsCache
+
+        mock_client = MagicMock()
+        mock_client.get = AsyncMock(side_effect=Exception("network error"))
+
+        cache = RobotsCache()
+        with patch("web_core.scraper.robots._get_shared_client", return_value=mock_client):
+            content = await cache._fetch_robots_txt("https://example.com/robots.txt")
+            assert content is None

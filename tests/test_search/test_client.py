@@ -581,30 +581,31 @@ class TestSearch:
         client_mod._shared_client = None
 
         try:
-            with patch("httpx.AsyncClient") as mock_client_class:
+            with patch("web_core.search.client.safe_httpx_client") as mock_factory:
                 m1 = MagicMock()
                 m1.is_closed = False
                 m2 = MagicMock()
                 m2.is_closed = False
 
-                mock_client_class.side_effect = [m1, m2]
+                mock_factory.side_effect = [m1, m2]
 
                 # 1. First call creates it
                 c1 = _get_shared_client()
                 assert c1 is m1
-                assert mock_client_class.call_count == 1
+                mock_factory.assert_called_once_with(allow_private=True, timeout=15.0)
 
                 # 2. Second call reuses it
                 c2 = _get_shared_client()
                 assert c2 is c1
-                assert mock_client_class.call_count == 1
+                assert mock_factory.call_count == 1
 
                 # 3. If closed, creates new one
                 m1.is_closed = True
                 c3 = _get_shared_client()
                 assert c3 is m2
                 assert c3 is not c1
-                assert mock_client_class.call_count == 2
+                assert mock_factory.call_count == 2
+                mock_factory.assert_called_with(allow_private=True, timeout=15.0)
         finally:
             client_mod._shared_client = old_client
 
