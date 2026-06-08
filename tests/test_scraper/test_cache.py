@@ -65,24 +65,29 @@ class TestStrategyCache:
 
     def test_extract_domain_full_url(self):
         from web_core.http.url import extract_domain
+
         assert extract_domain("https://example.com/page") == "example.com"
 
     def test_extract_domain_with_port(self):
         from web_core.http.url import extract_domain
+
         assert extract_domain("https://example.com:8080/page") == "example.com:8080"
 
     def test_extract_domain_http(self):
         from web_core.http.url import extract_domain
+
         assert extract_domain("http://test.org") == "test.org"
 
     def test_extract_domain_no_scheme(self):
         from web_core.http.url import extract_domain
+
         # Without scheme, urlparse puts it all in path
         result = extract_domain("example.com/page")
         assert result == "example.com"
 
     def test_extract_domain_subdomain(self):
         from web_core.http.url import extract_domain
+
         assert extract_domain("https://sub.example.com/path") == "sub.example.com"
 
     # ------------------------------------------------------------------
