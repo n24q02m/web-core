@@ -281,6 +281,12 @@ class TestTryReuseExisting:
         url = await _try_reuse_existing()
         assert url is None
 
+    async def test_returns_none_on_exception(self, tmp_discovery):
+        """Returns None if an exception occurs during reuse check."""
+        with patch("web_core.search.runner.asyncio.to_thread", side_effect=Exception("mock error")):
+            url = await _try_reuse_existing()
+            assert url is None
+
 
 # ===========================================================================
 # _find_available_port
