@@ -15,7 +15,7 @@ from typing import Any
 
 import httpx
 
-from web_core.http import safe_httpx_client
+from web_core.http import extract_domain, safe_httpx_client
 from web_core.http.url import is_valid_domain, normalize_url
 from web_core.search.models import SearchError, SearchResult
 
@@ -50,13 +50,7 @@ def _apply_domain_cap(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
     for item in items:
         url = item.get("url", "")
-        # Fast path domain extraction (~3.5x faster than urlparse for hot loops)
-        if url.startswith("//"):
-            domain = url[2:].partition("/")[0].partition("?")[0].partition("#")[0]
-        else:
-            _, sep, rest = url.partition("://")
-            domain_part = rest if sep else url
-            domain = domain_part.partition("/")[0].partition("?")[0].partition("#")[0]
+        domain = extract_domain(url)
 
         if domain.startswith("www."):
             domain = domain[4:]

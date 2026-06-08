@@ -6,6 +6,8 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, ClassVar
 
+from web_core.http import extract_domain
+
 
 @dataclass
 class StrategyStats:
@@ -48,19 +50,6 @@ class StrategyCache:
         self._backend = backend
         self._stats: dict[str, dict[str, StrategyStats]] = defaultdict(lambda: defaultdict(StrategyStats))
 
-    @staticmethod
-    def _extract_domain(url: str) -> str:
-        """Extract the network-location (domain:port) from *url*."""
-        # Performance Optimization: Using string partitioning is ~3.5x faster
-        # than urllib.parse.urlparse by avoiding regex and tuple allocation overhead.
-        # This is a hot path called for every URL caching operation.
-        if url.startswith("//"):
-            return url[2:].partition("/")[0].partition("?")[0].partition("#")[0]
-
-        _, sep, rest = url.partition("://")
-        domain_part = rest if sep else url
-        return domain_part.partition("/")[0].partition("?")[0].partition("#")[0]
-
     async def record(
         self,
         url: str,
@@ -69,7 +58,7 @@ class StrategyCache:
         time_ms: float = 0.0,
     ) -> None:
         """Record one attempt for (*domain*, *strategy_name*)."""
-        domain = self._extract_domain(url)
+        domain = extract_domain(url)
         stats = self._stats[domain][strategy_name]
         stats.attempts += 1
         if success:
@@ -81,7 +70,7 @@ class StrategyCache:
 
         Strategies with fewer than ``min_attempts`` are appended in default order.
         """
-        domain = self._extract_domain(url)
+        domain = extract_domain(url)
         domain_stats = self._stats.get(domain, {})
 
         if not domain_stats:
@@ -101,7 +90,7 @@ class StrategyCache:
 
     async def get_stats(self, url: str) -> dict[str, StrategyStats]:
         """Return all strategy stats for *url*'s domain."""
-        domain = self._extract_domain(url)
+        domain = extract_domain(url)
         return dict(self._stats.get(domain, {}))
 
     async def clear(self, url: str | None = None) -> None:
@@ -109,5 +98,5 @@ class StrategyCache:
         if url is None:
             self._stats.clear()
         else:
-            domain = self._extract_domain(url)
+            domain = extract_domain(url)
             self._stats.pop(domain, None)
