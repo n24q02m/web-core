@@ -102,3 +102,36 @@ def test_build_filtered_query_empty_query():
 def test_build_filtered_query_whitespace_query():
     """Whitespace query string."""
     assert _build_filtered_query("   ") == "   "
+
+
+def test_build_filtered_query_extremely_long_query():
+    """64KB query string."""
+    query = "a" * 65536
+    result = _build_filtered_query(query)
+    assert result == query
+    assert len(result) == 65536
+
+
+def test_build_filtered_query_non_string_domains():
+    """Include/exclude lists containing non-string items should be handled safely."""
+    # This currently crashes with TypeError in is_valid_domain
+    result = _build_filtered_query("python", include_domains=["valid.com", None, 123, {"a": 1}])
+    assert result == "(site:valid.com) python"
+
+    result = _build_filtered_query("python", exclude_domains=["valid.com", None, 123])
+    assert result == "python -site:valid.com"
+
+
+def test_build_filtered_query_domain_whitespace():
+    """Domains with whitespace should be rejected (or handled) by is_valid_domain."""
+    result = _build_filtered_query("python", include_domains=["  ", "example.com "])
+    assert result == "python"
+
+
+def test_build_filtered_query_injection_attempt():
+    """Attempt to inject OR operators into the site filter."""
+    # is_valid_domain should reject these
+    injection = "example.com) OR (site:malicious.com"
+    result = _build_filtered_query("python", include_domains=[injection])
+    assert result == "python"
+    assert "malicious.com" not in result

@@ -86,7 +86,7 @@ def _build_filtered_query(
         seen_include = set()
         safe_include = []
         for d in include_domains:
-            if d not in seen_include and is_valid_domain(d):
+            if isinstance(d, str) and d not in seen_include and is_valid_domain(d):
                 seen_include.add(d)
                 safe_include.append(d)
                 if len(safe_include) >= 5:
@@ -99,7 +99,7 @@ def _build_filtered_query(
         seen_exclude = set()
         count_exclude = 0
         for d in exclude_domains:
-            if d not in seen_exclude and is_valid_domain(d):
+            if isinstance(d, str) and d not in seen_exclude and is_valid_domain(d):
                 seen_exclude.add(d)
                 parts.append(f"-site:{d}")
                 count_exclude += 1
