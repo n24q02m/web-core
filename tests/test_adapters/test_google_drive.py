@@ -368,3 +368,34 @@ async def test_fetch_folder_chapters_is_concurrent():
     assert len(chapters) == 3
     # If sequential, it would take at least 0.3s. If concurrent, ~0.1s.
     assert duration < 0.2
+
+
+def test_list_folder_via_gdown_with_namedtuple():
+    """list_folder_via_gdown correctly handles namedtuples from gdown."""
+    from collections import namedtuple
+
+    GoogleDriveFileToDownload = namedtuple("GoogleDriveFileToDownload", ["id", "path", "local_path"])
+
+    items = [
+        GoogleDriveFileToDownload(id="id1", path="folder/file1.txt", local_path="/tmp/file1.txt"),
+        GoogleDriveFileToDownload(id="id2", path="folder/file2.epub", local_path="/tmp/file2.epub"),
+    ]
+
+    mock_gdown = MagicMock()
+    mock_gdown.download_folder.return_value = items
+
+    with patch.dict("sys.modules", {"gdown": mock_gdown}):
+        import asyncio
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(_list_folder_via_gdown("test_folder_id"))
+        finally:
+            loop.close()
+
+    assert len(result) == 2
+    assert result[0].file_id == "id1"
+    assert result[0].name == "file1.txt"
+    assert result[1].file_id == "id2"
+    assert result[1].name == "file2.epub"
