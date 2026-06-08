@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import random
 import socket
 import subprocess
 import sys
@@ -358,10 +359,68 @@ class TestFindAvailablePort:
             assert isinstance(port, int)
             assert mock_socket_cls.call_count == 2
 
+    # ===========================================================================
+    # _wait_for_service
+    # ===========================================================================
 
-# ===========================================================================
-# _wait_for_service
-# ===========================================================================
+    def test_find_available_port_boundary(self):
+        """Covers the boundary filter in requested_range."""
+        # Start port near 65535, max_tries 10.
+        # requested_range should only contain [65534, 65535].
+        # We mock socket to fail for some, then succeed.
+        with patch("socket.socket") as mock_socket_cls:
+            mock_s_fail = MagicMock()
+            mock_s_fail.__enter__.return_value = mock_s_fail
+            mock_s_fail.bind.side_effect = OSError("Port taken")
+
+            mock_s_success = MagicMock()
+            mock_s_success.__enter__.return_value = mock_s_success
+
+            # Return 2 failures then 1 success.
+            mock_socket_cls.side_effect = [mock_s_fail, mock_s_fail, mock_s_success]
+
+            port = _find_available_port(65534, max_tries=10)
+            assert isinstance(port, int)
+            assert 1024 <= port <= 65535
+            assert mock_socket_cls.call_count == 3
+
+    def test_find_available_port_large_max_tries(self):
+        """Covers the min() branch when max_tries > dynamic range size."""
+        # Dynamic range is 49152 to 65535 (16384 ports).
+        # We use a very large max_tries.
+        with patch("random.sample", wraps=random.sample) as mock_sample:
+            port = _find_available_port(18888, max_tries=20000)
+            assert isinstance(port, int)
+            # Check that min() was used - the second arg to random.sample should be 16384.
+            # range(49152, 65535 + 1) has 16384 elements.
+            # Wait, dynamic_end - dynamic_start + 1 = 65535 - 49152 + 1 = 16384.
+            mock_sample.assert_called()
+            args, _ = mock_sample.call_args
+            assert args[1] == 16384
+
+    def test_find_available_port_mixed_errors(self):
+        """Inject a mix of socket creation and bind errors."""
+        with patch("socket.socket") as mock_socket_cls:
+            # 1. Socket creation fails
+            # 2. Bind fails
+            # 3. Success
+            mock_s_bind_fail = MagicMock()
+            mock_s_bind_fail.__enter__.return_value = mock_s_bind_fail
+            mock_s_bind_fail.bind.side_effect = OSError("Bind failed")
+
+            mock_s_success = MagicMock()
+            mock_s_success.__enter__.return_value = mock_s_success
+
+            mock_socket_cls.side_effect = [OSError("Socket creation failed"), mock_s_bind_fail, mock_s_success]
+
+            port = _find_available_port(18888, max_tries=5)
+            assert isinstance(port, int)
+            assert mock_socket_cls.call_count == 3
+
+    def test_find_available_port_zero_tries(self):
+        """Test with max_tries=0 to verify the immediate failure path."""
+        with pytest.raises(RuntimeError, match="No available port found after 0 attempts"):
+            _find_available_port(18888, max_tries=0)
 
 
 class TestWaitForService:
