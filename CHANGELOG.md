@@ -2,6 +2,36 @@
 
 <!-- version list -->
 
+## v2.2.1-beta.1 (2026-06-09)
+
+### Bug Fixes
+
+- Gitignore bot/merge junk artifacts (*.orig/*.rej/*.patch/*.diff/*.cover/*.bak)
+  ([#396](https://github.com/n24q02m/web-core/pull/396),
+  [`b921414`](https://github.com/n24q02m/web-core/commit/b9214140c737443644f80bb24d3aa2c6d7c812af))
+
+- **deps**: Lock file maintenance ([#399](https://github.com/n24q02m/web-core/pull/399),
+  [`45c3d10`](https://github.com/n24q02m/web-core/commit/45c3d10c0b9563c08fecae09aa61c7230066adb2))
+
+- **deps**: Update codecov/codecov-action action to v7
+  ([#398](https://github.com/n24q02m/web-core/pull/398),
+  [`79fca4c`](https://github.com/n24q02m/web-core/commit/79fca4c254d2ea33902d751ff0723b4f0711ef9b))
+
+- **deps**: Update non-major dependencies to >=0.0.45
+  ([#437](https://github.com/n24q02m/web-core/pull/437),
+  [`7e4087a`](https://github.com/n24q02m/web-core/commit/7e4087aca273ec5847313daa8951748a1daa2fcf))
+
+- **scraper**: Add SSRF protection to browser strategies
+  ([#426](https://github.com/n24q02m/web-core/pull/426),
+  [`06242b0`](https://github.com/n24q02m/web-core/commit/06242b07d7a0d5e902618b49398da2e00d562140))
+
+### Testing
+
+- Add comprehensive tests for _build_filtered_query robustness
+  ([#414](https://github.com/n24q02m/web-core/pull/414),
+  [`6c14f0d`](https://github.com/n24q02m/web-core/commit/6c14f0d6ae8af5e4a42a617aa3e4126116d2ff9d))
+
+
 ## v2.2.0 (2026-06-07)
 
 
