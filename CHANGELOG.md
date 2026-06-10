@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v2.2.2-beta.2 (2026-06-10)
+
+### Bug Fixes
+
+- Raise coverage gate to 95% policy and cover LLM provider calls
+  ([#444](https://github.com/n24q02m/web-core/pull/444),
+  [`5014e44`](https://github.com/n24q02m/web-core/commit/5014e445f18552dde4f8c258f21b96373511af4e))
+
+- Remove leaked private identity from web-core public package
+  ([#443](https://github.com/n24q02m/web-core/pull/443),
+  [`c3b59e3`](https://github.com/n24q02m/web-core/commit/c3b59e32977b34593c82c19732ee110207aa0782))
+
+
 ## v2.2.2-beta.1 (2026-06-10)
 
 ### Bug Fixes
