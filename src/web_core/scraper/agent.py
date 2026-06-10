@@ -147,14 +147,7 @@ class ScrapingAgent:
         selectors = state.get("selectors")
 
         if idx >= len(order):
-            return {
-                **state,
-                "success": False,
-                "content": "",
-                "status_code": 0,
-                "errors": errors,
-                "strategies_tried": tried,
-            }
+            return self._handle_execution_failure(state, errors, tried)
 
         strategy_name = order[idx]
         strategy = self.strategies.get(strategy_name)
@@ -165,20 +158,10 @@ class ScrapingAgent:
 
         if strategy is None:
             errors.append(f"Strategy '{strategy_name}' not found")
-            return {
-                **state,
-                "success": False,
-                "content": "",
-                "status_code": 0,
-                "errors": errors,
-                "strategies_tried": tried,
-            }
+            return self._handle_execution_failure(state, errors, tried)
 
         try:
-            t0 = time.monotonic()
-            result = await strategy.fetch(url, selectors)
-            elapsed_ms = (time.monotonic() - t0) * 1000
-
+            result, elapsed_ms = await self._run_strategy(strategy, url, selectors)
             metadata = {
                 **state.get("metadata", {}),
                 "last_strategy": strategy_name,
@@ -194,14 +177,25 @@ class ScrapingAgent:
             }
         except Exception as e:
             errors.append(f"{strategy_name}: {e!s}")
-            return {
-                **state,
-                "success": False,
-                "content": "",
-                "status_code": 0,
-                "errors": errors,
-                "strategies_tried": tried,
-            }
+            return self._handle_execution_failure(state, errors, tried)
+
+    async def _run_strategy(self, strategy: Any, url: str, selectors: dict[str, str] | None) -> tuple[Any, float]:
+        """Execute a strategy and return the result and elapsed time in ms."""
+        t0 = time.monotonic()
+        result = await strategy.fetch(url, selectors)
+        elapsed_ms = (time.monotonic() - t0) * 1000
+        return result, elapsed_ms
+
+    def _handle_execution_failure(self, state: ScrapingState, errors: list[str], tried: list[str]) -> ScrapingState:
+        """Return a failed state with updated errors and tried strategies."""
+        return {
+            **state,
+            "success": False,
+            "content": "",
+            "status_code": 0,
+            "errors": errors,
+            "strategies_tried": tried,
+        }
 
     async def _validate_node(self, state: ScrapingState) -> ScrapingState:
         """Validate that the response is usable.
