@@ -7,6 +7,7 @@ comparison, and for validating domain names to prevent injection attacks.
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 # ---------------------------------------------------------------------------
@@ -50,6 +51,7 @@ _DOMAIN_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*\.[a-zA-Z]{2,}\Z")
 # ---------------------------------------------------------------------------
 
 
+@lru_cache(maxsize=1024)
 def normalize_url(url: str) -> str:
     """Normalize a URL for deduplication.
 
