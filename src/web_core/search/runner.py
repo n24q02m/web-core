@@ -316,28 +316,31 @@ async def _try_reuse_existing() -> str | None:
     Reads the discovery file, verifies the process is alive and healthy,
     and returns the URL if reusable.
     """
-    data = await asyncio.to_thread(_read_discovery)
-    if not data:
-        return None
+    try:
+        data = await asyncio.to_thread(_read_discovery)
+        if not data:
+            return None
 
-    port = data.get("port")
-    pid = data.get("pid")
-    if not port or not pid:
-        return None
+        port = data.get("port")
+        pid = data.get("pid")
+        if not port or not pid:
+            return None
 
-    # Check if the SearXNG process is still alive
-    if not _is_pid_alive(pid):
-        logger.debug("Discovery file points to dead process (PID=%d), cleaning up", pid)
+        # Check if the SearXNG process is still alive
+        if not _is_pid_alive(pid):
+            logger.debug("Discovery file points to dead process (PID=%d), cleaning up", pid)
+            _remove_discovery()
+            return None
+
+        # Health check the existing instance
+        url = f"http://127.0.0.1:{port}"
+        if await _quick_health_check(url):
+            return url
+
+        logger.debug("Discovery file points to unhealthy instance at %s, cleaning up", url)
         _remove_discovery()
+    except Exception:
         return None
-
-    # Health check the existing instance
-    url = f"http://127.0.0.1:{port}"
-    if await _quick_health_check(url):
-        return url
-
-    logger.debug("Discovery file points to unhealthy instance at %s, cleaning up", url)
-    _remove_discovery()
     return None
 
 
