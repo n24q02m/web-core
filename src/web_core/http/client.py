@@ -92,6 +92,16 @@ def _check_ip_safe(ip_str: str, hostname: str) -> bool:
 _BLOCKED_HOSTNAMES = frozenset({"localhost", "localhost.localdomain", "127.0.0.1", "::1"})
 
 
+def _is_dns_cached(hostname: str) -> bool:
+    """Return True if hostname is already resolved and pinned in cache."""
+    with _dns_cache_lock:
+        entry = _dns_cache.get(hostname)
+        if entry is None:
+            return False
+        _, cached_at = entry
+        return (time.monotonic() - cached_at) < _DNS_CACHE_TTL
+
+
 def is_safe_url(url: str, *, allow_private: bool = False) -> bool:
     """Validate that *url* is safe to fetch (no SSRF).
 
@@ -107,38 +117,31 @@ def is_safe_url(url: str, *, allow_private: bool = False) -> bool:
     except Exception:
         return False
 
-    if parsed.scheme not in ("http", "https"):
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
         return False
 
     hostname = parsed.hostname
-    if not hostname:
-        return False
-
     if not allow_private and hostname.lower() in _BLOCKED_HOSTNAMES:
         return False
 
     # Fast path: already resolved, validated, and pinned
-    with _dns_cache_lock:
-        entry = _dns_cache.get(hostname)
-        if entry is not None:
-            _, cached_at = entry
-            if time.monotonic() - cached_at < _DNS_CACHE_TTL:
-                return True
+    if _is_dns_cached(hostname):
+        return True
 
     try:
         results = _original_getaddrinfo(hostname, None)
-        if not allow_private:
-            for res in results:
-                ip_str = str(res[4][0])
-                if not _check_ip_safe(ip_str, hostname):
-                    return False
-        # Pin the DNS result
-        with _dns_cache_lock:
-            _dns_cache[hostname] = (results, time.monotonic())
-    except socket.gaierror:
+    except (socket.gaierror, Exception):
         return False
-    except Exception:
-        return False
+
+    if not allow_private:
+        for res in results:
+            ip_str = str(res[4][0])
+            if not _check_ip_safe(ip_str, hostname):
+                return False
+
+    # Pin the DNS result
+    with _dns_cache_lock:
+        _dns_cache[hostname] = (results, time.monotonic())
 
     return True
 
