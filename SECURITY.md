@@ -27,5 +27,8 @@ You will receive acknowledgment within 48 hours.
 - Pre-commit hooks with gitleaks for secret detection
 - GitHub Actions SHA-pinned for supply chain security
 - Branch protection via repository rulesets
-- SSRF protection on all outbound HTTP (DNS pinning + IP validation)
-- Private package with restricted access
+- SSRF protection on all outbound HTTP: DNS pinning + IP validation, redirect
+  no-follow with per-hop re-validation, and per-connection re-resolve-and-vet
+  to close redirect-bypass and DNS-rebinding (TOCTOU) gaps — enforced across
+  HTTP strategies and stealth browsers
+- Published as a public PyPI package; releases via OIDC Trusted Publishing

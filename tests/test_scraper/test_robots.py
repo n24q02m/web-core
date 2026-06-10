@@ -18,8 +18,8 @@ Disallow: /admin/
 Allow: /
 """
 
-ROBOTS_BLOCK_KLPRISM = """\
-User-agent: KlPrismBot
+ROBOTS_BLOCK_OUR_BOT = """\
+User-agent: web-core-bot
 Disallow: /
 
 User-agent: *
@@ -66,13 +66,13 @@ class TestRobotsCache:
 
     async def test_user_agent_specific_block(self):
         """Our bot is specifically blocked, others allowed."""
-        cache = RobotsCache(user_agent="KlPrismBot/1.0")
-        with _patch_fetch(ROBOTS_BLOCK_KLPRISM):
+        cache = RobotsCache(user_agent="web-core-bot/1.0")
+        with _patch_fetch(ROBOTS_BLOCK_OUR_BOT):
             assert await cache.is_allowed("https://example.com/page") is False
 
         # Different user-agent should be allowed
         cache2 = RobotsCache(user_agent="OtherBot/1.0")
-        with _patch_fetch(ROBOTS_BLOCK_KLPRISM):
+        with _patch_fetch(ROBOTS_BLOCK_OUR_BOT):
             assert await cache2.is_allowed("https://example.com/page") is True
 
     async def test_cache_hit_skips_refetch(self):
@@ -106,11 +106,11 @@ class TestRobotsDisallowedError:
     """Error type tests."""
 
     def test_error_message(self):
-        err = RobotsDisallowedError("https://example.com/secret", "KlPrismBot/1.0")
-        assert "KlPrismBot/1.0" in str(err)
+        err = RobotsDisallowedError("https://example.com/secret", "web-core-bot/1.0")
+        assert "web-core-bot/1.0" in str(err)
         assert "https://example.com/secret" in str(err)
         assert err.url == "https://example.com/secret"
-        assert err.user_agent == "KlPrismBot/1.0"
+        assert err.user_agent == "web-core-bot/1.0"
 
     def test_is_exception(self):
         assert issubclass(RobotsDisallowedError, Exception)
