@@ -1,38 +1,28 @@
+"""Tests for PatchrightStrategy."""
+
+from __future__ import annotations
+
 import contextlib
+import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
-from web_core.scraper.strategies.patchright_browser import PatchrightStrategy
-
-
-@pytest.fixture(autouse=True)
-def mock_is_safe_url_all():
-    with (
-        patch("web_core.scraper.strategies.patchright_browser.is_safe_url", return_value=True),
-        patch("web_core.scraper.strategies.captcha.is_safe_url", return_value=True),
-        patch("web_core.scraper.strategies.headless.is_safe_url", return_value=True),
-    ):
-        yield
-
+from web_core.scraper.strategies.patchright_browser import PatchrightConfig, PatchrightStrategy
 
 NORMAL_HTML = "<html><body><h1>Hello World</h1></body></html>"
-CF_JS_CHALLENGE_HTML = "<html><body><title>just a moment...</title></body></html>"
-CF_TURNSTILE_HTML = '<html><body><div class="cf-turnstile-response"></div></body></html>'
-CF_MANAGED_HTML = '<html><body><div id="cf-please-wait"></div></body></html>'
+CF_JS_CHALLENGE_HTML = "<html><body><div class='cf-browser-verification'>just a moment...</div></body></html>"
+CF_MANAGED_HTML = "<html><body><div id='managed_checking_msg'>managed challenge</div></body></html>"
 
 
-def _make_mock_provider(content: str):
+def _make_mock_provider(html: str, url: str = "https://example.com", status: int = 200):
     mock_page = AsyncMock()
-    mock_page.content = AsyncMock(return_value=content)
-    mock_page.url = "https://example.com"
+    mock_page.content = AsyncMock(return_value=html)
+    mock_page.url = url
     mock_page.close = AsyncMock()
     mock_page.context = MagicMock()
     mock_page.context.cookies = AsyncMock(return_value=[])
-    mock_page.wait_for_load_state = AsyncMock()
 
     mock_response = MagicMock()
-    mock_response.status = 200
+    mock_response.status = status
     mock_page.goto = AsyncMock(return_value=mock_response)
 
     mock_browser = AsyncMock()
@@ -46,37 +36,35 @@ def _make_mock_provider(content: str):
 
 
 class TestPatchrightStrategy:
-    async def test_fetch_normal_page(self):
-        provider, _page = _make_mock_provider(NORMAL_HTML)
+    @pytest.fixture(autouse=True)
+    def mock_safe_url(self):
+        with patch("web_core.scraper.strategies.patchright_browser.is_safe_url", return_value=True):
+            yield
+
+    async def test_fetch_success(self):
+        provider, page = _make_mock_provider(NORMAL_HTML)
         strategy = PatchrightStrategy(provider=provider)
 
         result = await strategy.fetch("https://example.com")
 
         assert result.content == NORMAL_HTML
-        assert result.status_code == 200
+        assert result.url == "https://example.com"
         assert result.strategy == "patchright"
+        assert result.status_code == 200
+        assert result.metadata["rendered"] is True
         assert result.metadata["cf_challenge"] is None
 
-    async def test_fetch_detects_turnstile(self):
-        provider, _page = _make_mock_provider(CF_TURNSTILE_HTML)
-        strategy = PatchrightStrategy(provider=provider)
-
-        result = await strategy.fetch("https://protected.com")
-
-        assert result.metadata["cf_challenge"] == "turnstile"
-        assert result.content == CF_TURNSTILE_HTML
-
-    async def test_fetch_js_challenge_polls_and_resolves(self):
-        """JS challenge should be polled until content changes to normal."""
+    async def test_fetch_js_challenge_resolves(self):
+        """CF JS challenge should wait and poll."""
         provider, page = _make_mock_provider(CF_JS_CHALLENGE_HTML)
 
-        # After polling, page.content() returns normal HTML
-        call_count = 0
+        # After wait, content changes to normal
+        content_calls = 0
 
         async def content_side_effect():
-            nonlocal call_count
-            call_count += 1
-            if call_count >= 3:
+            nonlocal content_calls
+            content_calls += 1
+            if content_calls >= 2:
                 return NORMAL_HTML
             return CF_JS_CHALLENGE_HTML
 
@@ -331,3 +319,71 @@ class TestPatchrightStrategy:
             result = await strategy.fetch("https://managed-timeout.com")
 
         assert result.strategy == "patchright"
+
+    async def test_config_object_init(self):
+        """Verify initialization with PatchrightConfig object."""
+        provider, page = _make_mock_provider(NORMAL_HTML)
+        config = PatchrightConfig(timeout=45.0, headless=False)
+        strategy = PatchrightStrategy(config=config, provider=provider)
+
+        assert strategy.config.timeout == 45.0
+        assert strategy.config.headless is False
+
+        await strategy.fetch("https://example.com")
+        page.goto.assert_awaited_once()
+        call_kwargs = page.goto.call_args
+        assert call_kwargs[1]["timeout"] == 45000.0
+
+    async def test_lazy_provider_init(self):
+        """Verify PatchrightProvider is lazily initialized when not provided."""
+        mock_provider_instance = AsyncMock()
+        mock_provider_instance.launch = AsyncMock()
+        mock_provider_instance.close = AsyncMock()
+
+        with patch("web_core.browsers.patchright.PatchrightProvider", return_value=mock_provider_instance):
+            strategy = PatchrightStrategy()
+            # Suppress all exceptions because we only care about the instantiation
+            with contextlib.suppress(Exception):
+                await strategy.fetch("https://example.com")
+
+        assert mock_provider_instance.launch.called
+
+    async def test_ssrf_protection_triggered(self):
+        """Cover line 103: SSRF protection."""
+        strategy = PatchrightStrategy()
+        with patch("web_core.scraper.strategies.patchright_browser.is_safe_url", return_value=False):
+            with pytest.raises(ValueError, match="SSRF blocked"):
+                await strategy.fetch("http://169.254.169.254")
+
+    async def test_managed_challenge_recheck_resolves(self):
+        """Cover line 146: managed challenge resolved after domcontentloaded."""
+        provider, page = _make_mock_provider(CF_MANAGED_HTML)
+
+        # Initial content is challenge, then it resolves after domcontentloaded
+        content_calls = 0
+
+        async def content_side_effect():
+            nonlocal content_calls
+            content_calls += 1
+            if content_calls >= 3:  # 1 for detect, 1 for loop (exhausted), 1 for re-check
+                return NORMAL_HTML
+            return CF_MANAGED_HTML
+
+        page.content = AsyncMock(side_effect=content_side_effect)
+
+        strategy = PatchrightStrategy(provider=provider)
+        with (
+            patch("web_core.scraper.strategies.patchright_browser._CF_POLL_MAX_CHECKS", 1),
+            patch("web_core.scraper.strategies.patchright_browser._CF_POLL_INTERVAL", 0.01),
+        ):
+            result = await strategy.fetch("https://managed-resolve-late.com")
+
+        assert result.metadata["cf_challenge"] is None
+        assert result.content == NORMAL_HTML
+
+    async def test_turnstile_detected(self):
+        """Cover line 146: turnstile detected."""
+        provider, page = _make_mock_provider("<html><body><div class='cf-turnstile-response'></div></body></html>")
+        strategy = PatchrightStrategy(provider=provider)
+        result = await strategy.fetch("https://turnstile.com")
+        assert result.metadata["cf_challenge"] == "turnstile"
