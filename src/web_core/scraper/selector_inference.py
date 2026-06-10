@@ -23,6 +23,8 @@ import re
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from web_core.http.url import extract_domain
+
 logger = logging.getLogger(__name__)
 
 LLMCaller = Callable[[str, str], Awaitable[dict[str, str]]]
@@ -124,6 +126,74 @@ Example response:
 {{"content": "#novel_honbun", "title": ".novel_title", "next_chapter": "a.next"}}"""
 
 
+def _extract_domain(url: str) -> str:
+    """Extract domain from a URL using the optimized fast path."""
+    return extract_domain(url)
+
+
+def _find_hardcoded_selectors(domain: str, url: str) -> dict[str, str] | None:
+    """Search for selectors in hardcoded domain configs and wildcard patterns."""
+    # Exact match
+    if domain in DOMAIN_CONFIGS:
+        logger.info(
+            "domain_selector_hit",
+            extra={"domain": domain, "tier": "hardcoded", "url": url},
+        )
+        return DOMAIN_CONFIGS[domain].copy()
+
+    # Wildcard match (e.g. example*.com pattern in DOMAIN_CONFIGS)
+    for pattern_re, config in _WILDCARD_CONFIGS:
+        if pattern_re.match(domain):
+            logger.info(
+                "domain_selector_hit",
+                extra={
+                    "domain": domain,
+                    "tier": "hardcoded_wildcard",
+                    "pattern": pattern_re.pattern,
+                    "url": url,
+                },
+            )
+            return config.copy()
+
+    return None
+
+
+async def _execute_llm_inference(
+    llm_caller: LLMCaller,
+    prompt: str,
+    html_content: str,
+) -> Any:
+    """Execute the LLM caller and handle common exceptions."""
+    try:
+        return await llm_caller(prompt, html_content)
+    except ImportError as e:
+        logger.debug("selector_inference: provider SDK not installed (%s), skipping", e)
+        return None
+    except Exception as e:
+        logger.warning("LLM selector inference failed: %s", e)
+        return None
+
+
+def _process_llm_raw_output(raw: Any) -> dict[str, str]:
+    """Process raw LLM output into a validated selector dictionary."""
+    if raw is None:
+        return {}
+
+    # llm_caller may return a dict directly (already parsed) or raw JSON text.
+    if isinstance(raw, str):
+        try:
+            return _parse_selector_json(raw)
+        except json.JSONDecodeError as e:
+            logger.warning("LLM selector inference returned invalid JSON: %s", e)
+            return {}
+
+    if isinstance(raw, dict):
+        return {k: v for k, v in raw.items() if k in {"content", "title", "next_chapter"} and isinstance(v, str)}
+
+    logger.warning("LLM selector inference returned unexpected type: %s", type(raw))
+    return {}
+
+
 def get_domain_selectors(url: str) -> dict[str, str] | None:
     """Return built-in selectors for a known domain, or None.
 
@@ -134,38 +204,8 @@ def get_domain_selectors(url: str) -> dict[str, str] | None:
     Logs domain usage for analytics — enabling the Tiered Scraping
     feedback loop (track unknown domains → hardcode popular ones).
     """
-    # Fast path domain extraction (~3.5x faster than urlparse)
-    if url.startswith("//"):
-        domain = url[2:].partition("/")[0].partition("?")[0].partition("#")[0].lower()
-    else:
-        _, sep, rest = url.partition("://")
-        domain_part = rest if sep else url
-        domain = domain_part.partition("/")[0].partition("?")[0].partition("#")[0].lower()
-
-    selectors: dict[str, str] | None = None
-
-    # Exact match
-    if domain in DOMAIN_CONFIGS:
-        selectors = DOMAIN_CONFIGS[domain].copy()
-        logger.info(
-            "domain_selector_hit",
-            extra={"domain": domain, "tier": "hardcoded", "url": url},
-        )
-    else:
-        # Wildcard match (e.g. example*.com pattern in DOMAIN_CONFIGS)
-        for pattern_re, config in _WILDCARD_CONFIGS:
-            if pattern_re.match(domain):
-                selectors = config.copy()
-                logger.info(
-                    "domain_selector_hit",
-                    extra={
-                        "domain": domain,
-                        "tier": "hardcoded_wildcard",
-                        "pattern": pattern_re.pattern,
-                        "url": url,
-                    },
-                )
-                break
+    domain = _extract_domain(url)
+    selectors = _find_hardcoded_selectors(domain, url)
 
     # Log unknown domain — candidate for future hardcoding
     if selectors is None:
@@ -173,9 +213,8 @@ def get_domain_selectors(url: str) -> dict[str, str] | None:
             "domain_selector_miss",
             extra={"domain": domain, "tier": "unknown", "url": url},
         )
-
-    # Inject domain-specific cookies
-    if selectors is not None:
+    else:
+        # Inject domain-specific cookies
         cookies = DOMAIN_COOKIES.get(domain)
         if cookies:
             selectors["cookies"] = cookies  # type: ignore[assignment]
@@ -394,36 +433,13 @@ async def infer_selectors_with_llm(
         return {}
 
     prompt = _build_prompt(url, html_content)
+    raw = await _execute_llm_inference(llm_caller, prompt, html_content)
+    selectors = _process_llm_raw_output(raw)
 
-    try:
-        raw = await llm_caller(prompt, html_content)
-    except ImportError as e:
-        logger.debug("selector_inference: provider SDK not installed (%s), skipping", e)
-        return {}
-    except Exception as e:
-        logger.warning("LLM selector inference failed: %s", e)
+    if not selectors:
         return {}
 
-    # llm_caller may return a dict directly (already parsed) or raw JSON text.
-    if isinstance(raw, str):
-        try:
-            selectors = _parse_selector_json(raw)
-        except json.JSONDecodeError as e:
-            logger.warning("LLM selector inference returned invalid JSON: %s", e)
-            return {}
-    elif isinstance(raw, dict):
-        selectors = {k: v for k, v in raw.items() if k in {"content", "title", "next_chapter"} and isinstance(v, str)}
-    else:
-        logger.warning("LLM selector inference returned unexpected type: %s", type(raw))
-        return {}
-
-    # Fast path domain extraction (~3.5x faster than urlparse)
-    if url.startswith("//"):
-        domain = url[2:].partition("/")[0].partition("?")[0].partition("#")[0].lower()
-    else:
-        _, sep, rest = url.partition("://")
-        domain_part = rest if sep else url
-        domain = domain_part.partition("/")[0].partition("?")[0].partition("#")[0].lower()
+    domain = _extract_domain(url)
     provider_name = getattr(llm_caller, "__web_core_provider__", provider or "custom")
     resolved_model = getattr(llm_caller, "__web_core_model__", model)
     logger.info(
