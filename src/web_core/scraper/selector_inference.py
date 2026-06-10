@@ -191,7 +191,10 @@ def _build_prompt(url: str, html_content: str) -> str:
 
 def _parse_selector_json(text: str) -> dict[str, str]:
     """Parse a JSON response into a whitelisted selector dict."""
-    result = json.loads(text or "")
+    try:
+        result = json.loads(text or "")
+    except json.JSONDecodeError:
+        return {}
     selectors: dict[str, str] = {}
     if isinstance(result, dict):
         for key in ("content", "title", "next_chapter"):
@@ -406,11 +409,7 @@ async def infer_selectors_with_llm(
 
     # llm_caller may return a dict directly (already parsed) or raw JSON text.
     if isinstance(raw, str):
-        try:
-            selectors = _parse_selector_json(raw)
-        except json.JSONDecodeError as e:
-            logger.warning("LLM selector inference returned invalid JSON: %s", e)
-            return {}
+        selectors = _parse_selector_json(raw)
     elif isinstance(raw, dict):
         selectors = {k: v for k, v in raw.items() if k in {"content", "title", "next_chapter"} and isinstance(v, str)}
     else:
