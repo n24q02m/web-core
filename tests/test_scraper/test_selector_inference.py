@@ -9,7 +9,6 @@ import pytest
 
 from web_core.scraper import selector_inference
 from web_core.scraper.selector_inference import (
-    _detect_provider_from_env,
     _parse_selector_json,
     _resolve_provider_and_model,
     infer_selectors_with_llm,
@@ -47,74 +46,6 @@ def test_merge_selectors_missing_existing_uses_inferred():
 
 def test_merge_selectors_all_empty():
     assert merge_selectors({}, {}) == {}
-
-
-def test_parse_selector_json_valid():
-    text = json.dumps({"content": "#c", "title": ".t", "next_chapter": "a"})
-    assert _parse_selector_json(text) == {"content": "#c", "title": ".t", "next_chapter": "a"}
-
-
-def test_parse_selector_json_partial():
-    text = json.dumps({"content": "#c"})
-    assert _parse_selector_json(text) == {"content": "#c"}
-
-
-def test_parse_selector_json_unexpected_keys():
-    text = json.dumps({"content": "#c", "bogus": "val"})
-    assert _parse_selector_json(text) == {"content": "#c"}
-
-
-def test_parse_selector_json_non_string_values():
-    text = json.dumps({"content": 123, "title": None})
-    assert _parse_selector_json(text) == {}
-
-
-def test_parse_selector_json_malformed():
-    assert _parse_selector_json("invalid { json") == {}
-
-
-def test_parse_selector_json_empty():
-    assert _parse_selector_json("") == {}
-    assert _parse_selector_json(None) == {}  # type: ignore[arg-type]
-
-
-def test_parse_selector_json_non_dict():
-    assert _parse_selector_json(json.dumps([1, 2, 3])) == {}
-    assert _parse_selector_json(json.dumps("not a dict")) == {}
-
-
-def test_parse_selector_json_valid():
-    text = json.dumps({"content": "#c", "title": ".t", "next_chapter": "a"})
-    assert _parse_selector_json(text) == {"content": "#c", "title": ".t", "next_chapter": "a"}
-
-
-def test_parse_selector_json_partial():
-    text = json.dumps({"content": "#c"})
-    assert _parse_selector_json(text) == {"content": "#c"}
-
-
-def test_parse_selector_json_unexpected_keys():
-    text = json.dumps({"content": "#c", "bogus": "val"})
-    assert _parse_selector_json(text) == {"content": "#c"}
-
-
-def test_parse_selector_json_non_string_values():
-    text = json.dumps({"content": 123, "title": None})
-    assert _parse_selector_json(text) == {}
-
-
-def test_parse_selector_json_malformed():
-    assert _parse_selector_json("invalid { json") == {}
-
-
-def test_parse_selector_json_empty():
-    assert _parse_selector_json("") == {}
-    assert _parse_selector_json(None) == {}  # type: ignore[arg-type]
-
-
-def test_parse_selector_json_non_dict():
-    assert _parse_selector_json(json.dumps([1, 2, 3])) == {}
-    assert _parse_selector_json(json.dumps("not a dict")) == {}
 
 
 def test_parse_selector_json_valid():
