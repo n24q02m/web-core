@@ -75,88 +75,104 @@ class PatchrightStrategy(BaseStrategy):
 
         return await page.content()
 
-    async def fetch(self, url: str, selectors: dict[str, str] | None = None) -> ScrapingResult:
-        """Fetch *url* via Patchright undetected browser.
+    def _get_provider(self) -> Any:
+        """Get Patchright provider instance."""
+        if self._provider is not None:
+            return self._provider
+        from web_core.browsers.patchright import PatchrightProvider
 
-        Quy trinh:
-        1. Launch browser + navigate voi networkidle wait
-        2. Kiem tra CF challenge trong HTML
-        3. Neu JS challenge: poll cho den khi resolve (toi da 10s)
-        4. Neu Turnstile/managed: tra ve challenge HTML (de CaptchaStrategy xu ly)
-        5. Neu khong co challenge: tra ve content ngay
-        """
+        return PatchrightProvider(headless=self.headless)
+
+    async def _perform_navigation(self, page: Any, url: str) -> tuple[Any, str, str | None]:
+        """Perform initial navigation and detect Cloudflare challenges."""
+        # Use domcontentloaded first so we don't blind wait 60s if there's a CF challenge
+        response = await page.goto(url, wait_until="domcontentloaded", timeout=self.timeout * 1000)
+
+        content = await page.content()
+        cf_challenge_type = detect_cloudflare_challenge(content)
+
+        # Wait networkidle right away if no challenge initially
+        if cf_challenge_type is None:
+            try:
+                # Now wait for networkidle safely
+                await page.wait_for_load_state("networkidle", timeout=self.timeout * 1000)
+                content = await page.content()
+            except TimeoutError:
+                logger.debug("Optional networkidle wait timed out for %s", url)
+            cf_challenge_type = detect_cloudflare_challenge(content)
+
+        return response, content, cf_challenge_type
+
+    async def _handle_js_challenge(self, page: Any, url: str) -> str:
+        """Handle Cloudflare JS challenge by polling for resolution."""
+        logger.info("CF JS challenge detected for %s, polling for resolution", url)
+        content = await self._wait_for_cf_resolution(page)
+
+        # Re-check and wait for networkidle if resolved
+        if detect_cloudflare_challenge(content) is None:
+            try:
+                await page.wait_for_load_state("networkidle", timeout=15000)
+                content = await page.content()
+            except TimeoutError:
+                logger.debug("Optional networkidle wait timed out for %s after JS challenge", url)
+
+        return content
+
+    async def _handle_managed_challenge(self, page: Any, url: str) -> str:
+        """Handle Cloudflare managed challenge by polling and waiting for navigation."""
+        logger.info("CF managed challenge for %s, polling for resolution", url)
+
+        # Poll until challenge resolves (redirect to real page)
+        cf_challenge_type = "managed"
+        for _ in range(_CF_POLL_MAX_CHECKS):
+            await asyncio.sleep(_CF_POLL_INTERVAL)
+            content = await page.content()
+            cf_challenge_type = detect_cloudflare_challenge(content)
+            if cf_challenge_type is None:
+                logger.debug("CF managed challenge resolved for %s", url)
+                break
+
+        # If still challenged after polls, wait for navigation
+        if cf_challenge_type is not None:
+            try:
+                await page.wait_for_load_state("domcontentloaded", timeout=15000)
+                content = await page.content()
+                cf_challenge_type = detect_cloudflare_challenge(content)
+            except TimeoutError:
+                logger.debug("Optional domcontentloaded wait timed out for %s after managed challenge", url)
+
+        # If resolved, wait for networkidle
+        if cf_challenge_type is None:
+            try:
+                await page.wait_for_load_state("networkidle", timeout=15000)
+                content = await page.content()
+            except TimeoutError:
+                logger.debug("Optional networkidle wait timed out for %s after managed challenge", url)
+
+        return content
+
+    async def fetch(self, url: str, selectors: dict[str, str] | None = None) -> ScrapingResult:
+        """Fetch *url* via Patchright undetected browser."""
         if not is_safe_url(url):
             raise ValueError(f"SSRF blocked: {url}")
-        if self._provider is not None:
-            provider = self._provider
-        else:
-            from web_core.browsers.patchright import PatchrightProvider
 
-            provider = PatchrightProvider(headless=self.headless)
-
-        cf_challenge_type = None
-
+        provider = self._get_provider()
         try:
             browser = await provider.launch(config=self.launch_config)
             page = await browser.new_page()
 
             try:
-                # Use domcontentloaded first so we don't blind wait 60s if there's a CF challenge
-                response = await page.goto(url, wait_until="domcontentloaded", timeout=self.timeout * 1000)
-
-                content = await page.content()
-                cf_challenge_type = detect_cloudflare_challenge(content)
-
-                # Wait networkidle right away if no challenge initially
-                if cf_challenge_type is None:
-                    try:
-                        # Now wait for networkidle safely
-                        await page.wait_for_load_state("networkidle", timeout=self.timeout * 1000)
-                        content = await page.content()
-                    except TimeoutError:
-                        logger.debug("Optional networkidle wait timed out for %s", url)
-                    cf_challenge_type = detect_cloudflare_challenge(content)
+                response, content, cf_challenge_type = await self._perform_navigation(page, url)
 
                 if cf_challenge_type == "js_challenge":
-                    logger.info("CF JS challenge detected for %s, polling for resolution", url)
-                    content = await self._wait_for_cf_resolution(page)
-                    # Re-check after wait
-                    cf_challenge_type = detect_cloudflare_challenge(content)
-                    if cf_challenge_type is None:
-                        try:
-                            await page.wait_for_load_state("networkidle", timeout=15000)
-                            content = await page.content()
-                        except TimeoutError:
-                            logger.debug("Optional networkidle wait timed out for %s after JS challenge", url)
+                    content = await self._handle_js_challenge(page, url)
                 elif cf_challenge_type == "turnstile":
                     logger.info("CF Turnstile detected for %s, cannot solve here", url)
-                    # Return the challenge HTML — CaptchaStrategy will handle
                 elif cf_challenge_type == "managed":
-                    logger.info("CF managed challenge for %s, polling for resolution", url)
-                    # Poll until challenge resolves (redirect to real page)
-                    for _ in range(_CF_POLL_MAX_CHECKS):
-                        await asyncio.sleep(_CF_POLL_INTERVAL)
-                        content = await page.content()
-                        cf_challenge_type = detect_cloudflare_challenge(content)
-                        if cf_challenge_type is None:
-                            logger.debug("CF managed challenge resolved for %s", url)
-                            break
-                    # If still challenged after polls, wait for navigation
-                    if cf_challenge_type is not None:
-                        try:
-                            await page.wait_for_load_state("domcontentloaded", timeout=15000)
-                            content = await page.content()
-                            cf_challenge_type = detect_cloudflare_challenge(content)
-                        except TimeoutError:
-                            logger.debug("Optional domcontentloaded wait timed out for %s after managed challenge", url)
+                    content = await self._handle_managed_challenge(page, url)
 
-                    if cf_challenge_type is None:
-                        try:
-                            await page.wait_for_load_state("networkidle", timeout=15000)
-                            content = await page.content()
-                        except TimeoutError:
-                            logger.debug("Optional networkidle wait timed out for %s after managed challenge", url)
-
+                # Final re-check challenge type for metadata
+                cf_challenge_type = detect_cloudflare_challenge(content)
                 status_code = response.status if response else 200
                 final_url = page.url
 

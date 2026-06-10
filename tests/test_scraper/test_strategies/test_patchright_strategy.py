@@ -331,3 +331,9 @@ class TestPatchrightStrategy:
             result = await strategy.fetch("https://managed-timeout.com")
 
         assert result.strategy == "patchright"
+
+    async def test_fetch_blocked_url(self):
+        with patch("web_core.scraper.strategies.patchright_browser.is_safe_url", return_value=False):
+            strategy = PatchrightStrategy()
+            with pytest.raises(ValueError, match="SSRF blocked"):
+                await strategy.fetch("http://internal.service")
