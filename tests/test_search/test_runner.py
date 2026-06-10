@@ -57,7 +57,7 @@ def _reset_module_state():
     mod._last_restart_time = 0.0
     mod._is_owner = False
     mod._startup_lock = None
-    mod._DOCKER_LOCK = None
+    mod._docker_lock = None
 
 
 @pytest.fixture(autouse=True)
@@ -1201,12 +1201,13 @@ class TestModuleExports:
 
 class TestGetDockerLock:
     def test_returns_filelock(self, tmp_config_dir):
-        """Returns a filelock.FileLock instance."""
+        """Returns a filelock.FileLock instance with correct path and timeout."""
         import filelock
 
         lock = _get_docker_lock()
         assert isinstance(lock, filelock.FileLock)
-        assert Path(lock.lock_file).name == "searxng_docker.lock"
+        assert Path(lock.lock_file).name == "docker_startup.lock"
+        assert lock.timeout == 60.0
 
     def test_returns_same_lock(self, tmp_config_dir):
         """Returns the same lock on subsequent calls."""
@@ -1218,8 +1219,25 @@ class TestGetDockerLock:
         """Creates the config directory if it does not exist."""
         config_dir = tmp_path / "new-config-dir"
         monkeypatch.setattr("web_core.search.runner._CONFIG_DIR", config_dir)
-        monkeypatch.setattr("web_core.search.runner._DOCKER_LOCK", None)
+        monkeypatch.setattr("web_core.search.runner._docker_lock", None)
 
         assert not config_dir.exists()
         _get_docker_lock()
         assert config_dir.exists()
+
+    def test_get_config_dir_permissions(self, tmp_path, monkeypatch):
+        """_get_config_dir sets correct permissions (0o700) on non-Windows."""
+        import os
+        import sys
+
+        from web_core.search.runner import _get_config_dir
+
+        config_dir = tmp_path / "perm-test-dir"
+        monkeypatch.setattr("web_core.search.runner._CONFIG_DIR", config_dir)
+
+        _get_config_dir()
+        assert config_dir.exists()
+
+        if sys.platform != "win32":
+            mode = os.stat(config_dir).st_mode
+            assert (mode & 0o777) == 0o700

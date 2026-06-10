@@ -189,48 +189,120 @@ class TestMangaDexClientConfig:
 
 # Fixture data mocking the MangaDex API responses
 
+MOCK_SEARCH_RESPONSE = {
+    "result": "ok",
+    "response": "collection",
+    "data": [
+        {
+            "id": "manga-001",
+            "type": "manga",
+            "attributes": {
+                "title": {"en": "One Piece"},
+                "altTitles": [{"ja": "Wan Piisu"}, {"ko": "Won Piseu"}],
+                "description": {"en": "A pirate adventure."},
+                "status": "ongoing",
+                "year": 1997,
+                "contentRating": "safe",
+            },
+            "relationships": [
+                {
+                    "type": "cover_art",
+                    "id": "cover-001",
+                    "attributes": {"fileName": "one-piece-cover.jpg"},
+                },
+            ],
+        },
+        {
+            "id": "manga-002",
+            "type": "manga",
+            "attributes": {
+                "title": {"ja": "Naruto"},
+                "altTitles": [],
+                "description": {},
+                "status": "completed",
+                "year": 1999,
+            },
+            "relationships": [],
+        },
+    ],
+    "limit": 10,
+    "offset": 0,
+    "total": 2,
+}
+
+MOCK_CHAPTER_RESPONSE = {
+    "result": "ok",
+    "response": "entity",
+    "data": {
+        "id": "ch-1",
+        "type": "chapter",
+        "attributes": {
+            "volume": "1",
+            "chapter": "1",
+            "title": "Chapter 1",
+            "translatedLanguage": "en",
+            "pages": 20,
+            "version": 1,
+        },
+        "relationships": [
+            {"id": "manga-001", "type": "manga"},
+        ],
+    },
+}
+
+MOCK_FEED_RESPONSE = {
+    "result": "ok",
+    "response": "collection",
+    "data": [
+        {
+            "id": "ch-1",
+            "type": "chapter",
+            "attributes": {
+                "volume": "1",
+                "chapter": "1",
+                "title": "Chapter 1",
+                "translatedLanguage": "en",
+                "pages": 20,
+            },
+        },
+        {
+            "id": "ch-2",
+            "type": "chapter",
+            "attributes": {
+                "volume": "1",
+                "chapter": "2",
+                "title": "Chapter 2",
+                "translatedLanguage": "en",
+                "pages": 18,
+            },
+        },
+    ],
+    "limit": 100,
+    "offset": 0,
+    "total": 2,
+}
+
+MOCK_AT_HOME_RESPONSE = {
+    "result": "ok",
+    "baseUrl": "https://cmdxd98sb0x3yprd.mangadex.network",
+    "chapter": {
+        "hash": "abcdef123456",
+        "data": ["p1-full.png", "p2-full.png", "p3-full.png"],
+        "dataSaver": ["p1-saver.jpg", "p2-saver.jpg", "p3-saver.jpg"],
+    },
+}
+
 
 def _mock_search_response() -> dict:
-    return {
-        "result": "ok",
-        "data": [
-            {
-                "id": "manga-001",
-                "type": "manga",
-                "attributes": {
-                    "title": {"en": "One Piece"},
-                    "altTitles": [{"ja": "Wan Piisu"}, {"ko": "Won Piseu"}],
-                    "description": {"en": "A pirate adventure."},
-                    "status": "ongoing",
-                    "year": 1997,
-                },
-                "relationships": [
-                    {
-                        "type": "cover_art",
-                        "id": "cover-001",
-                        "attributes": {"fileName": "one-piece-cover.jpg"},
-                    },
-                ],
-            },
-            {
-                "id": "manga-002",
-                "type": "manga",
-                "attributes": {
-                    "title": {"ja": "Naruto"},
-                    "altTitles": [],
-                    "description": {},
-                    "status": "completed",
-                    "year": 1999,
-                },
-                "relationships": [],
-            },
-        ],
-        "total": 2,
-    }
+    return MOCK_SEARCH_RESPONSE
 
 
 def _mock_feed_response(offset: int = 0) -> dict:
     """Simulate a single page of chapter feed."""
+    if offset == 0:
+        return MOCK_FEED_RESPONSE
+
+    # Dynamic response for pagination tests
     return {
         "result": "ok",
         "data": [
@@ -262,15 +334,7 @@ def _mock_feed_response(offset: int = 0) -> dict:
 
 
 def _mock_at_home_response() -> dict:
-    return {
-        "result": "ok",
-        "baseUrl": "https://cmdxd98sb0x3yprd.mangadex.network",
-        "chapter": {
-            "hash": "abcdef123456",
-            "data": ["p1-full.png", "p2-full.png", "p3-full.png"],
-            "dataSaver": ["p1-saver.jpg", "p2-saver.jpg", "p3-saver.jpg"],
-        },
-    }
+    return MOCK_AT_HOME_RESPONSE
 
 
 def _make_mock_response(json_data: dict | None = None, content: bytes = b"") -> MagicMock:
