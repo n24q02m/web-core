@@ -154,6 +154,38 @@ class CaptchaStrategy(BaseStrategy):
 
         return None
 
+    async def _get_turnstile_token(self, url: str, sitekey: str) -> str | None:
+        """Retrieve Turnstile solution token from CapSolver."""
+        logger.info("Extracted Turnstile sitekey for %s: %s...", url, sitekey[:12])
+        token = await self.solve_captcha(site_key=sitekey, page_url=url, captcha_type=TURNSTILE_PROXYLESS)
+        return token if token else None
+
+    async def _submit_turnstile_token(self, page: Any, token: str) -> None:
+        """Inject Turnstile token into page, submit form, and wait for navigation."""
+        # Inject token and submit
+        await page.evaluate(
+            """(token) => {
+            // Set CF Turnstile response token
+            const inputs = document.querySelectorAll('[name="cf-turnstile-response"]');
+            inputs.forEach(el => { el.value = token; });
+            // Try calling the turnstile callback if present
+            if (window.turnstile && window.turnstile.getResponse) {
+                const widgets = document.querySelectorAll('[id^="cf-turnstile"]');
+                widgets.forEach(w => {
+                    try { window.turnstile.execute(w.id, { response: token }); } catch(e) {}
+                });
+            }
+            // Submit first form if present
+            const form = document.querySelector('form#challenge-form, form[action*="cdn-cgi"]');
+            if (form) form.submit();
+        }""",
+            token,
+        )
+
+        # Wait for navigation to actual page
+        with contextlib.suppress(Exception):
+            await page.wait_for_load_state("networkidle", timeout=15000)
+
     async def _solve_cf_turnstile_via_patchright(self, url: str) -> ScrapingResult:
         """Use Patchright to load page, extract Turnstile sitekey via Python API,
         solve with CapSolver, inject token back, and return final content."""
@@ -182,10 +214,8 @@ class CaptchaStrategy(BaseStrategy):
                         metadata={"captcha_solved": False, "error": "sitekey_not_found"},
                     )
 
-                logger.info("Extracted Turnstile sitekey for %s: %s...", url, sitekey[:12])
-
                 # Solve with CapSolver
-                token = await self.solve_captcha(site_key=sitekey, page_url=url, captcha_type=TURNSTILE_PROXYLESS)
+                token = await self._get_turnstile_token(url, sitekey)
 
                 if not token:
                     content = await page.content()
@@ -198,28 +228,7 @@ class CaptchaStrategy(BaseStrategy):
                     )
 
                 # Inject token and submit
-                await page.evaluate(
-                    """(token) => {
-                    // Set CF Turnstile response token
-                    const inputs = document.querySelectorAll('[name="cf-turnstile-response"]');
-                    inputs.forEach(el => { el.value = token; });
-                    // Try calling the turnstile callback if present
-                    if (window.turnstile && window.turnstile.getResponse) {
-                        const widgets = document.querySelectorAll('[id^="cf-turnstile"]');
-                        widgets.forEach(w => {
-                            try { window.turnstile.execute(w.id, { response: token }); } catch(e) {}
-                        });
-                    }
-                    // Submit first form if present
-                    const form = document.querySelector('form#challenge-form, form[action*="cdn-cgi"]');
-                    if (form) form.submit();
-                }""",
-                    token,
-                )
-
-                # Wait for navigation to actual page
-                with contextlib.suppress(Exception):
-                    await page.wait_for_load_state("networkidle", timeout=15000)
+                await self._submit_turnstile_token(page, token)
 
                 content = await page.content()
                 final_url = page.url
