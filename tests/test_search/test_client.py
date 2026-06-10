@@ -248,6 +248,19 @@ class TestApplyDomainCap:
         result = _apply_domain_cap(items)
         assert len(result) == _MAX_PER_DOMAIN
 
+    def test_apply_domain_cap_missing_url_combinations(self):
+        """Mix of missing keys, None values, and empty strings are all capped together."""
+        items = [
+            {"url": ""},  # 1
+            {"url": None},  # 2
+            {},  # 3
+            {"url": ""},  # 4 (should be capped if _MAX_PER_DOMAIN is 3)
+            {"url": "https://a.com/1"},
+        ]
+        result = _apply_domain_cap(items)
+        # Since _MAX_PER_DOMAIN is 3, we should get 3 from the "empty" set and 1 from a.com
+        assert len(result) == 4
+
 
 class TestSearch:
     """Test the main search function."""

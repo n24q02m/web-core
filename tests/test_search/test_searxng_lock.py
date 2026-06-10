@@ -25,20 +25,37 @@ _FAKE_DOCKER = "/usr/bin/docker"
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture
+def tmp_config_dir(tmp_path, monkeypatch):
+    """Use a temporary config directory."""
+    import web_core.search.runner as mod
+
+    config_dir = tmp_path / ".web-core"
+    config_dir.mkdir()
+    monkeypatch.setattr(mod, "_CONFIG_DIR", config_dir)
+    monkeypatch.setattr(mod, "_DISCOVERY_FILE", config_dir / "searxng_instance.json")
+    return config_dir
+
+
 @pytest.fixture(autouse=True)
 def _reset_docker_state():
     """Reset module-level Docker state before and after each test."""
     import web_core.search.runner as mod
 
-    mod._searxng_docker_container = None
-    mod._searxng_port = None
-    mod._is_owner = False
-    mod._DOCKER_LOCK = None  # Reset lazy filelock so tmp_path dir is used
+    def _reset():
+        mod._searxng_process = None
+        mod._searxng_port = None
+        mod._searxng_docker_container = None
+        mod._searxng_settings_path = None
+        mod._restart_count = 0
+        mod._last_restart_time = 0.0
+        mod._is_owner = False
+        mod._startup_lock = None
+        mod._docker_lock = None  # Reset lazy filelock so tmp_path dir is used
+
+    _reset()
     yield
-    mod._searxng_docker_container = None
-    mod._searxng_port = None
-    mod._is_owner = False
-    mod._DOCKER_LOCK = None
+    _reset()
 
 
 # ---------------------------------------------------------------------------
@@ -46,15 +63,8 @@ def _reset_docker_state():
 # ---------------------------------------------------------------------------
 
 
-async def test_spawn_docker_searxng_reuses_existing_container(tmp_path, monkeypatch):
+async def test_spawn_docker_searxng_reuses_existing_container(tmp_config_dir, monkeypatch):
     """When container searxng-wet-{PINNED_PORT} already running, do NOT docker run."""
-    import web_core.search.runner as mod
-
-    config_dir = tmp_path / ".web-core"
-    config_dir.mkdir()
-    monkeypatch.setattr(mod, "_CONFIG_DIR", config_dir)
-    monkeypatch.setattr(mod, "_DISCOVERY_FILE", config_dir / "searxng_instance.json")
-
     container_name = f"searxng-wet-{PINNED_SEARXNG_PORT}"
 
     call_args_list: list = []
@@ -93,15 +103,8 @@ async def test_spawn_docker_searxng_reuses_existing_container(tmp_path, monkeypa
 # ---------------------------------------------------------------------------
 
 
-async def test_spawn_docker_searxng_creates_when_absent(tmp_path, monkeypatch):
+async def test_spawn_docker_searxng_creates_when_absent(tmp_config_dir, monkeypatch):
     """When no container running on PINNED_PORT, rm stale + docker run must be called."""
-    import web_core.search.runner as mod
-
-    config_dir = tmp_path / ".web-core"
-    config_dir.mkdir()
-    monkeypatch.setattr(mod, "_CONFIG_DIR", config_dir)
-    monkeypatch.setattr(mod, "_DISCOVERY_FILE", config_dir / "searxng_instance.json")
-
     container_name = f"searxng-wet-{PINNED_SEARXNG_PORT}"
 
     call_args_list: list = []
