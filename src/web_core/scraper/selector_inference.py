@@ -251,9 +251,12 @@ async def _call_gemini(prompt: str, model: str) -> str:
     if api_key:
         client = genai.Client(api_key=api_key)
     else:
+        project = os.environ.get("GOOGLE_CLOUD_PROJECT")
+        if not project:
+            raise ValueError("Vertex mode requires GOOGLE_CLOUD_PROJECT (or set GEMINI_API_KEY for API-key mode)")
         client = genai.Client(
             vertexai=True,
-            project=os.environ.get("GOOGLE_CLOUD_PROJECT", "klprism"),
+            project=project,
             location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global"),
         )
     response = await client.aio.models.generate_content(
