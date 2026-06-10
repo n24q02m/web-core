@@ -250,11 +250,11 @@ class TestScrapingAgent:
     async def test_min_content_length_default(self):
         """Default min_content_length should be 100."""
         agent = ScrapingAgent()
-        assert agent.min_content_length == 100
+        assert agent.config.min_content_length == 100
 
     async def test_custom_min_content_length(self):
         agent = ScrapingAgent(min_content_length=50)
-        assert agent.min_content_length == 50
+        assert agent.config.min_content_length == 50
 
     async def test_validate_accepts_3xx_status(self):
         """Status codes in 200-399 range should be considered valid."""
