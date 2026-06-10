@@ -1,8 +1,8 @@
 from __future__ import annotations
-import json
+
 import importlib
-import os
-import pytest
+import json
+
 from web_core.scraper import selector_inference
 
 
