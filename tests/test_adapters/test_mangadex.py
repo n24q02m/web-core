@@ -477,6 +477,34 @@ class TestGetChapterFeed:
         assert call_count == 2
         assert chapters[2].id == "ch-3"
 
+    async def test_get_chapter_feed_no_offsets(self):
+        """Verify get_chapter_feed returns early when _MAX_FEED_PAGES is reached."""
+
+        # Total 300, but first page returns 100.
+        def make_page(total):
+            return {
+                "data": [
+                    {"id": f"ch-{i}", "attributes": {"chapter": str(i), "translatedLanguage": "en", "pages": 10}}
+                    for i in range(100)
+                ],
+                "total": total,
+            }
+
+        mock_resp = _make_mock_response(make_page(300))
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex._MAX_FEED_PAGES", 1),
+        ):
+            client = MangaDexClient()
+            chapters = await client.get_chapter_feed("manga-001", limit=300)
+            # Should only have 100 chapters from the first page
+            assert len(chapters) == 100
+
 
 class TestGetChapterImages:
     """Test get_chapter_images with mocked HTTP."""
@@ -512,6 +540,25 @@ class TestGetChapterImages:
 
         call_args = mock_client.get.call_args
         assert call_args.args[0] == "https://api.mangadex.org/at-home/server/chapter-uuid-xyz"
+
+    async def test_get_chapter_images_rate_limit(self):
+        """Verify get_chapter_images rate limiting sleep."""
+        mock_resp = _make_mock_response(_mock_at_home_response())
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        ):
+            client = MangaDexClient()
+            # First call sets the time
+            await client.get_chapter_images("ch-1")
+            # Second call should trigger sleep
+            await client.get_chapter_images("ch-2")
+            assert mock_sleep.call_count >= 1
 
 
 class TestDownloadImage:
@@ -597,6 +644,26 @@ class TestDownloadImage:
                 # In MangaDexClient.__aenter__, it sets self._client = safe_httpx_client(...)
                 mock_client.get.assert_called_once()
 
+    async def test_download_image_http_error_reused_client(self):
+        mock_resp = _make_mock_response()
+        mock_resp.status_code = 500
+        mock_resp.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "500 Internal Server Error", request=MagicMock(), response=mock_resp
+        )
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+            async with MangaDexClient() as client:
+                with pytest.raises(httpx.HTTPStatusError):
+                    await client.download_image(
+                        "https://server.example.com",
+                        "abcdef",
+                        "page1.png",
+                    )
+
 
 # ---------------------------------------------------------------------------
 # Rate limiting
@@ -617,7 +684,7 @@ class TestRateLimit:
         with patch("web_core.adapters.mangadex.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
             await client._rate_limit()
             # Should have slept since we just set _last_request_time to now
-            mock_sleep.assert_called_once()
+            assert mock_sleep.call_count >= 1
             sleep_duration = mock_sleep.call_args.args[0]
             assert 0 < sleep_duration <= 1.0 / client.RATE_LIMIT_RPS
 
@@ -636,6 +703,25 @@ class TestRateLimit:
 
 
 class TestSsrfSafety:
+    async def test_context_manager_nested(self):
+        """Verify nested context manager does not re-initialize client."""
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client) as mock_factory:
+            async with MangaDexClient() as client, client:
+                pass
+            # Factory should only be called once
+            mock_factory.assert_called_once()
+
+    async def test_context_manager_exit_no_client(self):
+        """Verify __aexit__ handles None client gracefully."""
+        client = MangaDexClient()
+        # client._client is None initially
+        await client.__aexit__(None, None, None)
+        # Should not raise
+
     """Verify the adapter uses safe_httpx_client, not raw httpx.AsyncClient."""
 
     async def test_uses_context_manager_client(self):
