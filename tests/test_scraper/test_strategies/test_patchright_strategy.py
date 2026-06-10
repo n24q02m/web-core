@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import contextlib
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from web_core.scraper.strategies.patchright_browser import PatchrightConfig, PatchrightStrategy
 
@@ -42,7 +43,7 @@ class TestPatchrightStrategy:
             yield
 
     async def test_fetch_success(self):
-        provider, page = _make_mock_provider(NORMAL_HTML)
+        provider, _page = _make_mock_provider(NORMAL_HTML)
         strategy = PatchrightStrategy(provider=provider)
 
         result = await strategy.fetch("https://example.com")
@@ -351,9 +352,11 @@ class TestPatchrightStrategy:
     async def test_ssrf_protection_triggered(self):
         """Cover line 103: SSRF protection."""
         strategy = PatchrightStrategy()
-        with patch("web_core.scraper.strategies.patchright_browser.is_safe_url", return_value=False):
-            with pytest.raises(ValueError, match="SSRF blocked"):
-                await strategy.fetch("http://169.254.169.254")
+        with (
+            patch("web_core.scraper.strategies.patchright_browser.is_safe_url", return_value=False),
+            pytest.raises(ValueError, match="SSRF blocked"),
+        ):
+            await strategy.fetch("http://169.254.169.254")
 
     async def test_managed_challenge_recheck_resolves(self):
         """Cover line 146: managed challenge resolved after domcontentloaded."""
@@ -383,7 +386,7 @@ class TestPatchrightStrategy:
 
     async def test_turnstile_detected(self):
         """Cover line 146: turnstile detected."""
-        provider, page = _make_mock_provider("<html><body><div class='cf-turnstile-response'></div></body></html>")
+        provider, _page = _make_mock_provider("<html><body><div class='cf-turnstile-response'></div></body></html>")
         strategy = PatchrightStrategy(provider=provider)
         result = await strategy.fetch("https://turnstile.com")
         assert result.metadata["cf_challenge"] == "turnstile"
