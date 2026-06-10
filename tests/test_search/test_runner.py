@@ -135,57 +135,57 @@ class TestIsPidAlive:
 
 
 class TestDiscovery:
-    def test_read_discovery_no_file(self, tmp_discovery):
+    async def test_read_discovery_no_file(self, tmp_discovery):
         """Returns None when discovery file doesn't exist."""
-        assert _read_discovery() is None
+        assert await _read_discovery() is None
 
-    def test_write_and_read_discovery(self, tmp_discovery):
+    async def test_write_and_read_discovery(self, tmp_discovery):
         """Write then read round-trips correctly."""
-        _write_discovery(18888, 12345)
-        data = _read_discovery()
+        await _write_discovery(18888, 12345)
+        data = await _read_discovery()
         assert data is not None
         assert data["port"] == 18888
         assert data["pid"] == 12345
         assert data["owner_pid"] == os.getpid()
         assert "started_at" in data
 
-    def test_read_discovery_invalid_json(self, tmp_discovery):
+    async def test_read_discovery_invalid_json(self, tmp_discovery):
         """Returns None on malformed JSON."""
         tmp_discovery.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(tmp_discovery, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w") as f:
             f.write("not json")
-        assert _read_discovery() is None
+        assert await _read_discovery() is None
 
-    def test_read_discovery_missing_keys(self, tmp_discovery):
+    async def test_read_discovery_missing_keys(self, tmp_discovery):
         """Returns None when required keys are missing."""
         tmp_discovery.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(tmp_discovery, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w") as f:
             f.write(json.dumps({"port": 8080}))  # Missing pid
-        assert _read_discovery() is None
+        assert await _read_discovery() is None
 
     @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions not supported on Windows")
-    def test_read_discovery_insecure_permissions(self, tmp_discovery):
+    async def test_read_discovery_insecure_permissions(self, tmp_discovery):
         """Returns None when discovery file has insecure permissions."""
-        _write_discovery(18888, 12345)
+        await _write_discovery(18888, 12345)
         os.chmod(tmp_discovery, 0o644)
-        assert _read_discovery() is None
+        assert await _read_discovery() is None
 
     @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions not supported on Windows")
-    def test_write_discovery_secure_permissions(self, tmp_discovery):
+    async def test_write_discovery_secure_permissions(self, tmp_discovery):
         """Discovery file is created with 0o600 permissions."""
-        _write_discovery(18888, 12345)
+        await _write_discovery(18888, 12345)
         assert (os.stat(tmp_discovery).st_mode & 0o777) == 0o600
 
-    def test_remove_discovery(self, tmp_discovery):
+    async def test_remove_discovery(self, tmp_discovery):
         """Removes the discovery file if it exists."""
-        _write_discovery(18888, 12345)
+        await _write_discovery(18888, 12345)
         assert tmp_discovery.exists()
         _remove_discovery()
         assert not tmp_discovery.exists()
 
-    def test_remove_discovery_nonexistent(self, tmp_discovery):
+    async def test_remove_discovery_nonexistent(self, tmp_discovery):
         """Does not raise when file doesn't exist."""
         _remove_discovery()  # Should not raise
 
@@ -246,7 +246,7 @@ class TestQuickHealthCheck:
 class TestTryReuseExisting:
     async def test_returns_url_if_instance_running(self, tmp_discovery):
         """Returns URL if discovery file points to a healthy instance."""
-        _write_discovery(18888, os.getpid())
+        await _write_discovery(18888, os.getpid())
 
         with patch("web_core.search.runner._quick_health_check", new_callable=AsyncMock, return_value=True):
             url = await _try_reuse_existing()
@@ -254,7 +254,7 @@ class TestTryReuseExisting:
 
     async def test_returns_none_if_not_running(self, tmp_discovery):
         """Returns None if health check fails."""
-        _write_discovery(18888, os.getpid())
+        await _write_discovery(18888, os.getpid())
 
         with patch("web_core.search.runner._quick_health_check", new_callable=AsyncMock, return_value=False):
             url = await _try_reuse_existing()
@@ -267,7 +267,7 @@ class TestTryReuseExisting:
 
     async def test_returns_none_if_pid_dead(self, tmp_discovery):
         """Returns None and cleans up if PID in discovery is dead."""
-        _write_discovery(18888, 999999999)
+        await _write_discovery(18888, 999999999)
 
         with patch("web_core.search.runner._is_pid_alive", return_value=False):
             url = await _try_reuse_existing()
@@ -699,7 +699,7 @@ class TestKillStalePortProcess:
 
 
 class TestCleanupProcess:
-    def test_cleanup_as_owner(self, tmp_discovery, tmp_path):
+    async def test_cleanup_as_owner(self, tmp_discovery, tmp_path):
         """Owner kills process, removes discovery file, and deletes settings path."""
         import web_core.search.runner as mod
 
@@ -717,7 +717,7 @@ class TestCleanupProcess:
         dummy_settings.write_text("test")
         mod._searxng_settings_path = dummy_settings
 
-        _write_discovery(18888, 12345)
+        await _write_discovery(18888, 12345)
         assert tmp_discovery.exists()
 
         _cleanup_process()
@@ -728,7 +728,7 @@ class TestCleanupProcess:
         assert not tmp_discovery.exists()
         assert not dummy_settings.exists()
 
-    def test_cleanup_as_non_owner(self, tmp_discovery):
+    async def test_cleanup_as_non_owner(self, tmp_discovery):
         """Non-owner clears local refs but does not kill or remove discovery."""
         import web_core.search.runner as mod
 
@@ -740,7 +740,7 @@ class TestCleanupProcess:
         mod._searxng_port = 18888
         mod._is_owner = False
 
-        _write_discovery(18888, 12345)
+        await _write_discovery(18888, 12345)
 
         _cleanup_process()
 
@@ -817,7 +817,7 @@ class TestEnsureSearxng:
     async def test_returns_url_from_discovery(self, tmp_discovery, monkeypatch):
         """Returns URL from discovery file if valid instance is running."""
         monkeypatch.delenv("SEARXNG_URL", raising=False)
-        _write_discovery(18888, os.getpid())
+        await _write_discovery(18888, os.getpid())
 
         with patch("web_core.search.runner._quick_health_check", new_callable=AsyncMock, return_value=True):
             url = await ensure_searxng()

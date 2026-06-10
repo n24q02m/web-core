@@ -1091,9 +1091,10 @@ wheels = [
 
 [[package]]
 name = "n24q02m-web-core"
-version = "2.2.1"
+version = "2.2.2b2"
 source = { editable = "." }
 dependencies = [
+    { name = "aiofiles" },
     { name = "browserforge" },
     { name = "capsolver" },
     { name = "crawl4ai" },
@@ -1118,6 +1119,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiofiles", specifier = ">=24.1.0" },
     { name = "browserforge", specifier = ">=1.2.4" },
     { name = "capsolver", specifier = ">=1.0.7" },
     { name = "crawl4ai", specifier = ">=0.8.9" },

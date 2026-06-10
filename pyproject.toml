@@ -20,6 +20,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
+    "aiofiles>=24.1.0",
     "httpx>=0.28.1",
     "curl-cffi>=0.15.0",
     "crawl4ai>=0.8.9",
