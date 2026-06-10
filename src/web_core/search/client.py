@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Iterable
 from typing import Any
 
 import httpx
@@ -67,6 +68,31 @@ def _apply_domain_cap(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return result
 
 
+def _get_safe_domains(domains: Any, limit: int) -> list[str]:
+    """Filter, normalize, and limit a list of domains.
+
+    - Silently skips invalid domains (per ``is_valid_domain``).
+    - Normalizes to lowercase.
+    - Deduplicates.
+    - Limits to ``limit`` items.
+    - Handles non-iterable input gracefully.
+    """
+    if not isinstance(domains, Iterable) or isinstance(domains, (str, bytes)):
+        return []
+
+    seen = set()
+    safe = []
+    for d in domains:
+        if isinstance(d, str):
+            d_norm = d.strip().lower()
+            if d_norm and d_norm not in seen and is_valid_domain(d_norm):
+                seen.add(d_norm)
+                safe.append(d_norm)
+                if len(safe) >= limit:
+                    break
+    return safe
+
+
 def _build_filtered_query(
     query: str,
     include_domains: list[str] | None = None,
@@ -80,31 +106,18 @@ def _build_filtered_query(
     Invalid domains (per ``is_valid_domain``) are silently skipped to
     prevent search operator injection.
     """
-    parts = [query]
+    # Robustness: ensure query is a string (handles None gracefully)
+    safe_query = str(query) if query is not None else ""
+    parts = [safe_query]
 
-    if include_domains:
-        seen_include = set()
-        safe_include = []
-        for d in include_domains:
-            if isinstance(d, str) and d not in seen_include and is_valid_domain(d):
-                seen_include.add(d)
-                safe_include.append(d)
-                if len(safe_include) >= 5:
-                    break
-        if safe_include:
-            site_filter = " OR ".join(f"site:{d}" for d in safe_include)
-            parts = [f"({site_filter}) {query}"]
+    safe_include = _get_safe_domains(include_domains, 5)
+    if safe_include:
+        site_filter = " OR ".join(f"site:{d}" for d in safe_include)
+        parts = [f"({site_filter}) {safe_query}"]
 
-    if exclude_domains:
-        seen_exclude = set()
-        count_exclude = 0
-        for d in exclude_domains:
-            if isinstance(d, str) and d not in seen_exclude and is_valid_domain(d):
-                seen_exclude.add(d)
-                parts.append(f"-site:{d}")
-                count_exclude += 1
-                if count_exclude >= 10:
-                    break
+    safe_exclude = _get_safe_domains(exclude_domains, 10)
+    for d in safe_exclude:
+        parts.append(f"-site:{d}")
 
     return " ".join(parts)
 

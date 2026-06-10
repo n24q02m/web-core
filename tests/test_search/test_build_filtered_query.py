@@ -114,7 +114,6 @@ def test_build_filtered_query_extremely_long_query():
 
 def test_build_filtered_query_non_string_domains():
     """Include/exclude lists containing non-string items should be handled safely."""
-    # This currently crashes with TypeError in is_valid_domain
     result = _build_filtered_query("python", include_domains=["valid.com", None, 123, {"a": 1}])
     assert result == "(site:valid.com) python"
 
@@ -123,9 +122,9 @@ def test_build_filtered_query_non_string_domains():
 
 
 def test_build_filtered_query_domain_whitespace():
-    """Domains with whitespace should be rejected (or handled) by is_valid_domain."""
+    """Domains with whitespace should be handled by stripping and validation."""
     result = _build_filtered_query("python", include_domains=["  ", "example.com "])
-    assert result == "python"
+    assert result == "(site:example.com) python"
 
 
 def test_build_filtered_query_injection_attempt():
@@ -135,3 +134,39 @@ def test_build_filtered_query_injection_attempt():
     result = _build_filtered_query("python", include_domains=[injection])
     assert result == "python"
     assert "malicious.com" not in result
+
+
+def test_build_filtered_query_none_query():
+    """None query should be handled as empty string."""
+    assert _build_filtered_query(None) == ""
+    assert _build_filtered_query(None, include_domains=["a.com"]) == "(site:a.com) "
+
+
+def test_build_filtered_query_mixed_case_domains():
+    """Domains should be normalized to lowercase and deduplicated."""
+    result = _build_filtered_query("q", include_domains=["Example.Com", "example.com"])
+    assert result == "(site:example.com) q"
+
+
+def test_build_filtered_query_non_iterable_domains():
+    """Non-iterable domain lists should be handled safely."""
+    assert _build_filtered_query("q", include_domains=123) == "q"
+    assert _build_filtered_query("q", exclude_domains=456) == "q"
+
+
+def test_build_filtered_query_domain_stripping():
+    """Domains should be stripped of whitespace."""
+    result = _build_filtered_query("q", include_domains=["  example.com  "])
+    assert result == "(site:example.com) q"
+
+
+def test_build_filtered_query_unicode():
+    """Query with unicode characters."""
+    query = "pýthön"
+    assert _build_filtered_query(query) == query
+
+
+def test_build_filtered_query_unicode_domain():
+    """Domains with unicode should be rejected by is_valid_domain."""
+    result = _build_filtered_query("q", include_domains=["pýthön.com"])
+    assert result == "q"
