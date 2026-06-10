@@ -1,5 +1,5 @@
-from unittest import mock
 import contextlib
+from unittest import mock
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -49,8 +49,12 @@ def _make_mock_provider(content: str):
 class TestPatchrightStrategy:
     @pytest.fixture(autouse=True)
     def mock_is_safe_url(self):
-        with patch("web_core.scraper.strategies.patchright_browser.is_safe_url", side_effect=lambda url: "localhost" not in url and "169.254" not in url) as m:
+        with patch(
+            "web_core.scraper.strategies.patchright_browser.is_safe_url",
+            side_effect=lambda url: "localhost" not in url and "169.254" not in url,
+        ) as m:
             yield m
+
     async def test_fetch_normal_page(self):
         provider, _page = _make_mock_provider(NORMAL_HTML)
         strategy = PatchrightStrategy(provider=provider)
@@ -342,7 +346,7 @@ class TestPatchrightStrategy:
         """Verify that PatchrightStrategy blocks unsafe initial URLs."""
         strategy = PatchrightStrategy()
         with pytest.raises(ValueError, match="SSRF blocked"):
-            provider, page = _make_mock_provider("<html></html>")
+            provider, _page = _make_mock_provider("<html></html>")
             strategy = PatchrightStrategy(provider=provider)
             await strategy.fetch("http://localhost:8080")
 
