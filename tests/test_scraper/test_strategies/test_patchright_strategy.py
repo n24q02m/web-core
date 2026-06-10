@@ -1,3 +1,4 @@
+from unittest import mock
 import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -46,6 +47,10 @@ def _make_mock_provider(content: str):
 
 
 class TestPatchrightStrategy:
+    @pytest.fixture(autouse=True)
+    def mock_is_safe_url(self):
+        with patch("web_core.scraper.strategies.patchright_browser.is_safe_url", side_effect=lambda url: "localhost" not in url and "169.254" not in url) as m:
+            yield m
     async def test_fetch_normal_page(self):
         provider, _page = _make_mock_provider(NORMAL_HTML)
         strategy = PatchrightStrategy(provider=provider)
@@ -331,3 +336,53 @@ class TestPatchrightStrategy:
             result = await strategy.fetch("https://managed-timeout.com")
 
         assert result.strategy == "patchright"
+
+    @pytest.mark.asyncio
+    async def test_patchright_ssrf_initial_url_blocked(self):
+        """Verify that PatchrightStrategy blocks unsafe initial URLs."""
+        strategy = PatchrightStrategy()
+        with pytest.raises(ValueError, match="SSRF blocked"):
+            provider, page = _make_mock_provider("<html></html>")
+            strategy = PatchrightStrategy(provider=provider)
+            await strategy.fetch("http://localhost:8080")
+
+    @pytest.mark.asyncio
+    async def test_patchright_sets_up_request_interception(self):
+        """Verify that PatchrightStrategy sets up request interception for SSRF protection."""
+        provider, page = _make_mock_provider("<html></html>")
+        strategy = PatchrightStrategy(provider=provider)
+
+        await strategy.fetch("https://example.com")
+
+        # Check that route was called to setup interception
+        page.route.assert_called_once_with("**/*", mock.ANY)
+
+    @pytest.mark.asyncio
+    async def test_patchright_ssrf_handler_logic(self):
+        """Verify the logic of the interception handler."""
+        provider, page = _make_mock_provider("<html></html>")
+        strategy = PatchrightStrategy(provider=provider)
+
+        await strategy.fetch("https://example.com")
+
+        # Get the handler passed to page.route
+        args, _ = page.route.call_args
+        handler = args[1]
+
+        # Mock a route and request
+        mock_route = AsyncMock()
+        mock_request = MagicMock()
+
+        # Case 1: Safe URL
+        mock_request.url = "https://google.com"
+        await handler(mock_route, mock_request)
+        mock_route.continue_.assert_called_once()
+        mock_route.abort.assert_not_called()
+
+        mock_route.reset_mock()
+
+        # Case 2: Unsafe URL (redirect or sub-resource)
+        mock_request.url = "http://169.254.169.254/latest/meta-data/"
+        await handler(mock_route, mock_request)
+        mock_route.abort.assert_called_once_with("blockedbyclient")
+        mock_route.continue_.assert_not_called()

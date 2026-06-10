@@ -6,7 +6,7 @@ import asyncio
 import logging
 from typing import Any
 
-from web_core.http.client import is_safe_url
+from web_core.http import is_safe_url
 from web_core.scraper.base import BaseStrategy, ScrapingResult
 from web_core.scraper.utils import detect_cloudflare_challenge
 
@@ -99,6 +99,16 @@ class PatchrightStrategy(BaseStrategy):
         try:
             browser = await provider.launch(config=self.launch_config)
             page = await browser.new_page()
+
+            # Robust SSRF protection: intercept and validate every request (including redirects)
+            async def ssrf_handler(route: Any, request: Any) -> None:
+                if is_safe_url(request.url):
+                    await route.continue_()
+                else:
+                    logger.warning("SSRF blocked by request interception: %s", request.url)
+                    await route.abort("blockedbyclient")
+
+            await page.route("**/*", ssrf_handler)
 
             try:
                 # Use domcontentloaded first so we don't blind wait 60s if there's a CF challenge
