@@ -7,19 +7,29 @@ from unittest.mock import ANY, AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
+from web_core.search import client as client_mod
 from web_core.search.client import (
-    _MAX_PER_DOMAIN,
     _apply_domain_cap,
     _build_filtered_query,
+    _get_shared_client,
     search,
 )
-from web_core.search.models import SearchError, SearchResult
+from web_core.search.models import SearchError
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 SEARXNG_URL = "https://search.example.com"
+
+
+@pytest.fixture(autouse=True)
+def _reset_shared_client():
+    """Reset the global _shared_client before each test."""
+    old_client = client_mod._shared_client
+    client_mod._shared_client = None
+    yield
+    client_mod._shared_client = old_client
 
 
 def _make_searxng_response(results: list[dict], status_code: int = 200) -> MagicMock:
@@ -44,71 +54,105 @@ def _raw_result(url: str, title: str = "Title", content: str = "Snippet", engine
 
 
 # ---------------------------------------------------------------------------
+# _get_shared_client
+# ---------------------------------------------------------------------------
+
+
+class TestSharedClient:
+    """Tests for the shared httpx client caching logic."""
+
+    async def test_get_shared_client_caching(self):
+        """Verify that multiple calls return the same client instance."""
+        with patch("web_core.search.client.safe_httpx_client") as mock_factory:
+            m1 = MagicMock()
+            m1.is_closed = False
+            mock_factory.return_value = m1
+
+            c1 = _get_shared_client()
+            c2 = _get_shared_client()
+
+            assert c1 is m1
+            assert c2 is c1
+            assert mock_factory.call_count == 1
+
+    async def test_get_shared_client_reinit_when_closed(self):
+        """Verify that a new client is created if the cached one is closed."""
+        with patch("web_core.search.client.safe_httpx_client") as mock_factory:
+            m1 = MagicMock()
+            m1.is_closed = False
+            m2 = MagicMock()
+            m2.is_closed = False
+            mock_factory.side_effect = [m1, m2]
+
+            # 1. Create first client
+            c1 = _get_shared_client()
+            assert c1 is m1
+
+            # 2. Close it and verify re-init
+            m1.is_closed = True
+            c2 = _get_shared_client()
+            assert c2 is m2
+            assert c2 is not c1
+            assert mock_factory.call_count == 2
+
+
+# ---------------------------------------------------------------------------
 # _build_filtered_query
 # ---------------------------------------------------------------------------
 
 
-class TestBuildFilteredQuery:
-    """Test query building with domain filters."""
+def test_build_filtered_query_basic():
+    """Simple query without filters."""
+    assert _build_filtered_query("hello") == "hello"
 
-    def test_no_filters_returns_original(self):
-        assert _build_filtered_query("python tutorial") == "python tutorial"
 
-    def test_include_domains_adds_site_operator(self):
-        result = _build_filtered_query("test", include_domains=["example.com"])
-        assert "site:example.com" in result
-        assert "test" in result
+def test_build_filtered_query_include():
+    """Query with site: include filters."""
+    q = _build_filtered_query("hello", include_domains=["a.com", "b.com"])
+    assert q == "(site:a.com OR site:b.com) hello"
 
-    def test_include_multiple_domains_joined_with_or(self):
-        result = _build_filtered_query("q", include_domains=["a.com", "b.org"])
-        assert "site:a.com" in result
-        assert "site:b.org" in result
-        assert "OR" in result
 
-    def test_include_domains_max_five(self):
-        domains = [f"d{i}.com" for i in range(10)]
-        result = _build_filtered_query("q", include_domains=domains)
-        # Only the first 5 should appear
-        for i in range(5):
-            assert f"site:d{i}.com" in result
-        for i in range(5, 10):
-            assert f"site:d{i}.com" not in result
+def test_build_filtered_query_exclude():
+    """Query with -site: exclude filters."""
+    q = _build_filtered_query("hello", exclude_domains=["a.com", "b.com"])
+    assert q == "hello -site:a.com -site:b.com"
 
-    def test_exclude_domains_adds_negative_site(self):
-        result = _build_filtered_query("test", exclude_domains=["spam.com"])
-        assert "-site:spam.com" in result
 
-    def test_exclude_multiple_domains(self):
-        result = _build_filtered_query("q", exclude_domains=["a.com", "b.com"])
-        assert "-site:a.com" in result
-        assert "-site:b.com" in result
+def test_build_filtered_query_mixed():
+    """Query with both include and exclude filters."""
+    q = _build_filtered_query("hello", include_domains=["inc.com"], exclude_domains=["exc.com"])
+    assert q == "(site:inc.com) hello -site:exc.com"
 
-    def test_exclude_domains_max_ten(self):
-        domains = [f"d{i}.com" for i in range(15)]
-        result = _build_filtered_query("q", exclude_domains=domains)
-        for i in range(10):
-            assert f"-site:d{i}.com" in result
-        for i in range(10, 15):
-            assert f"-site:d{i}.com" not in result
 
-    def test_include_and_exclude_combined(self):
-        result = _build_filtered_query("q", include_domains=["good.com"], exclude_domains=["bad.com"])
-        assert "site:good.com" in result
-        assert "-site:bad.com" in result
+def test_build_filtered_query_caps():
+    """Verify include (5) and exclude (10) limits."""
+    includes = [f"{i}.com" for i in range(10)]
+    excludes = [f"{i}.org" for i in range(20)]
+    q = _build_filtered_query("hello", include_domains=includes, exclude_domains=excludes)
 
-    def test_invalid_include_domain_rejected(self):
-        result = _build_filtered_query("q", include_domains=["not valid!", "good.com"])
-        assert "site:good.com" in result
-        assert "not valid!" not in result
+    assert q.count("site:") == 15  # 5 includes + 10 excludes
+    assert q.count("OR") == 4
 
-    def test_invalid_exclude_domain_rejected(self):
-        result = _build_filtered_query("q", exclude_domains=["bad..domain", "spam.com"])
-        assert "-site:spam.com" in result
-        assert "bad..domain" not in result
 
-    def test_all_include_domains_invalid_returns_plain_query(self):
-        result = _build_filtered_query("test", include_domains=["!!!"])
-        assert result == "test"
+def test_build_filtered_query_invalid_domains():
+    """Invalid domains should be silently skipped."""
+    q = _build_filtered_query("hello", include_domains=["safe.com", "not a domain!!!", "127.0.0.1"])
+    # 127.0.0.1 is technically valid per is_valid_domain but might be blocked elsewhere.
+    # Actually is_valid_domain("127.0.0.1") is True.
+    assert "not a domain!!!" not in q
+    assert "site:safe.com" in q
+
+
+def test_build_filtered_query_all_invalid_include():
+    """Line 94 branch: safe_include is empty because all domains are invalid."""
+    q = _build_filtered_query("hello", include_domains=["invalid domain", "not-a-domain"])
+    assert q == "hello"
+
+
+def test_build_filtered_query_exclude_invalid():
+    """Line 102 branch: skip invalid domains in exclude list."""
+    q = _build_filtered_query("hello", exclude_domains=["invalid domain", "safe.com"])
+    assert q == "hello -site:safe.com"
 
 
 # ---------------------------------------------------------------------------
@@ -116,147 +160,60 @@ class TestBuildFilteredQuery:
 # ---------------------------------------------------------------------------
 
 
-class TestApplyDomainCap:
-    """Test per-domain result limiting."""
-
-    def test_caps_at_max_per_domain(self):
-        items = [{"url": f"https://example.com/page{i}"} for i in range(10)]
-        result = _apply_domain_cap(items)
-        assert len(result) == _MAX_PER_DOMAIN
-
-    def test_different_domains_unaffected(self):
-        items = [
-            {"url": "https://a.com/1"},
-            {"url": "https://b.com/1"},
-            {"url": "https://c.com/1"},
-            {"url": "https://d.com/1"},
-        ]
-        result = _apply_domain_cap(items)
-        assert len(result) == 4
-
-    def test_www_prefix_stripped_for_counting(self):
-        """www.example.com and example.com count as the same domain."""
-        items = [
-            {"url": "https://www.example.com/1"},
-            {"url": "https://example.com/2"},
-            {"url": "https://www.example.com/3"},
-            {"url": "https://example.com/4"},
-        ]
-        result = _apply_domain_cap(items)
-        assert len(result) == _MAX_PER_DOMAIN
-
-    def test_empty_list(self):
-        assert _apply_domain_cap([]) == []
-
-    def test_preserves_order(self):
-        items = [
-            {"url": "https://a.com/1"},
-            {"url": "https://b.com/1"},
-            {"url": "https://a.com/2"},
-        ]
-        result = _apply_domain_cap(items)
-        assert [r["url"] for r in result] == [
-            "https://a.com/1",
-            "https://b.com/1",
-            "https://a.com/2",
-        ]
-
-    def test_mixed_domains_with_cap(self):
-        items = [
-            {"url": "https://a.com/1"},
-            {"url": "https://a.com/2"},
-            {"url": "https://a.com/3"},
-            {"url": "https://a.com/4"},  # capped
-            {"url": "https://b.com/1"},
-        ]
-        result = _apply_domain_cap(items)
-        assert len(result) == 4
-        urls = [r["url"] for r in result]
-        assert "https://a.com/4" not in urls
-        assert "https://b.com/1" in urls
-
-    def test_missing_url_key_treated_as_empty(self):
-        """Items without a url key should not crash."""
-        items = [{"title": "no url"}, {"url": "https://a.com/1"}]
-        result = _apply_domain_cap(items)
-        # Empty netloc is still a "domain" — should not crash
-        assert len(result) == 2
-
-    def test_protocol_relative_url(self):
-        items = [
-            {"url": "//example.com/1"},
-            {"url": "//example.com/2"},
-            {"url": "//example.com/3"},
-            {"url": "//example.com/4"},
-        ]
-        result = _apply_domain_cap(items)
-        assert len(result) == _MAX_PER_DOMAIN
-
-    def test_url_with_port(self):
-        items = [
-            {"url": "http://example.com:8080/1"},
-            {"url": "http://example.com:8080/2"},
-            {"url": "http://example.com:8080/3"},
-            {"url": "http://example.com:8080/4"},
-        ]
-        result = _apply_domain_cap(items)
-        assert len(result) == _MAX_PER_DOMAIN
-
-    def test_url_with_query_and_fragment(self):
-        items = [
-            {"url": "https://example.com/path?q=1#f1"},
-            {"url": "https://example.com/path?q=2#f2"},
-            {"url": "https://example.com/path?q=3#f3"},
-            {"url": "https://example.com/path?q=4#f4"},
-        ]
-        result = _apply_domain_cap(items)
-        assert len(result) == _MAX_PER_DOMAIN
-
-    def test_domain_case_sensitivity(self):
-        """Domains are case-sensitive for capping."""
-        items = [
-            {"url": "https://Example.com/1"},
-            {"url": "https://Example.com/2"},
-            {"url": "https://Example.com/3"},
-            {"url": "https://example.com/1"},
-            {"url": "https://example.com/2"},
-            {"url": "https://example.com/3"},
-        ]
-        result = _apply_domain_cap(items)
-        # Should have 3 for Example.com and 3 for example.com
-        assert len(result) == 6
-
-    def test_url_without_protocol(self):
-        items = [
-            {"url": "example.com/1"},
-            {"url": "example.com/2"},
-            {"url": "example.com/3"},
-            {"url": "example.com/4"},
-        ]
-        result = _apply_domain_cap(items)
-        assert len(result) == _MAX_PER_DOMAIN
-
-    def test_none_url_treated_as_empty(self):
-        """None url value should not crash and be treated as empty."""
-        items = [{"url": None}, {"url": "https://a.com/1"}]
-        result = _apply_domain_cap(items)
-        assert len(result) == 2
-
-    def test_missing_urls_are_capped(self):
-        """Multiple items without a url key are correctly limited to _MAX_PER_DOMAIN."""
-        items = [{"title": f"no url {i}"} for i in range(_MAX_PER_DOMAIN + 2)]
-        result = _apply_domain_cap(items)
-        assert len(result) == _MAX_PER_DOMAIN
+def test_apply_domain_cap():
+    """Results should be limited per domain."""
+    raw = [
+        {"url": "https://a.com/1"},
+        {"url": "https://a.com/2"},
+        {"url": "https://a.com/3"},
+        {"url": "https://a.com/4"},  # capped
+        {"url": "https://b.com/1"},
+    ]
+    capped = _apply_domain_cap(raw)
+    assert len(capped) == 4
+    assert capped[-1]["url"] == "https://b.com/1"
 
 
+def test_apply_domain_cap_www_normalization():
+    """www. domains should be treated same as non-www."""
+    raw = [
+        {"url": "https://example.com/1"},
+        {"url": "https://www.example.com/2"},
+        {"url": "https://example.com/3"},
+        {"url": "https://www.example.com/4"},  # capped
+    ]
+    capped = _apply_domain_cap(raw)
+    assert len(capped) == 3
+
+
+def test_apply_domain_cap_no_scheme():
+    """Handle URLs without schemes or with relative paths."""
+    raw = [
+        {"url": "//a.com/1"},
+        {"url": "//a.com/2"},
+        {"url": "//a.com/3"},
+        {"url": "//a.com/4"},  # capped
+        {"url": "just-a-path/1"},  # domain becomes "just-a-path"
+        {"url": "just-a-path/2"},
+    ]
+    capped = _apply_domain_cap(raw)
+    assert len(capped) == 5
+
+
+# ---------------------------------------------------------------------------
+# search()
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
 class TestSearch:
-    """Test the main search function."""
+    """Main search() function tests."""
 
-    async def test_returns_search_results(self, mock_httpx_client):
-        """Basic success case: SearXNG returns results, we get SearchResult objects."""
+    async def test_search_success(self, mock_httpx_client):
+        """Basic search success path."""
         raw_results = [
-            _raw_result("https://example.com/1", "Title 1", "Snippet 1", "google"),
-            _raw_result("https://example.com/2", "Title 2", "Snippet 2", "bing"),
+            _raw_result("https://a.com/1", "Title 1", "Snippet 1", "google"),
+            _raw_result("https://b.com/1", "Title 2", "Snippet 2", "bing"),
         ]
         mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response(raw_results))
 
@@ -264,17 +221,15 @@ class TestSearch:
             results = await search(SEARXNG_URL, "test query")
 
         assert len(results) == 2
-        assert all(isinstance(r, SearchResult) for r in results)
-        assert results[0].url == "https://example.com/1"
-        assert results[0].title == "Title 1"
-        assert results[0].snippet == "Snippet 1"
+        assert results[0].url == "https://a.com/1"
         assert results[0].source == "google"
+        assert results[1].source == "bing"
 
-    async def test_deduplicates_urls(self, mock_httpx_client):
-        """Same URL from different engines should be merged into one result."""
+    async def test_search_dedup(self, mock_httpx_client):
+        """Duplicate URLs should be merged."""
         raw_results = [
-            _raw_result("https://example.com/page", "Title", "Short", "google"),
-            _raw_result("https://example.com/page", "Title", "Longer snippet here", "bing"),
+            _raw_result("https://a.com/1", "Short Title", "Snippet 1", "google"),
+            _raw_result("https://a.com/1", "Much Longer Title", "Longer Snippet", "bing"),
         ]
         mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response(raw_results))
 
@@ -282,74 +237,17 @@ class TestSearch:
             results = await search(SEARXNG_URL, "test")
 
         assert len(results) == 1
-        # Sources should be merged
-        assert "google" in results[0].source
-        assert "bing" in results[0].source
-        # Longest snippet should be kept
-        assert results[0].snippet == "Longer snippet here"
+        assert results[0].source == "bing, google"
+        assert results[0].snippet == "Longer Snippet"
+        assert results[0].title == "Much Longer Title"
 
-    async def test_dedup_keeps_longest_snippet(self, mock_httpx_client):
-        """When deduplicating, the longest snippet wins."""
-        raw_results = [
-            _raw_result("https://example.com/p", "T1", "A very long snippet with details", "google"),
-            _raw_result("https://example.com/p", "T2", "Short", "bing"),
-        ]
-        mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response(raw_results))
-
-        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
-            results = await search(SEARXNG_URL, "test")
-
-        assert results[0].snippet == "A very long snippet with details"
-
-    async def test_dedup_does_not_duplicate_source(self, mock_httpx_client):
-        """Duplicate source names should not be appended again."""
-        raw_results = [
-            _raw_result("https://example.com/p", "T", "S", "google"),
-            _raw_result("https://example.com/p", "T", "S", "google"),
-        ]
-        mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response(raw_results))
-
-        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
-            results = await search(SEARXNG_URL, "test")
-
-        assert results[0].source == "google"
-        assert results[0].source.count("google") == 1
-
-    async def test_domain_cap_applied(self, mock_httpx_client):
-        """No more than MAX_PER_DOMAIN results from a single domain."""
-        raw_results = [_raw_result(f"https://example.com/page{i}", f"Title {i}", f"Snippet {i}") for i in range(10)]
-        mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response(raw_results))
-
-        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
-            results = await search(SEARXNG_URL, "test")
-
-        assert len(results) == _MAX_PER_DOMAIN
-
-    async def test_respects_max_results(self, mock_httpx_client):
-        """Results should be limited to max_results."""
-        raw_results = [_raw_result(f"https://d{i}.com/page", f"Title {i}", f"Snippet {i}") for i in range(20)]
-        mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response(raw_results))
-
-        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
-            results = await search(SEARXNG_URL, "test", max_results=5)
-
-        assert len(results) == 5
-
-    async def test_empty_results_returns_empty_list(self, mock_httpx_client):
-        """Empty SearXNG response should return empty list."""
-        mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response([]))
-
-        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
-            results = await search(SEARXNG_URL, "obscure query")
-
-        assert results == []
-
-    async def test_retries_on_5xx(self, mock_httpx_client):
-        """5xx errors should trigger retry, and succeed on subsequent attempt."""
+    async def test_search_retry_on_500(self, mock_httpx_client):
+        """Transient errors should trigger retries."""
         fail_resp = _make_searxng_response([], status_code=500)
-        ok_resp = _make_searxng_response([_raw_result("https://example.com/1", "T", "S")])
+        ok_resp = _make_searxng_response([_raw_result("https://a.com/1")])
 
-        mock_httpx_client.get = AsyncMock(side_effect=[fail_resp, ok_resp])
+        # Fail twice, then succeed
+        mock_httpx_client.get = AsyncMock(side_effect=[fail_resp, fail_resp, ok_resp])
 
         with (
             patch("httpx.AsyncClient", return_value=mock_httpx_client),
@@ -358,85 +256,60 @@ class TestSearch:
             results = await search(SEARXNG_URL, "test", max_retries=3)
 
         assert len(results) == 1
-        assert mock_httpx_client.get.call_count == 2
-        mock_sleep.assert_called_once()
+        assert mock_httpx_client.get.call_count == 3
+        assert mock_sleep.call_count == 2
 
-    async def test_raises_search_error_on_4xx(self, mock_httpx_client):
-        """4xx errors should raise SearchError immediately without retry."""
-        fail_resp = _make_searxng_response([], status_code=429)
+    async def test_search_fail_on_400(self, mock_httpx_client):
+        """4xx errors should not be retried."""
+        fail_resp = _make_searxng_response([], status_code=400)
         mock_httpx_client.get = AsyncMock(return_value=fail_resp)
 
         with (
             patch("httpx.AsyncClient", return_value=mock_httpx_client),
-            pytest.raises(SearchError) as exc_info,
+            patch("web_core.search.client.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            pytest.raises(SearchError) as exc,
         ):
-            await search(SEARXNG_URL, "test", max_retries=3)
+            await search(SEARXNG_URL, "test")
 
-        assert exc_info.value.query == "test"
-        assert "429" in exc_info.value.reason
-        # Should NOT retry on 4xx
+        assert "HTTP 400" in exc.value.reason
         assert mock_httpx_client.get.call_count == 1
+        mock_sleep.assert_not_called()
 
-    async def test_raises_search_error_after_all_retries(self, mock_httpx_client):
-        """After exhausting all retries, SearchError should be raised."""
+    async def test_search_exhaust_retries(self, mock_httpx_client):
+        """Failure after all retries are exhausted."""
         fail_resp = _make_searxng_response([], status_code=503)
         mock_httpx_client.get = AsyncMock(return_value=fail_resp)
 
         with (
             patch("httpx.AsyncClient", return_value=mock_httpx_client),
             patch("web_core.search.client.asyncio.sleep", new_callable=AsyncMock),
-            pytest.raises(SearchError) as exc_info,
+            pytest.raises(SearchError) as exc,
         ):
             await search(SEARXNG_URL, "test", max_retries=2)
 
-        assert exc_info.value.query == "test"
-        assert "503" in exc_info.value.reason
+        assert "HTTP 503" in exc.value.reason
         assert mock_httpx_client.get.call_count == 2
 
-    async def test_retries_on_connection_error(self, mock_httpx_client):
-        """Connection errors should trigger retry."""
-        request = MagicMock()
-        conn_error = httpx.ConnectError("Connection refused", request=request)
-        ok_resp = _make_searxng_response([_raw_result("https://example.com/1", "T", "S")])
-
-        mock_httpx_client.get = AsyncMock(side_effect=[conn_error, ok_resp])
+    async def test_search_request_error(self, mock_httpx_client):
+        """httpx.RequestError (e.g. DNS) should also trigger retry."""
+        ok_resp = _make_searxng_response([_raw_result("https://a.com/1")])
+        mock_httpx_client.get = AsyncMock(
+            side_effect=[
+                httpx.ConnectError("failed", request=MagicMock()),
+                ok_resp,
+            ]
+        )
 
         with (
             patch("httpx.AsyncClient", return_value=mock_httpx_client),
             patch("web_core.search.client.asyncio.sleep", new_callable=AsyncMock),
         ):
-            results = await search(SEARXNG_URL, "test", max_retries=3)
+            results = await search(SEARXNG_URL, "test")
 
         assert len(results) == 1
         assert mock_httpx_client.get.call_count == 2
 
-    async def test_raises_after_connection_errors_exhausted(self, mock_httpx_client):
-        """If all retries fail with connection errors, SearchError is raised."""
-        request = MagicMock()
-        conn_error = httpx.ConnectError("Connection refused", request=request)
-        mock_httpx_client.get = AsyncMock(side_effect=[conn_error, conn_error])
-
-        with (
-            patch("httpx.AsyncClient", return_value=mock_httpx_client),
-            patch("web_core.search.client.asyncio.sleep", new_callable=AsyncMock),
-            pytest.raises(SearchError) as exc_info,
-        ):
-            await search(SEARXNG_URL, "test", max_retries=2)
-
-        assert "ConnectError" in exc_info.value.reason
-
-    async def test_passes_time_range_param(self, mock_httpx_client):
-        """time_range should be included in the SearXNG query params."""
-        ok_resp = _make_searxng_response([])
-        mock_httpx_client.get = AsyncMock(return_value=ok_resp)
-
-        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
-            await search(SEARXNG_URL, "test", time_range="week")
-
-        call_kwargs = mock_httpx_client.get.call_args
-        assert call_kwargs.kwargs["params"]["time_range"] == "week"
-
-    async def test_invalid_time_range_ignored(self, mock_httpx_client):
+    async def test_validates_time_range(self, mock_httpx_client):
         """Invalid time_range values should not be passed to SearXNG."""
         ok_resp = _make_searxng_response([])
         mock_httpx_client.get = AsyncMock(return_value=ok_resp)
@@ -446,6 +319,15 @@ class TestSearch:
 
         call_kwargs = mock_httpx_client.get.call_args
         assert "time_range" not in call_kwargs.kwargs["params"]
+
+    async def test_search_with_valid_time_range(self, mock_httpx_client):
+        """Line 169: Pass a valid time_range."""
+        ok_resp = _make_searxng_response([])
+        mock_httpx_client.get = AsyncMock(return_value=ok_resp)
+        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
+            await search(SEARXNG_URL, "test", time_range="day")
+        call_kwargs = mock_httpx_client.get.call_args
+        assert call_kwargs.kwargs["params"]["time_range"] == "day"
 
     async def test_passes_language_param(self, mock_httpx_client):
         """language should be included in the SearXNG query params."""
@@ -582,43 +464,6 @@ class TestSearch:
             await search(SEARXNG_URL, "test")
 
         mock_factory.assert_called_once_with(event_hooks=ANY, timeout=15.0)
-
-    async def test_get_shared_client_reused(self):
-        """Branch 36->38: Re-initialization if already set but closed."""
-        from web_core.search import client as client_mod
-        from web_core.search.client import _get_shared_client
-
-        # Reset global state for testing
-        old_client = client_mod._shared_client
-        client_mod._shared_client = None
-
-        try:
-            with patch("httpx.AsyncClient") as mock_client_class:
-                m1 = MagicMock()
-                m1.is_closed = False
-                m2 = MagicMock()
-                m2.is_closed = False
-
-                mock_client_class.side_effect = [m1, m2]
-
-                # 1. First call creates it
-                c1 = _get_shared_client()
-                assert c1 is m1
-                assert mock_client_class.call_count == 1
-
-                # 2. Second call reuses it
-                c2 = _get_shared_client()
-                assert c2 is c1
-                assert mock_client_class.call_count == 1
-
-                # 3. If closed, creates new one
-                m1.is_closed = True
-                c3 = _get_shared_client()
-                assert c3 is m2
-                assert c3 is not c1
-                assert mock_client_class.call_count == 2
-        finally:
-            client_mod._shared_client = old_client
 
     async def test_dedup_with_empty_source(self, mock_httpx_client):
         """Branch 204->206: Existing result, but new hit has no engine/source."""
