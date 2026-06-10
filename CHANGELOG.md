@@ -2,6 +2,50 @@
 
 <!-- version list -->
 
+## v2.2.2-beta.3 (2026-06-10)
+
+### Bug Fixes
+
+- Flatten deeply nested conditionals in is_safe_url
+  ([#446](https://github.com/n24q02m/web-core/pull/446),
+  [`b1da44e`](https://github.com/n24q02m/web-core/commit/b1da44e9cb0a5956a9e5ab827d60db78e3edb9b6))
+
+- Refactor _build_filtered_query to reduce nested conditionals
+  ([#455](https://github.com/n24q02m/web-core/pull/455),
+  [`98d68ec`](https://github.com/n24q02m/web-core/commit/98d68ec22fbc9f69b8145ec60fa698292600eefb))
+
+- **scraper**: Implement SSRF protection for Patchright browser
+  ([#476](https://github.com/n24q02m/web-core/pull/476),
+  [`a64f07b`](https://github.com/n24q02m/web-core/commit/a64f07b21487c2ae790ee261ba5e668739757220))
+
+- **scraper**: Refactor _load_domain_cookies to flatten nested conditionals
+  ([#468](https://github.com/n24q02m/web-core/pull/468),
+  [`85fa61d`](https://github.com/n24q02m/web-core/commit/85fa61d26e22b32423cdd4f6cd9d44a597758069))
+
+### Testing
+
+- Mock MangaDex API responses ([#470](https://github.com/n24q02m/web-core/pull/470),
+  [`f81f75d`](https://github.com/n24q02m/web-core/commit/f81f75ddad7efa19c2133ff842ffdab157616ac6))
+
+- Refactor fixtures in test_searxng_lock.py ([#466](https://github.com/n24q02m/web-core/pull/466),
+  [`55e4a34`](https://github.com/n24q02m/web-core/commit/55e4a3422315815b6b4e4a5158e3a77146908555))
+
+- **mangadex**: Improve test coverage to 100% ([#473](https://github.com/n24q02m/web-core/pull/473),
+  [`55500e5`](https://github.com/n24q02m/web-core/commit/55500e5a27398b3f4e64e8928771c0f6125a7ce3))
+
+- **search**: Add comprehensive test for missing url keys in domain capping
+  ([#465](https://github.com/n24q02m/web-core/pull/465),
+  [`c15dfe3`](https://github.com/n24q02m/web-core/commit/c15dfe369bc32014de64c58db1eed07bff1807ab))
+
+- **search**: Add missing tests for _get_docker_lock and refactor config dir management
+  ([#477](https://github.com/n24q02m/web-core/pull/477),
+  [`0a51f7b`](https://github.com/n24q02m/web-core/commit/0a51f7be1230425d391d6cf47a24f33242edbf08))
+
+- **search**: Add unit tests for _write_secure_text
+  ([#448](https://github.com/n24q02m/web-core/pull/448),
+  [`f9d9fe7`](https://github.com/n24q02m/web-core/commit/f9d9fe724968ebb510e5fe69340f9097547d6dfd))
+
+
 ## v2.2.2-beta.2 (2026-06-10)
 
 ### Bug Fixes
