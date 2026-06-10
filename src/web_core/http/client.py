@@ -185,3 +185,36 @@ def safe_httpx_client(**kwargs: Any) -> httpx.AsyncClient:
     request_hooks.insert(0, _ssrf_event_hook_factory(allow_private))
     hooks["request"] = request_hooks
     return httpx.AsyncClient(event_hooks=hooks, **kwargs)
+
+
+# ---------------------------------------------------------------------------
+# Browser SSRF protection
+# ---------------------------------------------------------------------------
+
+
+async def setup_browser_ssrf_protection(page: Any, *, allow_private: bool = False) -> None:
+    """Setup SSRF protection for a Playwright/Patchright page.
+
+    Uses page.route to intercept all requests (including redirects and
+    sub-resources) and validates them using is_safe_url.
+
+    Args:
+        page: The Playwright/Patchright Page object.
+        allow_private: If True, allows requests to private/loopback IPs.
+    """
+
+    async def _route_handler(route: Any) -> None:
+        url = route.request.url
+        # Allow safe local schemes
+        if url.startswith(("data:", "blob:", "about:")):
+            await route.continue_()
+            return
+
+        if not is_safe_url(url, allow_private=allow_private):
+            logger.warning("SSRF blocked browser request: %s", url)
+            await route.abort("blockedbyclient")
+            return
+
+        await route.continue_()
+
+    await page.route("**/*", _route_handler)
