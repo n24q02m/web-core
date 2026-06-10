@@ -548,11 +548,11 @@ async def test_call_anthropic_joins_text_blocks(monkeypatch):
     assert capture["client_kwargs"] == {"api_key": "ant-key"}
 
 
-def test_resolve_provider_unknown_falls_back_to_env(monkeypatch):
+def test_resolve_provider_unknown_returns_none(monkeypatch):
     _clear_llm_env(monkeypatch)
     monkeypatch.setenv("OPENAI_API_KEY", "dummy")
     resolved = _resolve_provider_and_model("bogus-provider", None)
-    assert resolved == ("openai", selector_inference._PROVIDER_DEFAULT_MODEL["openai"])
+    assert resolved is None
 
 
 def test_resolve_provider_unknown_no_env_returns_none(monkeypatch):
@@ -571,3 +571,9 @@ async def test_infer_dispatches_to_anthropic(monkeypatch):
     result = await infer_selectors_with_llm("https://example.com", "<html/>")
     assert result == {"content": "#a"}
     mock_call.assert_awaited_once()
+
+
+def test_build_default_caller_unknown_provider_raises_value_error():
+    """Verify that _build_default_caller raises ValueError for an explicit unknown provider."""
+    with pytest.raises(ValueError, match="Unknown provider: bogus"):
+        selector_inference._build_default_caller(provider="bogus", model="model")

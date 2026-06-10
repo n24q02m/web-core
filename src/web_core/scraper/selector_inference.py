@@ -230,13 +230,7 @@ def _resolve_provider_and_model(
         return None
 
     if provider not in _PROVIDER_DEFAULT_MODEL:
-        logger.warning(
-            "selector_inference: unknown provider %r, falling back to env detection",
-            provider,
-        )
-        provider = _detect_provider_from_env()
-        if provider is None:
-            return None
+        return None
 
     resolved_model = model or _PROVIDER_DEFAULT_MODEL[provider]
     return provider, resolved_model
@@ -324,6 +318,9 @@ def _build_default_caller(
     model: str | None,
 ) -> LLMCaller | None:
     """Build a default LLM caller from explicit params + env vars. None if no provider."""
+    if provider is not None and provider not in _PROVIDER_DEFAULT_MODEL:
+        raise ValueError(f"Unknown provider: {provider}")
+
     resolved = _resolve_provider_and_model(provider, model)
     if resolved is None:
         return None
