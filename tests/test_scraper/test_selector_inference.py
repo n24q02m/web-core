@@ -3,6 +3,7 @@
 import importlib
 import json
 import sys
+from types import ModuleType, SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -397,3 +398,176 @@ async def test_infer_domain_extraction_protocol_less(monkeypatch):
         llm_caller=fake_caller,
     )
     assert result == {"content": "#c"}
+
+
+# ---------------------------------------------------------------------------
+# Provider-call bodies (_call_gemini / _call_openai_compatible / _call_anthropic).
+# These exercise the real SDK-dispatch code by injecting fake SDK modules into
+# sys.modules so the lazy in-function imports resolve to the fakes.
+# ---------------------------------------------------------------------------
+
+
+def _inject_fake_genai(monkeypatch, *, text, capture):
+    async def generate_content(**kwargs):
+        capture["gen_kwargs"] = kwargs
+        return SimpleNamespace(text=text)
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            capture["client_kwargs"] = kwargs
+            self.aio = SimpleNamespace(models=SimpleNamespace(generate_content=generate_content))
+
+    mod = ModuleType("google.genai")
+    mod.Client = FakeClient
+    mod.types = SimpleNamespace(GenerateContentConfig=lambda **kw: SimpleNamespace(**kw))
+    # google-genai isn't installed in the test env, so the lazy
+    # `import google.genai` needs both the parent package and the submodule.
+    fake_google = ModuleType("google")
+    fake_google.genai = mod
+    monkeypatch.setitem(sys.modules, "google", fake_google)
+    monkeypatch.setitem(sys.modules, "google.genai", mod)
+    return capture
+
+
+@pytest.mark.asyncio
+async def test_call_gemini_api_key_mode(monkeypatch):
+    _clear_llm_env(monkeypatch)
+    monkeypatch.setenv("GEMINI_API_KEY", "k-123")
+    capture = _inject_fake_genai(monkeypatch, text='{"content": "#x"}', capture={})
+
+    out = await selector_inference._call_gemini("prompt", "gemini-2.5-flash")
+
+    assert out == '{"content": "#x"}'
+    assert capture["client_kwargs"] == {"api_key": "k-123"}
+    assert capture["gen_kwargs"]["model"] == "gemini-2.5-flash"
+
+
+@pytest.mark.asyncio
+async def test_call_gemini_vertex_mode(monkeypatch):
+    _clear_llm_env(monkeypatch)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "my-project")
+    monkeypatch.setenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+    capture = _inject_fake_genai(monkeypatch, text="", capture={})
+
+    out = await selector_inference._call_gemini("prompt", "gemini-2.5-flash")
+
+    # response.text is "" -> function returns "" (the `or ""` branch)
+    assert out == ""
+    assert capture["client_kwargs"] == {
+        "vertexai": True,
+        "project": "my-project",
+        "location": "us-central1",
+    }
+
+
+@pytest.mark.asyncio
+async def test_call_gemini_vertex_missing_project_raises(monkeypatch):
+    _clear_llm_env(monkeypatch)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
+    # Inject a fake so an accidental client build would not hit the real SDK.
+    _inject_fake_genai(monkeypatch, text="{}", capture={})
+
+    with pytest.raises(ValueError, match="GOOGLE_CLOUD_PROJECT"):
+        await selector_inference._call_gemini("prompt", "gemini-2.5-flash")
+
+
+@pytest.mark.asyncio
+async def test_call_openai_compatible_passes_base_url(monkeypatch):
+    capture: dict = {}
+
+    async def create(**kwargs):
+        capture["create_kwargs"] = kwargs
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content='{"content": "#c"}'))])
+
+    class FakeAsyncOpenAI:
+        def __init__(self, **kwargs):
+            capture["client_kwargs"] = kwargs
+            self.chat = SimpleNamespace(completions=SimpleNamespace(create=create))
+
+    mod = ModuleType("openai")
+    mod.AsyncOpenAI = FakeAsyncOpenAI
+    monkeypatch.setitem(sys.modules, "openai", mod)
+
+    out = await selector_inference._call_openai_compatible(
+        "prompt", "grok-3-mini", base_url="https://api.x.ai/v1", api_key="xai-key"
+    )
+
+    assert out == '{"content": "#c"}'
+    assert capture["client_kwargs"] == {"api_key": "xai-key", "base_url": "https://api.x.ai/v1"}
+    assert capture["create_kwargs"]["model"] == "grok-3-mini"
+
+
+@pytest.mark.asyncio
+async def test_call_openai_compatible_none_content(monkeypatch):
+    async def create(**kwargs):
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=None))])
+
+    class FakeAsyncOpenAI:
+        def __init__(self, **kwargs):
+            self.chat = SimpleNamespace(completions=SimpleNamespace(create=create))
+
+    mod = ModuleType("openai")
+    mod.AsyncOpenAI = FakeAsyncOpenAI
+    monkeypatch.setitem(sys.modules, "openai", mod)
+
+    out = await selector_inference._call_openai_compatible("prompt", "gpt-4o-mini", base_url=None, api_key="k")
+
+    assert out == ""
+
+
+@pytest.mark.asyncio
+async def test_call_anthropic_joins_text_blocks(monkeypatch):
+    _clear_llm_env(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "ant-key")
+    capture: dict = {}
+
+    async def create(**kwargs):
+        capture["create_kwargs"] = kwargs
+        return SimpleNamespace(
+            content=[
+                SimpleNamespace(text='{"content"'),
+                SimpleNamespace(text=': "#a"}'),
+                object(),  # block without a .text attribute -> skipped
+            ]
+        )
+
+    class FakeAsyncAnthropic:
+        def __init__(self, **kwargs):
+            capture["client_kwargs"] = kwargs
+            self.messages = SimpleNamespace(create=create)
+
+    mod = ModuleType("anthropic")
+    mod.AsyncAnthropic = FakeAsyncAnthropic
+    monkeypatch.setitem(sys.modules, "anthropic", mod)
+
+    out = await selector_inference._call_anthropic("prompt", "claude-haiku-4-5-20251001")
+
+    assert out == '{"content": "#a"}'
+    assert capture["client_kwargs"] == {"api_key": "ant-key"}
+
+
+def test_resolve_provider_unknown_falls_back_to_env(monkeypatch):
+    _clear_llm_env(monkeypatch)
+    monkeypatch.setenv("OPENAI_API_KEY", "dummy")
+    resolved = _resolve_provider_and_model("bogus-provider", None)
+    assert resolved == ("openai", selector_inference._PROVIDER_DEFAULT_MODEL["openai"])
+
+
+def test_resolve_provider_unknown_no_env_returns_none(monkeypatch):
+    _clear_llm_env(monkeypatch)
+    assert _resolve_provider_and_model("bogus-provider", None) is None
+
+
+@pytest.mark.asyncio
+async def test_infer_dispatches_to_anthropic(monkeypatch):
+    _clear_llm_env(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "dummy")
+
+    mock_call = AsyncMock(return_value=json.dumps({"content": "#a"}))
+    monkeypatch.setattr(selector_inference, "_call_anthropic", mock_call)
+
+    result = await infer_selectors_with_llm("https://example.com", "<html/>")
+    assert result == {"content": "#a"}
+    mock_call.assert_awaited_once()
