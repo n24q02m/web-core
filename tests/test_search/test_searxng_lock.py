@@ -51,7 +51,7 @@ def _reset_docker_state():
         mod._last_restart_time = 0.0
         mod._is_owner = False
         mod._startup_lock = None
-        mod._DOCKER_LOCK = None
+        mod._docker_lock = None  # Reset lazy filelock so tmp_path dir is used
 
     _reset()
     yield
