@@ -1,8 +1,13 @@
-import pytest
+from __future__ import annotations
+
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
 from web_core.http.client import setup_browser_ssrf_protection
 from web_core.scraper.strategies.captcha import CaptchaStrategy
 from web_core.scraper.strategies.patchright_browser import PatchrightStrategy
+
 
 @pytest.mark.asyncio
 async def test_setup_browser_ssrf_protection_aborts_unsafe():
@@ -13,7 +18,7 @@ async def test_setup_browser_ssrf_protection_aborts_unsafe():
     # Capture the handler passed to page.route
     await setup_browser_ssrf_protection(mock_page)
     mock_page.route.assert_called_once()
-    args, kwargs = mock_page.route.call_args
+    args = mock_page.route.call_args[0]
     assert args[0] == "**/*"
     handler = args[1]
 
@@ -22,6 +27,7 @@ async def test_setup_browser_ssrf_protection_aborts_unsafe():
 
     mock_route.abort.assert_called_once_with("blockedbyclient")
     mock_route.continue_.assert_not_called()
+
 
 @pytest.mark.asyncio
 async def test_setup_browser_ssrf_protection_allows_safe():
@@ -38,6 +44,7 @@ async def test_setup_browser_ssrf_protection_allows_safe():
     mock_route.continue_.assert_called_once()
     mock_route.abort.assert_not_called()
 
+
 @pytest.mark.asyncio
 async def test_setup_browser_ssrf_protection_allows_special_schemes():
     mock_page = AsyncMock()
@@ -51,6 +58,7 @@ async def test_setup_browser_ssrf_protection_allows_special_schemes():
         mock_route.continue_ = AsyncMock()
         await handler(mock_route)
         mock_route.continue_.assert_called_once()
+
 
 def _make_mock_patchright_for_ssrf():
     mock_page = AsyncMock()
@@ -68,6 +76,7 @@ def _make_mock_patchright_for_ssrf():
     mock_cls = MagicMock(return_value=mock_provider)
     return mock_cls, mock_page
 
+
 @pytest.mark.asyncio
 async def test_captcha_strategy_calls_setup_ssrf():
     strategy = CaptchaStrategy(capsolver_api_key="key")
@@ -76,13 +85,13 @@ async def test_captcha_strategy_calls_setup_ssrf():
     with (
         patch("web_core.browsers.patchright.PatchrightProvider", mock_cls),
         patch("web_core.scraper.strategies.captcha.is_safe_url", return_value=True),
-        patch("web_core.scraper.strategies.captcha.setup_browser_ssrf_protection", AsyncMock()) as mock_setup
+        patch("web_core.scraper.strategies.captcha.setup_browser_ssrf_protection", AsyncMock()) as mock_setup,
+        patch.object(strategy, "_extract_turnstile_sitekey", return_value=None),
     ):
-        # We need to mock _extract_turnstile_sitekey to avoid further calls
-        with patch.object(strategy, "_extract_turnstile_sitekey", return_value=None):
-            await strategy.fetch("https://example.com")
+        await strategy.fetch("https://example.com")
 
     mock_setup.assert_called_once_with(mock_page)
+
 
 @pytest.mark.asyncio
 async def test_patchright_strategy_calls_setup_ssrf():
@@ -93,8 +102,11 @@ async def test_patchright_strategy_calls_setup_ssrf():
     with (
         patch("web_core.browsers.patchright.PatchrightProvider", mock_cls),
         patch("web_core.scraper.strategies.patchright_browser.is_safe_url", return_value=True),
-        patch("web_core.scraper.strategies.patchright_browser.setup_browser_ssrf_protection", AsyncMock()) as mock_setup,
-        patch("web_core.scraper.strategies.patchright_browser.detect_cloudflare_challenge", return_value=None)
+        patch(
+            "web_core.scraper.strategies.patchright_browser.setup_browser_ssrf_protection",
+            AsyncMock(),
+        ) as mock_setup,
+        patch("web_core.scraper.strategies.patchright_browser.detect_cloudflare_challenge", return_value=None),
     ):
         await strategy.fetch("https://example.com")
 
