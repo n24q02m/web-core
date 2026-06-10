@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v2.2.2-beta.1 (2026-06-10)
+
+### Bug Fixes
+
+- **deps**: Lock file maintenance ([#441](https://github.com/n24q02m/web-core/pull/441),
+  [`90a1864`](https://github.com/n24q02m/web-core/commit/90a1864575430843bd4d75333011ef03efc2b714))
+
+- **deps**: Update non-major dependencies to >=0.0.46
+  ([#440](https://github.com/n24q02m/web-core/pull/440),
+  [`edb9fb7`](https://github.com/n24q02m/web-core/commit/edb9fb7f59e351c145890174d8c316c3bdc9d817))
+
+- **deps**: Update step-security/harden-runner digest to 9af89fc
+  ([#439](https://github.com/n24q02m/web-core/pull/439),
+  [`5879cd3`](https://github.com/n24q02m/web-core/commit/5879cd3a24a38c420f6717583c80564f18e21cd4))
+
+
 ## v2.2.1 (2026-06-09)
 
 
