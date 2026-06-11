@@ -128,7 +128,7 @@ jobs:
           comment-summary-in-pr: always
 
   # ============================================================================
-  # Qodo AI Code Review (External Contributors Only)
+  # Email Notification (External Contributors Only)
   # ============================================================================
   email-notify:
     name: Email Notification
