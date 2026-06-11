@@ -1,6 +1,6 @@
 # web-core
 
-Shared web infrastructure Python package (PUBLIC, PyPI). Cung cap SearXNG search, multi-strategy scraping, SSRF-safe HTTP client, va stealth browsers cho knowledge-core va cac downstream apps.
+Shared web infrastructure Python package (PUBLIC, PyPI). Cung cap SearXNG search, multi-strategy scraping, SSRF-safe HTTP client, va stealth browsers cho wet-mcp va cac downstream apps.
 
 ## Architecture
 
