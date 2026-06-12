@@ -6,6 +6,7 @@ comparison, and for validating domain names to prevent injection attacks.
 
 from __future__ import annotations
 
+import functools
 import re
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
@@ -50,8 +51,13 @@ _DOMAIN_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*\.[a-zA-Z]{2,}\Z")
 # ---------------------------------------------------------------------------
 
 
+@functools.lru_cache(maxsize=1024)
 def normalize_url(url: str) -> str:
     """Normalize a URL for deduplication.
+
+    Performance Optimization: Cached with lru_cache because URL parsing and regex
+    execution (for tracking parameters) is computationally expensive, and the same
+    URLs are often encountered repeatedly during deduplication.
 
     Transformations applied:
     - Lowercase scheme and netloc
