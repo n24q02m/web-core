@@ -1,5 +1,7 @@
 # web-core
 
+**Shared web infrastructure for search, scraping, HTTP security, and stealth browsers -- powers wet-mcp and downstream apps.**
+
 <!-- BEGIN: AUTO-GENERATED-CROSS-PROMO -->
 <details>
   <summary><strong>Sister projects from n24q02m</strong> (click to expand)</summary>
