@@ -1,22 +1,29 @@
+import asyncio
+import os
 import signal
+import sys
 import subprocess
+import time
+from unittest.mock import MagicMock, patch, AsyncMock
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 import web_core.search.runner as runner_mod
 from web_core.search.runner import (
-    _cleanup_process,
-    _force_kill_process,
-    _force_kill_process_sync,
     _is_pid_alive,
+    _sigterm_then_kill_sync,
+    _sigterm_then_kill,
+    _force_kill_process_sync,
+    _force_kill_process,
     _is_process_dead,
     _kill_stale_port_process,
-    _sigterm_then_kill,
-    _sigterm_then_kill_sync,
+    _cleanup_process,
 )
 
+# Helpers for platform-specific signals
+SIGTERM = getattr(signal, "SIGTERM", 15)
+SIGKILL = getattr(signal, "SIGKILL", 9)
 
 class TestProcessLiveness:
     def test_is_pid_alive_windows_success(self):
@@ -86,7 +93,6 @@ class TestProcessLiveness:
         assert _is_pid_alive(0) is False
         assert _is_pid_alive(-1) is False
 
-
 class TestSigtermThenKill:
     def test_sigterm_then_kill_sync_graceful(self):
         with (
@@ -95,7 +101,7 @@ class TestSigtermThenKill:
             patch("time.sleep"),
         ):
             assert _sigterm_then_kill_sync(1234, "test") is True
-            mock_kill.assert_called_once_with(1234, signal.SIGTERM)
+            mock_kill.assert_called_once_with(1234, SIGTERM)
 
     def test_sigterm_then_kill_sync_force(self):
         with (
@@ -105,8 +111,8 @@ class TestSigtermThenKill:
         ):
             assert _sigterm_then_kill_sync(1234, "test") is True
             assert mock_kill.call_count == 2
-            mock_kill.assert_any_call(1234, signal.SIGTERM)
-            mock_kill.assert_any_call(1234, signal.SIGKILL)
+            mock_kill.assert_any_call(1234, SIGTERM)
+            mock_kill.assert_any_call(1234, SIGKILL)
 
     def test_sigterm_then_kill_sync_force_exception(self):
         with (
@@ -128,7 +134,7 @@ class TestSigtermThenKill:
             patch("asyncio.sleep", new_callable=AsyncMock),
         ):
             assert await _sigterm_then_kill(1234, "test") is True
-            mock_kill.assert_called_once_with(1234, signal.SIGTERM)
+            mock_kill.assert_called_once_with(1234, SIGTERM)
 
     @pytest.mark.asyncio
     async def test_sigterm_then_kill_async_sigterm_exception(self):
@@ -144,8 +150,8 @@ class TestSigtermThenKill:
         ):
             assert await _sigterm_then_kill(1234, "test") is True
             assert mock_kill.call_count == 2
-            mock_kill.assert_any_call(1234, signal.SIGTERM)
-            mock_kill.assert_any_call(1234, signal.SIGKILL)
+            mock_kill.assert_any_call(1234, SIGTERM)
+            mock_kill.assert_any_call(1234, SIGKILL)
 
     @pytest.mark.asyncio
     async def test_sigterm_then_kill_async_force_exception(self):
@@ -155,7 +161,6 @@ class TestSigtermThenKill:
             patch("asyncio.sleep", new_callable=AsyncMock),
         ):
             assert await _sigterm_then_kill(1234, "test") is True
-
 
 class TestForceKillProcess:
     def test_force_kill_process_sync_windows_success(self):
@@ -208,7 +213,7 @@ class TestForceKillProcess:
             patch("os.killpg") as mock_killpg,
         ):
             _force_kill_process_sync(mock_proc)
-            mock_killpg.assert_called_once_with(5678, signal.SIGTERM)
+            mock_killpg.assert_called_once_with(5678, SIGTERM)
             mock_proc.wait.assert_called_once()
 
     def test_force_kill_process_sync_linux_killpg_error(self):
@@ -239,8 +244,8 @@ class TestForceKillProcess:
         ):
             _force_kill_process_sync(mock_proc)
             assert mock_killpg.call_count == 2
-            mock_killpg.assert_any_call(5678, signal.SIGTERM)
-            mock_killpg.assert_any_call(5678, signal.SIGKILL)
+            mock_killpg.assert_any_call(5678, SIGTERM)
+            mock_killpg.assert_any_call(5678, SIGKILL)
 
     def test_force_kill_process_sync_linux_force_timeout_warn(self):
         mock_proc = MagicMock(spec=subprocess.Popen)
@@ -318,7 +323,7 @@ class TestForceKillProcess:
             patch("asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread,
         ):
             await _force_kill_process(mock_proc)
-            mock_killpg.assert_called_once_with(5678, signal.SIGTERM)
+            mock_killpg.assert_called_once_with(5678, SIGTERM)
             mock_to_thread.assert_called_once()
 
     @pytest.mark.asyncio
@@ -335,8 +340,8 @@ class TestForceKillProcess:
         ):
             await _force_kill_process(mock_proc)
             assert mock_killpg.call_count == 2
-            mock_killpg.assert_any_call(5678, signal.SIGTERM)
-            mock_killpg.assert_any_call(5678, signal.SIGKILL)
+            mock_killpg.assert_any_call(5678, SIGTERM)
+            mock_killpg.assert_any_call(5678, SIGKILL)
 
     @pytest.mark.asyncio
     async def test_force_kill_process_async_linux_killpg_error(self):
@@ -376,7 +381,6 @@ class TestForceKillProcess:
         _force_kill_process_sync(mock_proc)
         mock_proc.wait.assert_not_called()
 
-
 class TestIsProcessDead:
     def test_is_process_dead_true(self):
         with patch("os.kill", side_effect=ProcessLookupError()):
@@ -389,7 +393,6 @@ class TestIsProcessDead:
     def test_is_process_dead_permission_error(self):
         with patch("os.kill", side_effect=PermissionError()):
             assert _is_process_dead(1234) is True
-
 
 class TestKillStalePortProcess:
     @pytest.mark.asyncio
@@ -486,15 +489,24 @@ class TestKillStalePortProcess:
         ):
             await _kill_stale_port_process(8888)
 
-
 class TestCleanupProcess:
     @pytest.fixture(autouse=True)
     def reset_mod_state(self):
+        # We need to use monkeypatch to avoid permanently modifying module globals
+        # but runner_mod is already imported.
         old_container = runner_mod._searxng_docker_container
         old_is_owner = runner_mod._is_owner
         old_process = runner_mod._searxng_process
         old_settings = runner_mod._searxng_settings_path
+
+        # Clear them for tests
+        runner_mod._searxng_docker_container = None
+        runner_mod._is_owner = False
+        runner_mod._searxng_process = None
+        runner_mod._searxng_settings_path = None
+
         yield
+
         runner_mod._searxng_docker_container = old_container
         runner_mod._is_owner = old_is_owner
         runner_mod._searxng_process = old_process
