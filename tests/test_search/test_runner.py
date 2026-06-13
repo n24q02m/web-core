@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import signal
 import socket
 import subprocess
 import sys
@@ -23,6 +24,8 @@ from web_core.search.runner import (
     _SETTINGS_TEMPLATE,
     _cleanup_process,
     _find_available_port,
+    _force_kill_process,
+    _force_kill_process_sync,
     _get_docker_lock,
     _get_pip_command,
     _get_process_kwargs,
@@ -31,11 +34,14 @@ from web_core.search.runner import (
     _install_searxng,
     _is_pid_alive,
     _is_process_alive,
+    _is_process_dead,
     _is_searxng_installed,
     _kill_stale_port_process,
     _quick_health_check,
     _read_discovery,
     _remove_discovery,
+    _sigterm_then_kill,
+    _sigterm_then_kill_sync,
     _start_docker_searxng,
     _try_reuse_existing,
     _wait_for_service,
@@ -1241,3 +1247,282 @@ class TestGetDockerLock:
         if sys.platform != "win32":
             mode = os.stat(config_dir).st_mode
             assert (mode & 0o777) == 0o700
+
+
+# ===========================================================================
+# Termination Functions
+# ===========================================================================
+
+
+class TestSigtermThenKill:
+    def test_sigterm_then_kill_sync_success(self):
+        """SIGTERM stops the process gracefully."""
+        with (
+            patch("os.kill") as mock_kill,
+            patch("web_core.search.runner._is_process_dead", side_effect=[False, True]),
+            patch("time.sleep") as mock_sleep,
+        ):
+            assert _sigterm_then_kill_sync(123, "test") is True
+            mock_kill.assert_called_once_with(123, signal.SIGTERM)
+            assert mock_sleep.call_count == 1
+
+    def test_sigterm_then_kill_sync_fallback(self):
+        """SIGKILL is sent if SIGTERM fails to stop the process."""
+        with (
+            patch("os.kill") as mock_kill,
+            patch("web_core.search.runner._is_process_dead", return_value=False),
+            patch("time.sleep") as mock_sleep,
+        ):
+            assert _sigterm_then_kill_sync(123, "test") is True
+            assert mock_kill.call_count == 2
+            mock_kill.assert_any_call(123, signal.SIGTERM)
+            mock_kill.assert_any_call(123, signal.SIGKILL)
+            assert mock_sleep.call_count == 30
+
+    def test_sigterm_then_kill_sync_lookup_error(self):
+        """Handles ProcessLookupError gracefully."""
+        with patch("os.kill", side_effect=ProcessLookupError):
+            assert _sigterm_then_kill_sync(123, "test") is True
+
+    @pytest.mark.asyncio
+    async def test_sigterm_then_kill_async_success(self):
+        """SIGTERM stops the process gracefully (async)."""
+        with (
+            patch("os.kill") as mock_kill,
+            patch("web_core.search.runner._is_process_dead", side_effect=[False, True]),
+            patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        ):
+            assert await _sigterm_then_kill(123, "test") is True
+            mock_kill.assert_called_once_with(123, signal.SIGTERM)
+            assert mock_sleep.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_sigterm_then_kill_async_fallback(self):
+        """SIGKILL is sent if SIGTERM fails (async)."""
+        with (
+            patch("os.kill") as mock_kill,
+            patch("web_core.search.runner._is_process_dead", return_value=False),
+            patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        ):
+            assert await _sigterm_then_kill(123, "test") is True
+            assert mock_kill.call_count == 2
+            mock_kill.assert_any_call(123, signal.SIGTERM)
+            mock_kill.assert_any_call(123, signal.SIGKILL)
+            assert mock_sleep.call_count == 30
+
+
+class TestForceKillProcess:
+    def test_force_kill_process_sync_already_dead(self):
+        """Does nothing if process is already dead."""
+        proc = MagicMock(spec=subprocess.Popen)
+        proc.poll.return_value = 0
+        _force_kill_process_sync(proc)
+        proc.pid_property = False  # just to avoid unused
+        assert not proc.pid_property
+
+    def test_force_kill_process_sync_unix_success(self):
+        """Unix path: terminates process group gracefully."""
+        proc = MagicMock(spec=subprocess.Popen)
+        proc.poll.return_value = None
+        proc.pid = 123
+        with (
+            patch("sys.platform", "linux"),
+            patch("os.getpgid", return_value=456),
+            patch("os.killpg") as mock_killpg,
+            patch.object(proc, "wait") as mock_wait,
+        ):
+            _force_kill_process_sync(proc)
+            mock_killpg.assert_any_call(456, signal.SIGTERM)
+            mock_wait.assert_called_once_with(timeout=3)
+
+    def test_force_kill_process_sync_unix_fallback(self):
+        """Unix path: force kills if termination fails."""
+        proc = MagicMock(spec=subprocess.Popen)
+        proc.poll.return_value = None
+        proc.pid = 123
+        with (
+            patch("sys.platform", "linux"),
+            patch("os.getpgid", side_effect=ProcessLookupError),
+            patch.object(proc, "terminate") as mock_terminate,
+            patch.object(proc, "wait", side_effect=subprocess.TimeoutExpired(cmd="test", timeout=3)),
+            patch.object(proc, "kill") as mock_kill,
+        ):
+            _force_kill_process_sync(proc)
+            mock_terminate.assert_called_once()
+            mock_kill.assert_called_once()
+
+    def test_force_kill_process_sync_windows(self):
+        """Windows path: uses _sigterm_then_kill_sync."""
+        proc = MagicMock(spec=subprocess.Popen)
+        proc.poll.return_value = None
+        proc.pid = 123
+        with (
+            patch("sys.platform", "win32"),
+            patch("web_core.search.runner._sigterm_then_kill_sync") as mock_sigterm,
+            patch.object(proc, "wait") as mock_wait,
+        ):
+            _force_kill_process_sync(proc)
+            mock_sigterm.assert_called_once_with(123, "SearXNG")
+            mock_wait.assert_called_once_with(timeout=3)
+
+    @pytest.mark.asyncio
+    async def test_force_kill_process_async_unix_success(self):
+        """Unix path (async): terminates process group."""
+        proc = MagicMock(spec=subprocess.Popen)
+        proc.poll.return_value = None
+        proc.pid = 123
+        with (
+            patch("sys.platform", "linux"),
+            patch("os.getpgid", return_value=456),
+            patch("os.killpg") as mock_killpg,
+            patch("asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread,
+        ):
+            await _force_kill_process(proc)
+            mock_killpg.assert_any_call(456, signal.SIGTERM)
+            mock_to_thread.assert_called_once_with(proc.wait, timeout=3)
+
+    @pytest.mark.asyncio
+    async def test_force_kill_process_async_windows(self):
+        """Windows path (async): uses _sigterm_then_kill."""
+        proc = MagicMock(spec=subprocess.Popen)
+        proc.poll.return_value = None
+        proc.pid = 123
+        with (
+            patch("sys.platform", "win32"),
+            patch("web_core.search.runner._sigterm_then_kill", new_callable=AsyncMock) as mock_sigterm,
+            patch("asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread,
+        ):
+            await _force_kill_process(proc)
+            mock_sigterm.assert_called_once_with(123, "SearXNG")
+            mock_to_thread.assert_called_once_with(proc.wait, timeout=3)
+
+    @pytest.mark.asyncio
+    async def test_force_kill_process_async_unix_fallback(self):
+        """Unix path (async): force kills if termination fails."""
+        proc = MagicMock(spec=subprocess.Popen)
+        proc.poll.return_value = None
+        proc.pid = 123
+        with (
+            patch("sys.platform", "linux"),
+            patch("os.getpgid", side_effect=ProcessLookupError),
+            patch.object(proc, "terminate") as mock_terminate,
+            patch.object(proc, "kill") as mock_kill,
+            patch("asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread,
+        ):
+            # First wait times out
+            mock_to_thread.side_effect = [
+                subprocess.TimeoutExpired(cmd="test", timeout=3),
+                None,
+            ]
+            await _force_kill_process(proc)
+            mock_terminate.assert_called_once()
+            mock_kill.assert_called_once()
+
+
+class TestIsProcessDead:
+    def test_is_process_dead_alive(self):
+        """Returns False if process is alive."""
+        with patch("os.kill", return_value=None):
+            assert _is_process_dead(123) is False
+
+    def test_is_process_dead_dead(self):
+        """Returns True if process is dead."""
+        with patch("os.kill", side_effect=ProcessLookupError):
+            assert _is_process_dead(123) is True
+
+    def test_is_process_dead_permission(self):
+        """Returns True if permission denied (assumed dead or inaccessible)."""
+        with patch("os.kill", side_effect=PermissionError):
+            assert _is_process_dead(123) is True
+
+
+class TestTerminationEdgeCases:
+    def test_sigterm_then_kill_sync_fallback_error(self):
+        """Fallback SIGKILL also handles ProcessLookupError."""
+        with (
+            patch("os.kill") as mock_kill,
+            patch("web_core.search.runner._is_process_dead", return_value=False),
+            patch("time.sleep"),
+        ):
+            mock_kill.side_effect = [None, ProcessLookupError]
+            assert _sigterm_then_kill_sync(123, "test") is True
+
+    @pytest.mark.asyncio
+    async def test_sigterm_then_kill_async_initial_error(self):
+        """Initial SIGTERM handles ProcessLookupError (async)."""
+        with patch("os.kill", side_effect=ProcessLookupError):
+            assert await _sigterm_then_kill(123, "test") is True
+
+    @pytest.mark.asyncio
+    async def test_sigterm_then_kill_async_fallback_error(self):
+        """Fallback SIGKILL handles ProcessLookupError (async)."""
+        with (
+            patch("os.kill") as mock_kill,
+            patch("web_core.search.runner._is_process_dead", return_value=False),
+            patch("asyncio.sleep", new_callable=AsyncMock),
+        ):
+            mock_kill.side_effect = [None, ProcessLookupError]
+            assert await _sigterm_then_kill(123, "test") is True
+
+    @pytest.mark.asyncio
+    async def test_force_kill_process_async_already_dead(self):
+        """Async version: does nothing if process is already dead."""
+        proc = MagicMock(spec=subprocess.Popen)
+        proc.poll.return_value = 0
+        await _force_kill_process(proc)
+        proc.pid_property = False
+        assert not proc.pid_property
+
+    def test_force_kill_process_sync_windows_timeout(self):
+        """Windows sync: kills process if wait times out."""
+        proc = MagicMock(spec=subprocess.Popen)
+        proc.poll.return_value = None
+        proc.pid = 123
+        with (
+            patch("sys.platform", "win32"),
+            patch("web_core.search.runner._sigterm_then_kill_sync"),
+            patch.object(proc, "wait", side_effect=subprocess.TimeoutExpired(cmd="test", timeout=3)),
+            patch.object(proc, "kill") as mock_kill,
+        ):
+            _force_kill_process_sync(proc)
+            mock_kill.assert_called_once()
+
+    def test_force_kill_process_sync_exception_handler(self):
+        """Sync: logs but swallows exceptions during killing."""
+        proc = MagicMock(spec=subprocess.Popen)
+        proc.poll.return_value = None
+        proc.pid = 123
+        with (
+            patch("sys.platform", "win32"),
+            patch("web_core.search.runner._sigterm_then_kill_sync", side_effect=RuntimeError("boom")),
+        ):
+            # Should not raise
+            _force_kill_process_sync(proc)
+
+    @pytest.mark.asyncio
+    async def test_force_kill_process_async_windows_timeout(self):
+        """Windows async: kills process if wait times out."""
+        proc = MagicMock(spec=subprocess.Popen)
+        proc.poll.return_value = None
+        proc.pid = 123
+        with (
+            patch("sys.platform", "win32"),
+            patch("web_core.search.runner._sigterm_then_kill", new_callable=AsyncMock),
+            patch("asyncio.to_thread", side_effect=subprocess.TimeoutExpired(cmd="test", timeout=3)),
+            patch.object(proc, "kill") as mock_kill,
+        ):
+            await _force_kill_process(proc)
+            mock_kill.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_force_kill_process_async_exception_handler(self):
+        """Async: logs but swallows exceptions during killing."""
+        proc = MagicMock(spec=subprocess.Popen)
+        proc.poll.return_value = None
+        proc.pid = 123
+        with (
+            patch("sys.platform", "win32"),
+            patch("web_core.search.runner._sigterm_then_kill", side_effect=RuntimeError("boom")),
+        ):
+            # Should not raise
+            await _force_kill_process(proc)

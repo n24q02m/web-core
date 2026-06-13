@@ -1,0 +1,34 @@
+<<<<<<< SEARCH
+    def test_force_kill_process_sync_unix_fallback(self):
+        """Unix path: force kills if termination fails."""
+        proc = MagicMock(spec=subprocess.Popen)
+        proc.poll.return_value = None
+        proc.pid = 123
+        with (
+            patch("sys.platform", "linux"),
+            patch("os.getpgid", return_value=456),
+            patch("os.killpg") as mock_killpg,
+            patch.object(proc, "wait", side_effect=subprocess.TimeoutExpired(cmd="test", timeout=3)),
+            patch.object(proc, "kill") as mock_kill,
+        ):
+            _force_kill_process_sync(proc)
+            mock_killpg.assert_any_call(456, signal.SIGTERM)
+            mock_killpg.assert_any_call(456, signal.SIGKILL)
+            mock_kill.assert_called_once()
+=======
+    def test_force_kill_process_sync_unix_fallback(self):
+        """Unix path: force kills if termination fails."""
+        proc = MagicMock(spec=subprocess.Popen)
+        proc.poll.return_value = None
+        proc.pid = 123
+        with (
+            patch("sys.platform", "linux"),
+            patch("os.getpgid", side_effect=ProcessLookupError),
+            patch.object(proc, "terminate") as mock_terminate,
+            patch.object(proc, "wait", side_effect=subprocess.TimeoutExpired(cmd="test", timeout=3)),
+            patch.object(proc, "kill") as mock_kill,
+        ):
+            _force_kill_process_sync(proc)
+            mock_terminate.assert_called_once()
+            mock_kill.assert_called_once()
+>>>>>>> REPLACE
