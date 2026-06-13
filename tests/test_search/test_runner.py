@@ -1413,7 +1413,9 @@ class TestHandleRestartAndStart:
             patch("web_core.search.runner._is_searxng_installed", return_value=False),
             patch("web_core.search.runner._install_searxng", return_value=True),
             patch(
-                "web_core.search.runner._start_searxng_subprocess", new_callable=AsyncMock, return_value="http://sub-url"
+                "web_core.search.runner._start_searxng_subprocess",
+                new_callable=AsyncMock,
+                return_value="http://sub-url",
             ),
         ):
             url = await _handle_restart_and_start(start_port=8888)
