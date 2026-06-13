@@ -408,8 +408,13 @@ class TestSearxngInstallation:
             assert _is_searxng_installed() is False
 
     def test_is_searxng_installed_module_not_found(self):
-        """Returns False when find_spec raises ModuleNotFoundError."""
-        with patch("importlib.util.find_spec", side_effect=ModuleNotFoundError):
+        """Returns False when SearXNG package is missing from sys.modules."""
+        with patch.dict("sys.modules", {"searx": None}):
+            assert _is_searxng_installed() is False
+
+    def test_is_searxng_installed_import_error(self):
+        """Returns False when importlib.util itself is missing."""
+        with patch.dict("sys.modules", {"importlib.util": None}):
             assert _is_searxng_installed() is False
 
     def test_install_searxng_success(self):
