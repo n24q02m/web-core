@@ -1,7 +1,3 @@
-"""Tests for URL normalization and domain validation."""
-
-from __future__ import annotations
-
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
@@ -9,43 +5,34 @@ import pytest
 
 from web_core.http.url import (
     _TRACKING_PARAMS,
+    extract_domain,
     is_valid_domain,
     normalize_url,
     strip_tracking_params,
 )
 
-# ---------------------------------------------------------------------------
-# normalize_url
-# ---------------------------------------------------------------------------
-
 
 class TestNormalizeUrl:
-    """Test URL normalization for deduplication."""
+    """Test URL normalization logic."""
 
-    def test_strips_fragment(self):
-        result = normalize_url("https://example.com/page#section")
-        assert "#" not in result
-        assert result == "https://example.com/page"
-
-    def test_strips_trailing_slash(self):
-        result = normalize_url("https://example.com/page/")
-        assert result == "https://example.com/page"
-
-    def test_lowercases_scheme(self):
-        result = normalize_url("HTTPS://example.com/page")
-        assert result.startswith("https://")
-
-    def test_lowercases_host(self):
-        result = normalize_url("https://EXAMPLE.COM/page")
-        assert "example.com" in result
+    def test_lowercases_host_and_scheme(self):
+        result = normalize_url("HTTPS://EXAMPLE.COM/Path")
+        assert result == "https://example.com/Path"
 
     def test_strips_www_prefix(self):
-        result = normalize_url("https://www.example.com/page")
-        assert "www." not in result
-        assert result == "https://example.com/page"
+        result = normalize_url("https://www.example.com/path")
+        assert result == "https://example.com/path"
+
+    def test_strips_trailing_slash(self):
+        result = normalize_url("https://example.com/path/")
+        assert result == "https://example.com/path"
+
+    def test_strips_fragment(self):
+        result = normalize_url("https://example.com/path#section")
+        assert result == "https://example.com/path"
 
     def test_strips_utm_source(self):
-        result = normalize_url("https://example.com/page?utm_source=twitter&title=hello")
+        result = normalize_url("https://example.com/?utm_source=twitter&title=hello")
         assert "utm_source" not in result
         assert "title=hello" in result
 
@@ -259,6 +246,35 @@ class TestStripTrackingParams:
 
 
 # ---------------------------------------------------------------------------
+# extract_domain
+# ---------------------------------------------------------------------------
+
+
+class TestExtractDomain:
+    """Test domain extraction from various URL formats."""
+
+    @pytest.mark.parametrize(
+        "url,expected",
+        [
+            ("https://example.com/path", "example.com"),
+            ("http://sub.example.com/path?q=1", "sub.example.com"),
+            ("//example.com/path", "example.com"),
+            ("example.com/path", "example.com"),
+            ("https://example.com:8080/path", "example.com:8080"),
+            ("https://example.com#fragment", "example.com"),
+            ("https://example.com?query", "example.com"),
+            ("https://user:pass@example.com", "user:pass@example.com"),
+            ("", ""),
+            ("/", ""),
+            ("//", ""),
+            ("http://", ""),
+        ],
+    )
+    def test_extract_domain(self, url, expected):
+        assert extract_domain(url) == expected
+
+
+# ---------------------------------------------------------------------------
 # is_valid_domain
 # ---------------------------------------------------------------------------
 
@@ -266,51 +282,35 @@ class TestStripTrackingParams:
 class TestIsValidDomain:
     """Test domain name validation."""
 
-    def test_valid_domain(self):
-        assert is_valid_domain("example.com") is True
-
-    def test_valid_subdomain(self):
-        assert is_valid_domain("sub.example.com") is True
-
-    def test_valid_deep_subdomain(self):
-        assert is_valid_domain("a.b.c.example.com") is True
-
-    def test_valid_hyphenated_domain(self):
-        assert is_valid_domain("my-site.example.com") is True
-
-    def test_empty_returns_false(self):
-        assert is_valid_domain("") is False
-
-    def test_ip_address_returns_false(self):
-        assert is_valid_domain("192.168.1.1") is False
-
-    def test_special_chars_returns_false(self):
-        assert is_valid_domain("exam!ple.com") is False
-
-    def test_double_dots_returns_false(self):
-        assert is_valid_domain("example..com") is False
-
-    def test_no_tld_returns_false(self):
-        """Single label without TLD is not a valid domain."""
-        assert is_valid_domain("localhost") is False
-
-    def test_starts_with_dot_returns_false(self):
-        assert is_valid_domain(".example.com") is False
-
-    def test_starts_with_hyphen_returns_false(self):
-        assert is_valid_domain("-example.com") is False
-
-    def test_space_in_domain_returns_false(self):
-        assert is_valid_domain("example .com") is False
-
-    def test_unicode_domain_returns_false(self):
-        """Punycode should be used for international domains."""
-        assert is_valid_domain("exampl\u00e9.com") is False
-
-    def test_search_operator_injection_blocked(self):
-        """Domains with operators like site:evil.com should be rejected."""
-        assert is_valid_domain("site:evil.com") is False
-
-    def test_trailing_newline_returns_false(self):
-        """Trailing newlines should be rejected to prevent bypasses."""
-        assert is_valid_domain("example.com\n") is False
+    @pytest.mark.parametrize(
+        "domain,expected",
+        [
+            # Valid cases
+            ("example.com", True),
+            ("sub.example.com", True),
+            ("a.b.c.example.com", True),
+            ("my-site.example.com", True),
+            ("site.london", True),
+            ("my_site.com", True),
+            # Invalid cases
+            ("", False),
+            ("localhost", False),
+            ("com", False),
+            ("192.168.1.1", False),
+            ("exam!ple.com", False),
+            ("example..com", False),
+            (".example.com", False),
+            ("-example.com", False),
+            ("example .com", False),
+            ("exampl\u00e9.com", False),
+            ("site:evil.com", False),
+            ("example.com\n", False),
+            ("example.c", False),
+            ("example.123", False),
+            ("example.", False),
+            ("example.-com", False),
+            ("example.com-", False),
+        ],
+    )
+    def test_is_valid_domain(self, domain, expected):
+        assert is_valid_domain(domain) is expected
