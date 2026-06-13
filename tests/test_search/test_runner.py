@@ -1329,8 +1329,8 @@ class TestForceKillProcess:
         proc.pid = 123
         with (
             patch("sys.platform", "linux"),
-            patch("os.getpgid", return_value=456),
-            patch("os.killpg") as mock_killpg,
+            patch("os.getpgid", create=True, return_value=456),
+            patch("os.killpg", create=True) as mock_killpg,
             patch.object(proc, "wait") as mock_wait,
         ):
             _force_kill_process_sync(proc)
@@ -1344,7 +1344,7 @@ class TestForceKillProcess:
         proc.pid = 123
         with (
             patch("sys.platform", "linux"),
-            patch("os.getpgid", side_effect=ProcessLookupError),
+            patch("os.getpgid", create=True, side_effect=ProcessLookupError),
             patch.object(proc, "terminate") as mock_terminate,
             patch.object(proc, "wait", side_effect=subprocess.TimeoutExpired(cmd="test", timeout=3)),
             patch.object(proc, "kill") as mock_kill,
@@ -1375,8 +1375,8 @@ class TestForceKillProcess:
         proc.pid = 123
         with (
             patch("sys.platform", "linux"),
-            patch("os.getpgid", return_value=456),
-            patch("os.killpg") as mock_killpg,
+            patch("os.getpgid", create=True, return_value=456),
+            patch("os.killpg", create=True) as mock_killpg,
             patch("asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread,
         ):
             await _force_kill_process(proc)
@@ -1406,7 +1406,7 @@ class TestForceKillProcess:
         proc.pid = 123
         with (
             patch("sys.platform", "linux"),
-            patch("os.getpgid", side_effect=ProcessLookupError),
+            patch("os.getpgid", create=True, side_effect=ProcessLookupError),
             patch.object(proc, "terminate") as mock_terminate,
             patch.object(proc, "kill") as mock_kill,
             patch("asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread,
@@ -1536,8 +1536,8 @@ class TestTerminationEdgeCases:
         proc.pid = 123
         with (
             patch("sys.platform", "linux"),
-            patch("os.getpgid", return_value=456),
-            patch("os.killpg") as mock_killpg,
+            patch("os.getpgid", create=True, return_value=456),
+            patch("os.killpg", create=True) as mock_killpg,
             patch.object(proc, "wait", side_effect=subprocess.TimeoutExpired(cmd="test", timeout=3)),
             patch.object(proc, "kill") as mock_kill,
         ):
@@ -1555,8 +1555,8 @@ class TestTerminationEdgeCases:
         proc.pid = 123
         with (
             patch("sys.platform", "linux"),
-            patch("os.getpgid", return_value=456),
-            patch("os.killpg") as mock_killpg,
+            patch("os.getpgid", create=True, return_value=456),
+            patch("os.killpg", create=True) as mock_killpg,
             patch("asyncio.to_thread", side_effect=subprocess.TimeoutExpired(cmd="test", timeout=3)),
             patch.object(proc, "kill") as mock_kill,
         ):
