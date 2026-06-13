@@ -38,6 +38,8 @@ import filelock
 
 from web_core.http import safe_httpx_client
 
+_SIGKILL = getattr(signal, "SIGKILL", 9)
+
 logger = logging.getLogger(__name__)
 
 # Pinned port for Docker SearXNG container.
@@ -605,7 +607,7 @@ def _sigterm_then_kill_sync(pid: int, label: str = "") -> bool:
 
     # Force kill.
     try:
-        os.kill(pid, signal.SIGKILL)
+        os.kill(pid, _SIGKILL)
         logger.debug("Process PID=%d%s force-killed", pid, tag)
         return True
     except (ProcessLookupError, PermissionError):
@@ -632,7 +634,7 @@ async def _sigterm_then_kill(pid: int, label: str = "") -> bool:
 
     # Force kill.
     try:
-        os.kill(pid, signal.SIGKILL)
+        os.kill(pid, _SIGKILL)
         logger.debug("Process PID=%d%s force-killed", pid, tag)
         return True
     except (ProcessLookupError, PermissionError):
@@ -662,7 +664,7 @@ def _force_kill_process_sync(proc: subprocess.Popen) -> None:
                 pass
 
             try:
-                os.killpg(os.getpgid(pid), signal.SIGKILL)
+                os.killpg(os.getpgid(pid), _SIGKILL)
             except (ProcessLookupError, PermissionError):
                 proc.kill()
             try:
@@ -702,7 +704,7 @@ async def _force_kill_process(proc: subprocess.Popen) -> None:
                 pass
 
             try:
-                os.killpg(os.getpgid(pid), signal.SIGKILL)
+                os.killpg(os.getpgid(pid), _SIGKILL)
             except (ProcessLookupError, PermissionError):
                 proc.kill()
             try:

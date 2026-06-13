@@ -48,6 +48,8 @@ from web_core.search.runner import (
     _write_discovery,
 )
 
+_SIGKILL = getattr(signal, "SIGKILL", 9)
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -1276,7 +1278,7 @@ class TestSigtermThenKill:
             assert _sigterm_then_kill_sync(123, "test") is True
             assert mock_kill.call_count == 2
             mock_kill.assert_any_call(123, signal.SIGTERM)
-            mock_kill.assert_any_call(123, signal.SIGKILL)
+            mock_kill.assert_any_call(123, _SIGKILL)
             assert mock_sleep.call_count == 30
 
     def test_sigterm_then_kill_sync_lookup_error(self):
@@ -1307,7 +1309,7 @@ class TestSigtermThenKill:
             assert await _sigterm_then_kill(123, "test") is True
             assert mock_kill.call_count == 2
             mock_kill.assert_any_call(123, signal.SIGTERM)
-            mock_kill.assert_any_call(123, signal.SIGKILL)
+            mock_kill.assert_any_call(123, _SIGKILL)
             assert mock_sleep.call_count == 30
 
 
@@ -1526,3 +1528,40 @@ class TestTerminationEdgeCases:
         ):
             # Should not raise
             await _force_kill_process(proc)
+
+    def test_force_kill_process_sync_unix_pgid_kill_fallback(self):
+        """Unix path: if killpg fails with SIGKILL, falls back to proc.kill."""
+        proc = MagicMock(spec=subprocess.Popen)
+        proc.poll.return_value = None
+        proc.pid = 123
+        with (
+            patch("sys.platform", "linux"),
+            patch("os.getpgid", return_value=456),
+            patch("os.killpg") as mock_killpg,
+            patch.object(proc, "wait", side_effect=subprocess.TimeoutExpired(cmd="test", timeout=3)),
+            patch.object(proc, "kill") as mock_kill,
+        ):
+            mock_killpg.side_effect = [None, ProcessLookupError]
+            _force_kill_process_sync(proc)
+            mock_killpg.assert_any_call(456, signal.SIGTERM)
+            mock_killpg.assert_any_call(456, _SIGKILL)
+            mock_kill.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_force_kill_process_async_unix_pgid_kill_fallback(self):
+        """Unix path (async): if killpg fails with SIGKILL, falls back to proc.kill."""
+        proc = MagicMock(spec=subprocess.Popen)
+        proc.poll.return_value = None
+        proc.pid = 123
+        with (
+            patch("sys.platform", "linux"),
+            patch("os.getpgid", return_value=456),
+            patch("os.killpg") as mock_killpg,
+            patch("asyncio.to_thread", side_effect=subprocess.TimeoutExpired(cmd="test", timeout=3)),
+            patch.object(proc, "kill") as mock_kill,
+        ):
+            mock_killpg.side_effect = [None, ProcessLookupError]
+            await _force_kill_process(proc)
+            mock_killpg.assert_any_call(456, signal.SIGTERM)
+            mock_killpg.assert_any_call(456, _SIGKILL)
+            mock_kill.assert_called_once()
