@@ -48,6 +48,13 @@ class ChapterInfo(BaseModel):
     pages: int = 0
 
 
+class ChapterPage(BaseModel):
+    """Single page image info with full URL."""
+
+    url: str
+    filename: str
+
+
 class ChapterImages(BaseModel):
     """Image file list for a chapter from the at-home delivery server."""
 
@@ -55,6 +62,16 @@ class ChapterImages(BaseModel):
     hash: str
     data: list[str]
     data_saver: list[str]
+
+    @property
+    def images(self) -> list[ChapterPage]:
+        """Get list of full image URLs for standard quality."""
+        return [ChapterPage(url=f"{self.base_url}/data/{self.hash}/{fn}", filename=fn) for fn in self.data]
+
+    @property
+    def images_saver(self) -> list[ChapterPage]:
+        """Get list of full image URLs for data-saver quality."""
+        return [ChapterPage(url=f"{self.base_url}/data-saver/{self.hash}/{fn}", filename=fn) for fn in self.data_saver]
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +168,51 @@ class MangaDexClient:
             resp.raise_for_status()
             return resp.json()
 
+    def _parse_manga_item(self, item: dict) -> MangaInfo:
+        """Parse a single manga item from the API response."""
+        attrs = item.get("attributes", {})
+        titles = attrs.get("title", {})
+        main_title = next(iter(titles.values()), "")
+        alt = [next(iter(t.values()), "") for t in attrs.get("altTitles", [])]
+
+        cover_url = _extract_cover_url(item)
+
+        return MangaInfo(
+            id=item.get("id", ""),
+            title=main_title,
+            alt_titles=alt,
+            description=next(iter(attrs.get("description", {}).values()), ""),
+            cover_url=cover_url,
+            status=attrs.get("status", ""),
+            year=attrs.get("year"),
+        )
+
+    def _parse_chapter_item(self, item: dict) -> ChapterInfo:
+        """Parse a single chapter item from the API response."""
+        attrs = item.get("attributes", {})
+        return ChapterInfo(
+            id=item.get("id", ""),
+            chapter=attrs.get("chapter"),
+            title=attrs.get("title"),
+            volume=attrs.get("volume"),
+            language=attrs.get("translatedLanguage", ""),
+            pages=attrs.get("pages", 0),
+        )
+
     # -- public API ---------------------------------------------------------
+
+    async def get_manga(self, manga_id: str) -> MangaInfo:
+        """Get manga metadata by UUID.
+
+        Includes ``cover_art`` relationship.
+        """
+        data = await self._get(f"/manga/{manga_id}", params={"includes[]": "cover_art"})
+        return self._parse_manga_item(data.get("data", {}))
+
+    async def get_chapter(self, chapter_id: str) -> ChapterInfo:
+        """Get chapter metadata by UUID."""
+        data = await self._get(f"/chapter/{chapter_id}")
+        return self._parse_chapter_item(data.get("data", {}))
 
     async def search_manga(self, title: str, limit: int = 10) -> list[MangaInfo]:
         """Search manga by title.
@@ -169,24 +230,7 @@ class MangaDexClient:
         )
         results: list[MangaInfo] = []
         for item in data.get("data", []):
-            attrs = item.get("attributes", {})
-            titles = attrs.get("title", {})
-            main_title = next(iter(titles.values()), "")
-            alt = [next(iter(t.values()), "") for t in attrs.get("altTitles", [])]
-
-            cover_url = _extract_cover_url(item)
-
-            results.append(
-                MangaInfo(
-                    id=item["id"],
-                    title=main_title,
-                    alt_titles=alt,
-                    description=next(iter(attrs.get("description", {}).values()), ""),
-                    cover_url=cover_url,
-                    status=attrs.get("status", ""),
-                    year=attrs.get("year"),
-                )
-            )
+            results.append(self._parse_manga_item(item))
         return results
 
     async def get_chapter_feed(
@@ -208,20 +252,7 @@ class MangaDexClient:
         """
 
         def _parse_batch(items: list[dict]) -> list[ChapterInfo]:
-            batch_chapters: list[ChapterInfo] = []
-            for item in items:
-                attrs = item.get("attributes", {})
-                batch_chapters.append(
-                    ChapterInfo(
-                        id=item["id"],
-                        chapter=attrs.get("chapter"),
-                        title=attrs.get("title"),
-                        volume=attrs.get("volume"),
-                        language=attrs.get("translatedLanguage", ""),
-                        pages=attrs.get("pages", 0),
-                    )
-                )
-            return batch_chapters
+            return [self._parse_chapter_item(item) for item in items]
 
         # Fetch first page to get total
         first_batch_limit = min(limit, 100)
