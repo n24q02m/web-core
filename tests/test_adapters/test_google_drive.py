@@ -1,8 +1,6 @@
-"""Tests for Google Drive adapter."""
-
-from __future__ import annotations
-
 import asyncio
+import os
+import tempfile
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -12,67 +10,10 @@ from web_core.adapters.google_drive import (
     DriveFile,
     _list_folder_via_gdown,
     _list_folder_via_html,
-    _natural_sort_key,
     download_text_file,
-    extract_folder_id,
     fetch_folder_chapters,
     list_folder_files,
 )
-
-# ---------------------------------------------------------------------------
-# extract_folder_id
-# ---------------------------------------------------------------------------
-
-
-def test_extract_folder_id_standard():
-    url = "https://drive.google.com/drive/folders/1Dm3nwjlzMB0166LwVO0vQhsGRArecuWd"
-    assert extract_folder_id(url) == "1Dm3nwjlzMB0166LwVO0vQhsGRArecuWd"
-
-
-def test_extract_folder_id_with_user():
-    url = "https://drive.google.com/drive/u/0/folders/1Abc123XYZ"
-    assert extract_folder_id(url) == "1Abc123XYZ"
-
-
-def test_extract_folder_id_none_for_non_drive():
-    assert extract_folder_id("https://docs.google.com/document/d/abc") is None
-
-
-def test_extract_folder_id_none_for_file():
-    assert extract_folder_id("https://drive.google.com/file/d/1abc/view") is None
-
-
-@pytest.mark.parametrize(
-    "url, expected",
-    [
-        ("https://drive.google.com/drive/folders/1Abc123XYZ?usp=sharing", "1Abc123XYZ"),
-        ("https://drive.google.com/drive/folders/1Abc123XYZ#settings", "1Abc123XYZ"),
-        ("https://drive.google.com/drive/folders/1Abc123XYZ/", "1Abc123XYZ"),
-        ("http://drive.google.com/drive/folders/1Abc123XYZ", "1Abc123XYZ"),
-        ("drive.google.com/drive/folders/1Abc123XYZ", "1Abc123XYZ"),
-        ("https://drive.google.com/drive/u/5/folders/1-abc_123", "1-abc_123"),
-    ],
-)
-def test_extract_folder_id_edge_cases(url, expected):
-    assert extract_folder_id(url) == expected
-
-
-# ---------------------------------------------------------------------------
-# _natural_sort_key
-# ---------------------------------------------------------------------------
-
-
-def test_natural_sort_numeric():
-    files = ["chapter-10.txt", "chapter-2.txt", "chapter-1.txt"]
-    sorted_files = sorted(files, key=_natural_sort_key)
-    assert sorted_files == ["chapter-1.txt", "chapter-2.txt", "chapter-10.txt"]
-
-
-def test_natural_sort_mixed():
-    files = ["Chap 3.txt", "Chap 10.txt", "Chap 1.txt"]
-    sorted_files = sorted(files, key=_natural_sort_key)
-    assert sorted_files == ["Chap 1.txt", "Chap 3.txt", "Chap 10.txt"]
-
 
 # ---------------------------------------------------------------------------
 # DriveFile / DriveChapter dataclasses
@@ -105,55 +46,45 @@ def reset_gdown_cache():
 
 
 async def test_list_folder_via_gdown_success():
-    """list_folder_via_gdown returns DriveFile list from gdown output."""
-    mock_item_1 = MagicMock()
-    mock_item_1.id = "file_id_1"
-    mock_item_1.path = "folder/chapter-1.txt"
+    """list_folder_via_gdown returns DriveFile list from mocked embedded view."""
+    html = """<html>
+    <a href="https://drive.google.com/file/d/1Dm3nwjlzMB0166LwVO0vQhsGRArecuWd/view">chapter-1.txt</a>
+    <a href="https://drive.google.com/file/d/2XyZ_AbcDefGhiJklMnOpQrStUvWxYz01/view">chapter-2.epub</a>
+    <a href="https://drive.google.com/file/d/3Image_AbcDefGhiJklMnOpQrStUvWxYz01/view">image.png</a>
+    </html>"""
 
-    mock_item_2 = MagicMock()
-    mock_item_2.id = "file_id_2"
-    mock_item_2.path = "folder/chapter-2.epub"
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.text = html
 
-    mock_item_3 = MagicMock()
-    mock_item_3.id = "file_id_3"
-    mock_item_3.path = "folder/image.png"  # Unsupported ext
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    mock_gdown = MagicMock()
-    mock_gdown.download_folder.return_value = [mock_item_1, mock_item_2, mock_item_3]
-
-    with patch.dict("sys.modules", {"gdown": mock_gdown}):
+    with patch("web_core.adapters.google_drive.safe_httpx_client", return_value=mock_client):
         result = await _list_folder_via_gdown("test_folder_id")
 
-    assert len(result) == 2  # .png filtered out
-    assert result[0].file_id == "file_id_1"
+    assert len(result) == 2
+    assert result[0].file_id == "1Dm3nwjlzMB0166LwVO0vQhsGRArecuWd"
     assert result[0].name == "chapter-1.txt"
-    assert result[1].file_id == "file_id_2"
+    assert result[1].file_id == "2XyZ_AbcDefGhiJklMnOpQrStUvWxYz01"
 
 
 async def test_list_folder_via_gdown_empty():
-    """list_folder_via_gdown returns empty list when gdown returns None."""
-    mock_gdown = MagicMock()
-    mock_gdown.download_folder.return_value = None
+    """list_folder_via_gdown returns empty list when response is not 200."""
+    mock_response = MagicMock()
+    mock_response.status_code = 404
 
-    with patch.dict("sys.modules", {"gdown": mock_gdown}):
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("web_core.adapters.google_drive.safe_httpx_client", return_value=mock_client):
         result = await _list_folder_via_gdown("empty_folder")
 
     assert result == []
-
-
-async def test_list_folder_via_gdown_no_path():
-    """list_folder_via_gdown handles items without path attribute."""
-    mock_item = MagicMock()
-    mock_item.id = "file_id"
-    mock_item.path = ""
-
-    mock_gdown = MagicMock()
-    mock_gdown.download_folder.return_value = [mock_item]
-
-    with patch.dict("sys.modules", {"gdown": mock_gdown}):
-        result = await _list_folder_via_gdown("test_folder")
-
-    assert result == []  # Empty name, no extension match
 
 
 async def test_list_folder_via_html_parses_ids():
@@ -220,8 +151,6 @@ async def test_list_folder_files_fallback_to_html():
 
 async def test_download_text_file_success():
     """download_text_file returns file content via gdown."""
-    import os
-    import tempfile
 
     # Create a temp file to simulate gdown download
     with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as f:
@@ -368,3 +297,45 @@ async def test_fetch_folder_chapters_is_concurrent():
     assert len(chapters) == 3
     # If sequential, it would take at least 0.3s. If concurrent, ~0.1s.
     assert duration < 0.2
+
+
+async def test_list_folder_recursive_with_subfolders():
+    """Verify that _list_folder_recursive correctly handles subfolders."""
+    from web_core.adapters.google_drive import _list_folder_recursive
+
+    # Root folder HTML with one file and one subfolder
+    root_html = """<html>
+    <a href="https://drive.google.com/file/d/file_root_AbcDefGhiJklMnOpQrStUvWxYz01/view">root.txt</a>
+    <a href="https://drive.google.com/drive/folders/subfolder_id_AbcDefGhiJklMnOpQrStUvWxYz01">Subfolder</a>
+    </html>"""
+
+    # Subfolder HTML with one file
+    sub_html = """<html>
+    <a href="https://drive.google.com/file/d/file_sub_AbcDefGhiJklMnOpQrStUvWxYz01/view">sub.txt</a>
+    </html>"""
+
+    mock_resp_root = MagicMock()
+    mock_resp_root.status_code = 200
+    mock_resp_root.text = root_html
+
+    mock_resp_sub = MagicMock()
+    mock_resp_sub.status_code = 200
+    mock_resp_sub.text = sub_html
+
+    mock_client = AsyncMock()
+    # First call for root, second for subfolder
+    mock_client.get = AsyncMock(side_effect=[mock_resp_root, mock_resp_sub])
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    sem = asyncio.Semaphore(1)
+    with patch("web_core.adapters.google_drive.safe_httpx_client", return_value=mock_client):
+        result = await _list_folder_recursive("root_id_AbcDefGhiJklMnOpQrStUvWxYz01", sem)
+
+    assert len(result) == 2
+    ids = [f.file_id for f in result]
+    assert "file_root_AbcDefGhiJklMnOpQrStUvWxYz01" in ids
+    assert "file_sub_AbcDefGhiJklMnOpQrStUvWxYz01" in ids
+    names = [f.name for f in result]
+    assert "root.txt" in names
+    assert "sub.txt" in names

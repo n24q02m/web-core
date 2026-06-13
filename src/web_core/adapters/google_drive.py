@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import bs4
+
 from web_core.http import safe_httpx_client
 
 _gdown_mod: Any = None
@@ -45,6 +47,7 @@ logger = logging.getLogger(__name__)
 FOLDER_URL_PATTERN = re.compile(r"drive\.google\.com/drive/(?:u/\d+/)?folders/([A-Za-z0-9_-]+)")
 _ID_NAME_RE = re.compile(r'"([A-Za-z0-9_-]{28,44})","([^"]+\.(txt|epub|pdf|md|html?|docx?))"')
 _NATURAL_SORT_RE = re.compile(r"(\d+)")
+_SUPPORTED_EXTS = {".txt", ".epub", ".pdf", ".md", ".html", ".htm", ".docx"}
 
 
 @dataclass
@@ -75,38 +78,81 @@ def extract_folder_id(url: str) -> str | None:
 async def list_folder_files(folder_id: str) -> list[DriveFile]:
     """List all text/document files in a public Google Drive folder.
 
-    Su dung gdown skip_download=True de list files ma khong download,
-    fallback sang HTML parsing neu gdown that bai.
+    Su dung async embedded view de list files,
+    fallback sang HTML parsing neu that bai.
     """
     try:
         return await _list_folder_via_gdown(folder_id)
-    except Exception:
+    except Exception as e:
+        logger.debug("Async folder list failed, falling back to HTML: %s", e)
         return await _list_folder_via_html(folder_id)
 
 
 async def _list_folder_via_gdown(folder_id: str) -> list[DriveFile]:
-    """Use gdown skip_download=True to list folder files without downloading."""
-    gdown_mod = await _get_gdown()
+    """Use Google Drive embedded view to list folder files recursively.
 
-    url = f"https://drive.google.com/drive/folders/{folder_id}"
-    loop = asyncio.get_running_loop()
+    This replaces the previous implementation that used gdown.download_folder
+    in a thread executor, providing a more efficient async alternative.
+    """
+    sem = asyncio.Semaphore(5)  # Limit concurrent subfolder fetches
+    return await _list_folder_recursive(folder_id, sem)
 
-    _SUPPORTED_EXTS = {".txt", ".epub", ".pdf", ".md", ".html", ".htm", ".docx"}
 
-    def _list_sync() -> list[DriveFile]:
-        items = gdown_mod.download_folder(url, skip_download=True, quiet=True, use_cookies=False)
-        if not items:
+async def _list_folder_recursive(folder_id: str, semaphore: asyncio.Semaphore) -> list[DriveFile]:
+    """Recursively list files in a Google Drive folder using the embedded view."""
+    url = f"https://drive.google.com/embeddedfolderview?id={folder_id}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+
+    async with semaphore, safe_httpx_client(follow_redirects=True, timeout=30.0) as client:
+        resp = await client.get(url, headers=headers)
+        if resp.status_code != 200:
             return []
-        files = []
-        for item in items:
-            # GoogleDriveFileToDownload has .id and .path attributes
-            name = item.path.split("/")[-1] if hasattr(item, "path") and item.path else ""
+        html = resp.text
+
+    soup = bs4.BeautifulSoup(html, "html.parser")
+    files: list[DriveFile] = []
+    subfolder_ids: list[str] = []
+
+    for a_tag in soup.find_all("a"):
+        href = a_tag.get("href", "")
+        if not isinstance(href, str) or not href:
+            continue
+
+        # File links
+        file_match = re.search(r"drive\.google\.com/file/d/([-\w]{25,})", href)
+        if file_match:
+            file_id = file_match.group(1)
+            name = a_tag.get_text(strip=True)
             ext = "." + name.rsplit(".", 1)[-1].lower() if "." in name else ""
             if ext in _SUPPORTED_EXTS:
-                files.append(DriveFile(file_id=item.id, name=name))
-        return files
+                files.append(DriveFile(file_id=file_id, name=name))
+            continue
 
-    return await loop.run_in_executor(None, _list_sync)
+        # Doc links (Google native)
+        docs_match = re.search(r"docs\.google\.com/\w+/d/([-\w]{25,})", href)
+        if docs_match:
+            file_id = docs_match.group(1)
+            name = a_tag.get_text(strip=True)
+            files.append(DriveFile(file_id=file_id, name=name))
+            continue
+
+        # Subfolder links
+        folder_match = re.search(r"drive\.google\.com/drive/folders/([-\w]{25,})", href)
+        if folder_match:
+            subfolder_ids.append(folder_match.group(1))
+
+    if subfolder_ids:
+        # Deduplicate subfolder IDs to avoid infinite loops or redundant work
+        subfolder_ids = list(dict.fromkeys(subfolder_ids))
+        tasks = [_list_folder_recursive(fid, semaphore) for fid in subfolder_ids]
+        subfolder_results = await asyncio.gather(*tasks)
+        for res in subfolder_results:
+            files.extend(res)
+
+    return files
 
 
 async def _list_folder_via_html(folder_id: str) -> list[DriveFile]:
