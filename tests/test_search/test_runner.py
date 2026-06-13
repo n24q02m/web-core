@@ -1407,7 +1407,6 @@ class TestHandleRestartAndStart:
 
     async def test_install_required_and_success(self):
         """Verifies it proceeds if installation is required and succeeds."""
-        import web_core.search.runner as mod
 
         with (
             patch("web_core.search.runner._start_docker_searxng", new_callable=AsyncMock, return_value=None),
