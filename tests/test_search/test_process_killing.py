@@ -22,6 +22,19 @@ SIGTERM = getattr(signal, "SIGTERM", 15)
 SIGKILL = getattr(signal, "SIGKILL", 9)
 
 
+def _reset_runner_state():
+    """Reset module-level state in runner_mod."""
+    runner_mod._searxng_process = None
+    runner_mod._searxng_port = None
+    runner_mod._searxng_docker_container = None
+    runner_mod._searxng_settings_path = None
+    runner_mod._restart_count = 0
+    runner_mod._last_restart_time = 0.0
+    runner_mod._is_owner = False
+    runner_mod._startup_lock = None
+    runner_mod._docker_lock = None
+
+
 class TestProcessLiveness:
     def test_is_pid_alive_windows_success(self):
         mock_ctypes = MagicMock()
@@ -502,10 +515,7 @@ class TestCleanupProcess:
         old_settings = runner_mod._searxng_settings_path
 
         # Clear them for tests
-        runner_mod._searxng_docker_container = None
-        runner_mod._is_owner = False
-        runner_mod._searxng_process = None
-        runner_mod._searxng_settings_path = None
+        _reset_runner_state()
 
         yield
 

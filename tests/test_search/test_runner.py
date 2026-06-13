@@ -1035,7 +1035,7 @@ class TestStartDockerSearxng:
         mock_lock = MagicMock()
 
         mock_popen = MagicMock()
-        mock_popen.wait = AsyncMock(return_value=0)
+        mock_popen.poll = MagicMock(returncode=0)
         mock_popen.returncode = 0
 
         with (
