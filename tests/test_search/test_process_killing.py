@@ -1,29 +1,26 @@
-import asyncio
-import os
 import signal
-import sys
 import subprocess
-import time
-from unittest.mock import MagicMock, patch, AsyncMock
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 import web_core.search.runner as runner_mod
 from web_core.search.runner import (
-    _is_pid_alive,
-    _sigterm_then_kill_sync,
-    _sigterm_then_kill,
-    _force_kill_process_sync,
+    _cleanup_process,
     _force_kill_process,
+    _force_kill_process_sync,
+    _is_pid_alive,
     _is_process_dead,
     _kill_stale_port_process,
-    _cleanup_process,
+    _sigterm_then_kill,
+    _sigterm_then_kill_sync,
 )
 
 # Helpers for platform-specific signals
 SIGTERM = getattr(signal, "SIGTERM", 15)
 SIGKILL = getattr(signal, "SIGKILL", 9)
+
 
 class TestProcessLiveness:
     def test_is_pid_alive_windows_success(self):
@@ -93,6 +90,7 @@ class TestProcessLiveness:
         assert _is_pid_alive(0) is False
         assert _is_pid_alive(-1) is False
 
+
 class TestSigtermThenKill:
     def test_sigterm_then_kill_sync_graceful(self):
         with (
@@ -161,6 +159,7 @@ class TestSigtermThenKill:
             patch("asyncio.sleep", new_callable=AsyncMock),
         ):
             assert await _sigterm_then_kill(1234, "test") is True
+
 
 class TestForceKillProcess:
     def test_force_kill_process_sync_windows_success(self):
@@ -381,6 +380,7 @@ class TestForceKillProcess:
         _force_kill_process_sync(mock_proc)
         mock_proc.wait.assert_not_called()
 
+
 class TestIsProcessDead:
     def test_is_process_dead_true(self):
         with patch("os.kill", side_effect=ProcessLookupError()):
@@ -393,6 +393,7 @@ class TestIsProcessDead:
     def test_is_process_dead_permission_error(self):
         with patch("os.kill", side_effect=PermissionError()):
             assert _is_process_dead(1234) is True
+
 
 class TestKillStalePortProcess:
     @pytest.mark.asyncio
@@ -488,6 +489,7 @@ class TestKillStalePortProcess:
             patch("asyncio.to_thread", side_effect=Exception("oops")),
         ):
             await _kill_stale_port_process(8888)
+
 
 class TestCleanupProcess:
     @pytest.fixture(autouse=True)
