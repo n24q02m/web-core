@@ -38,7 +38,7 @@ class TestNormalizeUrl:
 
     def test_lowercases_host(self):
         result = normalize_url("https://EXAMPLE.COM/page")
-        assert "example.com" in result
+        assert result == "https://example.com/page"
 
     def test_strips_www_prefix(self):
         result = normalize_url("https://www.example.com/page")
