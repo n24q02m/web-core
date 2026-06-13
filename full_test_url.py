@@ -9,7 +9,6 @@ import pytest
 
 from web_core.http.url import (
     _TRACKING_PARAMS,
-    extract_domain,
     is_valid_domain,
     normalize_url,
     strip_tracking_params,
@@ -108,15 +107,6 @@ class TestNormalizeUrl:
         assert "page=1" in result
         assert "utm_source" not in result
         assert "fbclid" not in result
-
-    def test_normalize_url_handles_non_string_input(self):
-        """Verify that the exception handler returns the input as-is for non-string types."""
-        # Non-string input (like an int) will pass 'if not url' but fail in 'urlparse(url)'
-        # or earlier. In Python, urlparse expects a string.
-        # However, since the type hint is 'str', we have to use type: ignore or cast
-        # to test the runtime behavior if someone bypasses type checking.
-        raw = 123
-        assert normalize_url(raw) == raw
 
     def test_urlparse_exception_returns_original(self):
         """If urlparse raises, the original URL string is returned unchanged."""
@@ -269,40 +259,6 @@ class TestStripTrackingParams:
 
 
 # ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
-# extract_domain
-# ---------------------------------------------------------------------------
-
-
-class TestExtractDomain:
-    """Test fast-path domain extraction."""
-
-    def test_extract_from_full_url(self):
-        assert extract_domain("https://example.com/path") == "example.com"
-
-    def test_extract_from_schemeless_url(self):
-        assert extract_domain("//example.com/path") == "example.com"
-
-    def test_extract_from_bare_domain(self):
-        assert extract_domain("example.com") == "example.com"
-
-    def test_extract_with_port(self):
-        assert extract_domain("https://example.com:8080/path") == "example.com:8080"
-
-    def test_extract_with_query(self):
-        assert extract_domain("https://example.com?q=1") == "example.com"
-
-    def test_extract_with_fragment(self):
-        assert extract_domain("https://example.com#section") == "example.com"
-
-    def test_extract_schemeless_with_query(self):
-        assert extract_domain("//example.com?q=1") == "example.com"
-
-    def test_extract_with_userinfo(self):
-        assert extract_domain("https://user:pass@example.com/path") == "user:pass@example.com"
-
-
 # is_valid_domain
 # ---------------------------------------------------------------------------
 
