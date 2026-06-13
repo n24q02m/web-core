@@ -8,6 +8,7 @@ import re
 from typing import Any
 
 from web_core.http.client import is_safe_url, safe_httpx_client, setup_browser_ssrf_protection
+from web_core.http.url import extract_domain
 from web_core.scraper.base import BaseStrategy, ScrapingResult
 from web_core.scraper.utils import detect_cloudflare_challenge, extract_turnstile_sitekey
 
@@ -132,7 +133,7 @@ class CaptchaStrategy(BaseStrategy):
         iframes = await page.query_selector_all("iframe")
         for iframe in iframes:
             src = await iframe.get_attribute("src") or ""
-            if "challenges.cloudflare.com" in src:
+            if extract_domain(src) == "challenges.cloudflare.com":
                 logger.debug("Found CF challenge iframe")
 
             if "/0x" in src:
