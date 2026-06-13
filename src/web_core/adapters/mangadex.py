@@ -167,27 +167,18 @@ class MangaDexClient:
                 "includes[]": "cover_art",
             },
         )
-        results: list[MangaInfo] = []
-        for item in data.get("data", []):
-            attrs = item.get("attributes", {})
-            titles = attrs.get("title", {})
-            main_title = next(iter(titles.values()), "")
-            alt = [next(iter(t.values()), "") for t in attrs.get("altTitles", [])]
-
-            cover_url = _extract_cover_url(item)
-
-            results.append(
-                MangaInfo(
-                    id=item["id"],
-                    title=main_title,
-                    alt_titles=alt,
-                    description=next(iter(attrs.get("description", {}).values()), ""),
-                    cover_url=cover_url,
-                    status=attrs.get("status", ""),
-                    year=attrs.get("year"),
-                )
+        return [
+            MangaInfo(
+                id=item["id"],
+                title=next(iter((attrs := item.get("attributes", {})).get("title", {}).values()), ""),
+                alt_titles=[next(iter(t.values()), "") for t in attrs.get("altTitles", [])],
+                description=next(iter(attrs.get("description", {}).values()), ""),
+                cover_url=_extract_cover_url(item),
+                status=attrs.get("status", ""),
+                year=attrs.get("year"),
             )
-        return results
+            for item in data.get("data", [])
+        ]
 
     async def get_chapter_feed(
         self,
@@ -208,20 +199,17 @@ class MangaDexClient:
         """
 
         def _parse_batch(items: list[dict]) -> list[ChapterInfo]:
-            batch_chapters: list[ChapterInfo] = []
-            for item in items:
-                attrs = item.get("attributes", {})
-                batch_chapters.append(
-                    ChapterInfo(
-                        id=item["id"],
-                        chapter=attrs.get("chapter"),
-                        title=attrs.get("title"),
-                        volume=attrs.get("volume"),
-                        language=attrs.get("translatedLanguage", ""),
-                        pages=attrs.get("pages", 0),
-                    )
+            return [
+                ChapterInfo(
+                    id=item["id"],
+                    chapter=(attrs := item.get("attributes", {})).get("chapter"),
+                    title=attrs.get("title"),
+                    volume=attrs.get("volume"),
+                    language=attrs.get("translatedLanguage", ""),
+                    pages=attrs.get("pages", 0),
                 )
-            return batch_chapters
+                for item in items
+            ]
 
         # Fetch first page to get total
         first_batch_limit = min(limit, 100)
@@ -347,7 +335,7 @@ def _extract_cover_url(manga_item: dict) -> str | None:
     manga_id = manga_item.get("id", "")
     for rel in manga_item.get("relationships", []):
         if rel.get("type") == "cover_art":
-            cover_fn = rel.get("attributes", {}).get("fileName", "")
-            if cover_fn:
+            attrs = rel.get("attributes", {})
+            if cover_fn := attrs.get("fileName"):
                 return f"{MangaDexClient.COVERS_CDN}/{manga_id}/{cover_fn}"
     return None
