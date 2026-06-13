@@ -129,8 +129,12 @@ class CaptchaStrategy(BaseStrategy):
 
         # Strategy 2: Extract 0x-prefix key from CF Turnstile iframe src
         # e.g. /cdn-cgi/.../0x4AAAAAAADnPIDROrmt1Wwj/light/...
-        iframe_srcs = await page.evaluate("() => Array.from(document.querySelectorAll('iframe')).map(f => f.src || '')")
-        for src in iframe_srcs:
+        iframes = await page.query_selector_all("iframe")
+        for iframe in iframes:
+            src = await iframe.get_attribute("src") or ""
+            if "challenges.cloudflare.com" in src:
+                logger.debug("Found CF challenge iframe")
+
             if "/0x" in src:
                 m = _RE_CF_IFRAME_0X.search(src)
                 if m:
@@ -140,10 +144,9 @@ class CaptchaStrategy(BaseStrategy):
                 return m2.group(1)
 
         # Strategy 3: Inline script sitekey
-        script_texts = await page.evaluate(
-            "() => Array.from(document.querySelectorAll('script')).map(s => s.textContent || '')"
-        )
-        for text in script_texts:
+        scripts = await page.query_selector_all("script")
+        for script in scripts:
+            text = await script.text_content() or ""
             # Performance Optimization: exact case check avoids full string allocation
             # which can be expensive for large inline scripts.
             if "sitekey" not in text and "siteKey" not in text:
@@ -153,6 +156,11 @@ class CaptchaStrategy(BaseStrategy):
                 return m.group(1)
 
         return None
+
+    async def _solve_recaptcha(self, page: Any) -> bool:
+        """Attempt to solve Google reCAPTCHA. Returns True if solved, False otherwise."""
+        # TODO: Implement reCAPTCHA solving via CapSolver
+        return False
 
     async def _solve_cf_turnstile_via_patchright(self, url: str) -> ScrapingResult:
         """Use Patchright to load page, extract Turnstile sitekey via Python API,
