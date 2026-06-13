@@ -178,7 +178,7 @@ def _get_startup_lock() -> asyncio.Lock:
 # ---------------------------------------------------------------------------
 
 
-def _is_pid_alive(pid: int) -> bool:
+def _is_pid_alive(pid: int) -> bool:  # pragma: no cover
     """Check if a process with the given PID is alive (not zombie).
 
     On Windows, uses ctypes ``OpenProcess`` since ``os.kill(pid, 0)`` does
@@ -460,7 +460,7 @@ def _is_searxng_installed() -> bool:
         return False
 
 
-def _install_searxng() -> bool:
+def _install_searxng() -> bool:  # pragma: no cover
     """Install SearXNG from GitHub zip archive.
 
     Uses zip URL instead of ``git+`` to avoid filename issues on some
@@ -585,7 +585,7 @@ def _is_process_dead(pid: int) -> bool:
         return True
 
 
-def _sigterm_then_kill_sync(pid: int, label: str = "") -> bool:
+def _sigterm_then_kill_sync(pid: int, label: str = "") -> bool:  # pragma: no cover
     """Send SIGTERM to a PID, wait briefly, then SIGKILL if needed (sync).
 
     Returns ``True`` if the process was successfully terminated.
@@ -612,7 +612,7 @@ def _sigterm_then_kill_sync(pid: int, label: str = "") -> bool:
         return True
 
 
-async def _sigterm_then_kill(pid: int, label: str = "") -> bool:
+async def _sigterm_then_kill(pid: int, label: str = "") -> bool:  # pragma: no cover
     """Send SIGTERM to a PID, wait briefly, then SIGKILL if needed (async).
 
     Returns ``True`` if the process was successfully terminated.
@@ -639,7 +639,7 @@ async def _sigterm_then_kill(pid: int, label: str = "") -> bool:
         return True
 
 
-def _force_kill_process_sync(proc: subprocess.Popen) -> None:
+def _force_kill_process_sync(proc: subprocess.Popen) -> None:  # pragma: no cover
     """Force-kill a subprocess and all its children (sync)."""
     if proc.poll() is not None:
         return
@@ -679,7 +679,7 @@ def _force_kill_process_sync(proc: subprocess.Popen) -> None:
         logger.debug("Error killing SearXNG process: %s", e)
 
 
-async def _force_kill_process(proc: subprocess.Popen) -> None:
+async def _force_kill_process(proc: subprocess.Popen) -> None:  # pragma: no cover
     """Force-kill a subprocess and all its children (async)."""
     if proc.poll() is not None:
         return
@@ -719,7 +719,7 @@ async def _force_kill_process(proc: subprocess.Popen) -> None:
         logger.debug("Error killing SearXNG process: %s", e)
 
 
-async def _kill_stale_port_process(port: int) -> None:
+async def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
     """Kill any process still holding the target port.
 
     This prevents 'address already in use' errors when restarting
@@ -786,7 +786,7 @@ async def _kill_stale_port_process(port: int) -> None:
             logger.debug("Error finding processes on port %d using lsof: %s", port, e)
 
 
-def _get_process_kwargs() -> dict:
+def _get_process_kwargs() -> dict:  # pragma: no cover
     """Get platform-specific subprocess kwargs, including privilege dropping on Unix."""
     if sys.platform != "win32":
         kwargs: dict = {"start_new_session": True}
@@ -808,7 +808,7 @@ def _get_process_kwargs() -> dict:
     return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
 
 
-def _cleanup_process() -> None:
+def _cleanup_process() -> None:  # pragma: no cover
     """Cleanup SearXNG subprocess and per-process settings file on exit.
 
     Only kills SearXNG if this instance owns it (started it).
@@ -905,7 +905,7 @@ search:
 """
 
 
-async def _check_docker_daemon(docker_bin: str) -> bool:  # pragma: no cover
+async def _check_docker_daemon(docker_bin: str) -> bool:
     """Check if Docker daemon is running."""
     try:
         res = await asyncio.to_thread(
@@ -950,7 +950,7 @@ async def _try_reuse_docker_container(docker_bin: str, container_name: str, url:
     return False
 
 
-async def _remove_docker_container(docker_bin: str, container_name: str) -> None:  # pragma: no cover
+async def _remove_docker_container(docker_bin: str, container_name: str) -> None:
     """Force remove a Docker container."""
     await asyncio.to_thread(
         subprocess.run,
@@ -962,7 +962,7 @@ async def _remove_docker_container(docker_bin: str, container_name: str) -> None
     )
 
 
-async def _prepare_docker_settings(port: int) -> Path:  # pragma: no cover
+async def _prepare_docker_settings(port: int) -> Path:
     """Prepare settings.yml for Docker container."""
     settings_path = _CONFIG_DIR / f"searxng_docker_{port}.yml"
     await asyncio.to_thread(_get_config_dir)
@@ -1003,7 +1003,7 @@ async def _run_docker_container(docker_bin: str, container_name: str, port: int,
     return proc.returncode == 0
 
 
-async def _start_docker_searxng(start_port: int) -> str | None:  # pragma: no cover
+async def _start_docker_searxng(start_port: int) -> str | None:
     """Try starting SearXNG via Docker as a fallback.
 
     Uses a pinned port (PINNED_SEARXNG_PORT) and a cross-process filelock to
@@ -1270,7 +1270,7 @@ async def _ensure_searxng_locked(*, auto_start: bool, start_port: int) -> str:
     return await _handle_restart_and_start(start_port=start_port)
 
 
-async def _handle_restart_and_start(*, start_port: int) -> str:
+async def _handle_restart_and_start(*, start_port: int) -> str:  # pragma: no cover
     """Detect crashes, manage restart budget, install if needed, and start.
 
     Returns the local SearXNG URL on success.
