@@ -99,9 +99,11 @@ class MangaDexClient:
         self._last_at_home_time = 0.0
         self._lock = asyncio.Lock()
         self._at_home_lock = asyncio.Lock()
+        self._client_count = 0
         self._client: httpx.AsyncClient | None = None
 
     async def __aenter__(self) -> MangaDexClient:
+        self._client_count += 1
         if self._client is None:
             # We use 60.0 here since download_image needs 60.0, and sharing client means sharing the timeout
             self._client = safe_httpx_client(timeout=60.0)
@@ -109,7 +111,8 @@ class MangaDexClient:
         return self
 
     async def __aexit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
-        if self._client is not None:
+        self._client_count -= 1
+        if self._client_count <= 0 and self._client is not None:
             await self._client.__aexit__(exc_type, exc_val, exc_tb)
             self._client = None
 
@@ -223,57 +226,58 @@ class MangaDexClient:
                 )
             return batch_chapters
 
-        # Fetch first page to get total
-        first_batch_limit = min(limit, 100)
-        data = await self._get(
-            f"/manga/{manga_id}/feed",
-            params={
-                "translatedLanguage[]": language,
-                "order[chapter]": "asc",
-                "limit": first_batch_limit,
-                "offset": 0,
-            },
-        )
-
-        total = data.get("total", 0)
-        first_batch = data.get("data", [])
-        chapters = _parse_batch(first_batch)
-
-        # Calculate remaining pages
-        effective_limit = min(limit, total)
-        if len(chapters) >= effective_limit or not first_batch:
-            return chapters[:limit]
-
-        # Prepare offsets for remaining pages
-        offsets = []
-        curr_offset = len(chapters)
-        pages_to_fetch = 1  # We already fetched one page
-        while curr_offset < effective_limit and pages_to_fetch < _MAX_FEED_PAGES:
-            next_batch_limit = min(limit - curr_offset, 100)
-            offsets.append((curr_offset, next_batch_limit))
-            curr_offset += next_batch_limit
-            pages_to_fetch += 1
-
-        if not offsets:
-            return chapters[:limit]
-
-        async def fetch_page(offset: int, b_limit: int) -> list[ChapterInfo]:
-            page_data = await self._get(
+        async with self:
+            # Fetch first page to get total (MangaDex supports limit up to 500 for feeds)
+            first_batch_limit = min(limit, 500)
+            data = await self._get(
                 f"/manga/{manga_id}/feed",
                 params={
                     "translatedLanguage[]": language,
                     "order[chapter]": "asc",
-                    "limit": b_limit,
-                    "offset": offset,
+                    "limit": first_batch_limit,
+                    "offset": 0,
                 },
             )
-            return _parse_batch(page_data.get("data", []))
 
-        results = await asyncio.gather(*(fetch_page(o, limit_) for o, limit_ in offsets))
-        for batch_chapters in results:
-            chapters.extend(batch_chapters)
+            total = data.get("total", 0)
+            first_batch = data.get("data", [])
+            chapters = _parse_batch(first_batch)
 
-        return chapters[:limit]
+            # Calculate remaining pages
+            effective_limit = min(limit, total)
+            if len(chapters) >= effective_limit or not first_batch:
+                return chapters[:limit]
+
+            # Prepare offsets for remaining pages
+            offsets = []
+            curr_offset = len(chapters)
+            pages_to_fetch = 1  # We already fetched one page
+            while curr_offset < effective_limit and pages_to_fetch < _MAX_FEED_PAGES:
+                next_batch_limit = min(limit - curr_offset, 500)
+                offsets.append((curr_offset, next_batch_limit))
+                curr_offset += next_batch_limit
+                pages_to_fetch += 1
+
+            if not offsets:
+                return chapters[:limit]
+
+            async def fetch_page(offset: int, b_limit: int) -> list[ChapterInfo]:
+                page_data = await self._get(
+                    f"/manga/{manga_id}/feed",
+                    params={
+                        "translatedLanguage[]": language,
+                        "order[chapter]": "asc",
+                        "limit": b_limit,
+                        "offset": offset,
+                    },
+                )
+                return _parse_batch(page_data.get("data", []))
+
+            results = await asyncio.gather(*(fetch_page(o, limit_) for o, limit_ in offsets))
+            for batch_chapters in results:
+                chapters.extend(batch_chapters)
+
+            return chapters[:limit]
 
     async def get_chapter_images(self, chapter_id: str) -> ChapterImages:
         """Get image delivery info for a chapter via the MangaDex@Home network."""

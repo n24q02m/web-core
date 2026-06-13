@@ -840,9 +840,9 @@ class TestSsrfSafety:
 
     async def test_pagination_parallel_fetching(self):
         """Verify that multiple pages are fetched when total > batch size."""
-        # Total 300, limit 300.
-        # First page returns 100.
-        # We expect 2 more pages of 100.
+        # Total 1200, limit 1200.
+        # Batch size is now 500.
+        # Expected calls: offset 0 (500), offset 500 (500), offset 1000 (200).
 
         def make_page(start_id, count, total):
             return {
@@ -861,9 +861,9 @@ class TestSsrfSafety:
             call_count += 1
             params = kwargs.get("params", {})
             offset = params.get("offset", 0)
-            limit = params.get("limit", 100)
+            limit = params.get("limit", 500)
             offsets_called.append(offset)
-            return _make_mock_response(make_page(offset + 1, limit, 300))
+            return _make_mock_response(make_page(offset + 1, limit, 1200))
 
         mock_client = AsyncMock()
         mock_client.get = mock_get
@@ -872,8 +872,24 @@ class TestSsrfSafety:
 
         with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
             client = MangaDexClient()
-            chapters = await client.get_chapter_feed("manga-001", limit=300)
+            chapters = await client.get_chapter_feed("manga-001", limit=1200)
 
-        assert len(chapters) == 300
+        assert len(chapters) == 1200
         assert call_count == 3
-        assert sorted(offsets_called) == [0, 100, 200]
+        assert sorted(offsets_called) == [0, 500, 1000]
+
+    async def test_nested_context_manager(self):
+        """Verify that nested context managers do not re-initialize the client."""
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client) as mock_factory:
+            client = MangaDexClient()
+            async with client, client:
+                pass
+
+            # Factory should only be called once
+            mock_factory.assert_called_once()
+            mock_client.__aenter__.assert_called_once()
+            mock_client.__aexit__.assert_called_once()
