@@ -905,31 +905,9 @@ search:
 """
 
 
-async def _start_docker_searxng(start_port: int) -> str | None:
-    """Try starting SearXNG via Docker as a fallback.
-
-    Uses a pinned port (PINNED_SEARXNG_PORT) and a cross-process filelock to
-    guarantee at most one searxng-wet container runs at any time.  Previously,
-    random port selection spawned a new container per wet daemon; ``--rm`` only
-    triggers on container stop, but detached ``-d`` kept zombies alive after
-    parent exits.
-
-    Mounts a generated settings.yml so that JSON format is enabled and the
-    rate limiter is disabled -- otherwise searxng/searxng:latest default
-    config returns 403 on ``/search?format=json`` which makes the API
-    unusable even though ``/healthz`` returns 200.
-    """
-    global _searxng_docker_container, _searxng_port, _is_owner
-
-    docker_bin = shutil.which("docker")
-    if not docker_bin:
-        return None
-
+async def _check_docker_daemon(docker_bin: str) -> bool:
+    """Check if Docker daemon is running."""
     try:
-        # Avoid docker inside docker issues or daemon socket errors.
-        # Pass stdin=DEVNULL everywhere -- otherwise the docker CLI inherits
-        # the parent stdin (which is the MCP JSON-RPC stream when this module
-        # runs inside an MCP stdio server) and blocks indefinitely on read.
         res = await asyncio.to_thread(
             subprocess.run,
             [docker_bin, "info"],
@@ -943,6 +921,112 @@ async def _start_docker_searxng(start_port: int) -> str | None:
             msg = "Docker is installed but the Daemon is NOT running. Please open Docker Desktop!"
             logger.warning(msg)
             print(f"\n[!] {msg}\n", file=sys.stderr)
+            return False
+        return True
+    except Exception:
+        return False
+
+
+async def _try_reuse_docker_container(docker_bin: str, container_name: str, url: str, port: int) -> str | None:
+    """Check if container already running -- reuse it."""
+    global _searxng_docker_container, _searxng_port, _is_owner
+    ps_res = await asyncio.to_thread(
+        subprocess.run,
+        [docker_bin, "ps", "-q", "-f", f"name={container_name}"],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        check=False,
+        timeout=10,
+    )
+    if ps_res.stdout.strip():
+        logger.info("Reusing existing SearXNG Docker container %s at %s", container_name, url)
+        if await _quick_health_check(url):
+            _searxng_docker_container = container_name
+            _searxng_port = port
+            _is_owner = False
+            return url
+        # Container running but not healthy -- fall through to respawn.
+        logger.warning("Container %s running but unhealthy, respawning", container_name)
+    return None
+
+
+async def _remove_docker_container(docker_bin: str, container_name: str) -> None:
+    """Remove stale container (if any -- ignore errors)."""
+    await asyncio.to_thread(
+        subprocess.run,
+        [docker_bin, "rm", "-f", container_name],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        check=False,
+        timeout=15,
+    )
+
+
+async def _prepare_docker_settings(port: int) -> Path:
+    """Write Docker-specific settings."""
+    settings_path = _CONFIG_DIR / f"searxng_docker_{port}.yml"
+    await asyncio.to_thread(_get_config_dir)
+    await asyncio.to_thread(
+        _write_secure_text,
+        settings_path,
+        _DOCKER_SETTINGS_TEMPLATE.format(secret_key=secrets.token_hex(32)),
+    )
+    return settings_path
+
+
+async def _run_docker_container(docker_bin: str, container_name: str, port: int, settings_path: Path) -> bool:
+    """Run the SearXNG Docker container."""
+    cmd = [
+        docker_bin,
+        "run",
+        "--rm",
+        "-d",
+        "--name",
+        container_name,
+        "-p",
+        f"127.0.0.1:{port}:8080",
+        "-v",
+        f"{settings_path}:/etc/searxng/settings.yml:ro",
+        "searxng/searxng:latest",
+    ]
+
+    logger.info("Starting SearXNG (Docker) on port %d...", port)
+    proc = await asyncio.to_thread(
+        subprocess.Popen,
+        cmd,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        env=_get_secure_env(settings_path),
+        **_get_process_kwargs(),
+    )
+    await asyncio.to_thread(proc.wait)
+    return proc.returncode == 0
+
+
+async def _start_docker_searxng(start_port: int) -> str | None:
+    """Try starting SearXNG via Docker as a fallback.
+
+    Uses a pinned port (PINNED_SEARXNG_PORT) and a cross-process filelock to
+    guarantee at most one searxng-wet container runs at any time.  Previously,
+    random port selection spawned a new container per wet daemon; --rm only
+    triggers on container stop, but detached -d kept zombies alive after
+    parent exits.
+
+    Mounts a generated settings.yml so that JSON format is enabled and the
+    rate limiter is disabled -- otherwise searxng/searxng:latest default
+    config returns 403 on /search?format=json which makes the API
+    unusable even though /healthz returns 200.
+    """
+    global _searxng_docker_container, _searxng_port, _is_owner
+
+    docker_bin = shutil.which("docker")
+    if not docker_bin:
+        return None
+
+    try:
+        # Avoid docker inside docker issues or daemon socket errors.
+        if not await _check_docker_daemon(docker_bin):
             return None
 
         port = PINNED_SEARXNG_PORT
@@ -954,70 +1038,17 @@ async def _start_docker_searxng(start_port: int) -> str | None:
         lock = await asyncio.to_thread(_get_docker_lock)
         with lock.acquire(timeout=10):
             # Check if container already running -- reuse it.
-            ps_res = await asyncio.to_thread(
-                subprocess.run,
-                [docker_bin, "ps", "-q", "-f", f"name={container_name}"],
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                check=False,
-                timeout=10,
-            )
-            if ps_res.stdout.strip():
-                logger.info("Reusing existing SearXNG Docker container %s at %s", container_name, url)
-                if await _quick_health_check(url):
-                    _searxng_docker_container = container_name
-                    _searxng_port = port
-                    _is_owner = False
-                    return url
-                # Container running but not healthy -- fall through to respawn.
-                logger.warning("Container %s running but unhealthy, respawning", container_name)
+            reused_url = await _try_reuse_docker_container(docker_bin, container_name, url, port)
+            if reused_url:
+                return reused_url
 
             # Remove stale container (if any -- ignore errors).
-            await asyncio.to_thread(
-                subprocess.run,
-                [docker_bin, "rm", "-f", container_name],
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                check=False,
-                timeout=15,
-            )
+            await _remove_docker_container(docker_bin, container_name)
 
-            # Write Docker-specific settings (JSON format + limiter off) so the
-            # container exposes a usable /search JSON API.
-            settings_path = _CONFIG_DIR / f"searxng_docker_{port}.yml"
-            await asyncio.to_thread(_get_config_dir)
-            await asyncio.to_thread(
-                _write_secure_text,
-                settings_path,
-                _DOCKER_SETTINGS_TEMPLATE.format(secret_key=secrets.token_hex(32)),
-            )
+            # Write Docker-specific settings.
+            settings_path = await _prepare_docker_settings(port)
 
-            cmd = [
-                docker_bin,
-                "run",
-                "--rm",
-                "-d",
-                "--name",
-                container_name,
-                "-p",
-                f"127.0.0.1:{port}:8080",
-                "-v",
-                f"{settings_path}:/etc/searxng/settings.yml:ro",
-                "searxng/searxng:latest",
-            ]
-
-            logger.info("Starting SearXNG (Docker) on port %d...", port)
-            proc = await asyncio.to_thread(
-                subprocess.Popen,
-                cmd,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                env=_get_secure_env(settings_path),
-                **_get_process_kwargs(),
-            )
-            await asyncio.to_thread(proc.wait)
-            if proc.returncode != 0:
+            if not await _run_docker_container(docker_bin, container_name, port, settings_path):
                 return None
 
         if await _wait_for_service(url, timeout=45.0):
@@ -1029,14 +1060,7 @@ async def _start_docker_searxng(start_port: int) -> str | None:
             return url
 
         # Cleanup on fail
-        await asyncio.to_thread(
-            subprocess.run,
-            [docker_bin, "rm", "-f", container_name],
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            check=False,
-            timeout=15,
-        )
+        await _remove_docker_container(docker_bin, container_name)
         return None
     except Exception as e:
         logger.error("Failed to start SearXNG docker: %s", e)
@@ -1059,10 +1083,66 @@ def _get_secure_env(settings_path: Path) -> dict[str, str]:
     return env
 
 
+def _get_searxng_subprocess_cmd(port: int) -> list[str]:
+    """Build the command to start SearXNG subprocess."""
+    if sys.platform == "win32":
+        return [
+            sys.executable,
+            "-c",
+            (
+                "import sys;"
+                " port = int(sys.argv[1]);"
+                " from waitress import serve;"
+                " from searx.webapp import app;"
+                " serve(app,"
+                " host='127.0.0.1', port=port,"
+                " threads=8, channel_timeout=120,"
+                " cleanup_interval=30)"
+            ),
+            str(port),
+        ]
+    return [sys.executable, "-m", "searx.webapp"]
+
+
+async def _run_searxng_subprocess(cmd: list[str], env: dict[str, str], stderr_target: int) -> subprocess.Popen:
+    """Run the SearXNG subprocess via asyncio.to_thread."""
+    return await asyncio.to_thread(
+        lambda: subprocess.Popen(
+            cmd,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=stderr_target,
+            **_get_process_kwargs(),
+        )
+    )
+
+
+async def _handle_searxng_subprocess_failure(url: str) -> None:
+    """Handle SearXNG subprocess startup failure."""
+    global _searxng_process, _searxng_port
+    logger.warning("SearXNG started but not healthy at %s", url)
+    if _searxng_process.poll() is not None:
+        if _searxng_process.stderr:
+            stderr_raw = await asyncio.to_thread(_searxng_process.stderr.read)
+            stderr = stderr_raw.decode()
+        else:
+            stderr = ""
+        logger.error("SearXNG process exited during startup: %s", stderr[:500])
+    else:
+        logger.warning(
+            "SearXNG process (PID=%d) alive but not serving, killing stuck process",
+            _searxng_process.pid,
+        )
+        await _force_kill_process(_searxng_process)
+    _searxng_process = None
+    _searxng_port = None
+
+
 async def _start_searxng_subprocess(start_port: int) -> str | None:  # pragma: no cover
     """Start a fresh SearXNG subprocess.
 
-    Returns the URL if started successfully, ``None`` on failure.
+    Returns the URL if started successfully, None on failure.
     Handles port conflicts by killing stale processes first.
     Writes discovery file so other processes can reuse this SearXNG.
     """
@@ -1097,36 +1177,8 @@ async def _start_searxng_subprocess(start_port: int) -> str | None:  # pragma: n
         # On Windows, stderr=PIPE without a reader causes a deadlock.
         stderr_target = subprocess.DEVNULL if sys.platform == "win32" else subprocess.PIPE
 
-        # On Windows, use waitress instead of Flask's Werkzeug dev server.
-        if sys.platform == "win32":
-            cmd = [
-                sys.executable,
-                "-c",
-                (
-                    "import sys;"
-                    " port = int(sys.argv[1]);"
-                    " from waitress import serve;"
-                    " from searx.webapp import app;"
-                    " serve(app,"
-                    " host='127.0.0.1', port=port,"
-                    " threads=8, channel_timeout=120,"
-                    " cleanup_interval=30)"
-                ),
-                str(port),
-            ]
-        else:
-            cmd = [sys.executable, "-m", "searx.webapp"]
-
-        _searxng_process = await asyncio.to_thread(
-            lambda: subprocess.Popen(
-                cmd,
-                env=env,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=stderr_target,
-                **_get_process_kwargs(),
-            )
-        )
+        cmd = _get_searxng_subprocess_cmd(port)
+        _searxng_process = await _run_searxng_subprocess(cmd, env, stderr_target)
 
         # Register cleanup (idempotent -- atexit deduplicates internally).
         atexit.register(_cleanup_process)
@@ -1141,22 +1193,7 @@ async def _start_searxng_subprocess(start_port: int) -> str | None:  # pragma: n
             return url
 
         # Health check timed out.
-        logger.warning("SearXNG started but not healthy at %s", url)
-        if _searxng_process.poll() is not None:
-            if _searxng_process.stderr:
-                stderr_raw = await asyncio.to_thread(_searxng_process.stderr.read)
-                stderr = stderr_raw.decode()
-            else:
-                stderr = ""
-            logger.error("SearXNG process exited during startup: %s", stderr[:500])
-        else:
-            logger.warning(
-                "SearXNG process (PID=%d) alive but not serving, killing stuck process",
-                _searxng_process.pid,
-            )
-            await _force_kill_process(_searxng_process)
-        _searxng_process = None
-        _searxng_port = None
+        await _handle_searxng_subprocess_failure(url)
         return None
 
     except Exception as e:
