@@ -111,14 +111,14 @@ def test_get_domain_selectors_wildcard(monkeypatch):
 def test_load_domain_cookies_from_env(monkeypatch):
     # Test demonstrates generic env-var injection API: any domain can supply
     # cookies via WEB_CORE_DOMAIN_COOKIES.
-    custom_cookies = {"example.com": {"session": "123"}}
+    custom_cookies = {"test-domain": {"session": "123"}}
     monkeypatch.setenv("WEB_CORE_DOMAIN_COOKIES", json.dumps(custom_cookies))
 
     # Force re-load of the module-level DOMAIN_COOKIES
     importlib.reload(selector_inference)
 
-    assert "example.com" in selector_inference.DOMAIN_COOKIES
-    assert selector_inference.DOMAIN_COOKIES["example.com"] == {"session": "123"}
+    assert selector_inference.DOMAIN_COOKIES.get("test-domain") is not None
+    assert selector_inference.DOMAIN_COOKIES["test-domain"] == {"session": "123"}
 
 
 def test_load_domain_cookies_empty_env(monkeypatch):
@@ -267,7 +267,7 @@ async def test_infer_explicit_llm_caller_used(monkeypatch):
         return {"content": "#custom", "title": ".t", "next_chapter": "a.n"}
 
     result = await infer_selectors_with_llm(
-        "https://example.com",
+        "https://test-example.com",
         "<html/>",
         llm_caller=fake_caller,
     )
@@ -282,7 +282,7 @@ async def test_infer_llm_caller_returns_json_string(monkeypatch):
         return json.dumps({"content": "#x", "title": ".y", "unrelated": "ignored"})
 
     result = await infer_selectors_with_llm(
-        "https://example.com",
+        "https://test-example.com",
         "<html/>",
         llm_caller=fake_caller,
     )
@@ -294,7 +294,7 @@ async def test_infer_no_provider_graceful_degradation(monkeypatch):
     _clear_llm_env(monkeypatch)
     # Reset the one-shot warning flag
     monkeypatch.setattr(selector_inference, "_NO_PROVIDER_WARNED", False)
-    result = await infer_selectors_with_llm("https://example.com", "<html/>")
+    result = await infer_selectors_with_llm("https://test-example.com", "<html/>")
     assert result == {}
 
 
@@ -306,7 +306,7 @@ async def test_infer_llm_caller_exception_returns_empty(monkeypatch):
         raise RuntimeError("provider down")
 
     result = await infer_selectors_with_llm(
-        "https://example.com",
+        "https://test-example.com",
         "<html/>",
         llm_caller=boom,
     )
@@ -321,7 +321,7 @@ async def test_infer_llm_caller_import_error_returns_empty(monkeypatch):
         raise ImportError("openai not installed")
 
     result = await infer_selectors_with_llm(
-        "https://example.com",
+        "https://test-example.com",
         "<html/>",
         llm_caller=missing_sdk,
     )
@@ -336,7 +336,7 @@ async def test_infer_dispatches_to_provider_via_env(monkeypatch):
     mock_call = AsyncMock(return_value=json.dumps({"content": "#c", "title": ".t", "next_chapter": "a"}))
     monkeypatch.setattr(selector_inference, "_call_openai_compatible", mock_call)
 
-    result = await infer_selectors_with_llm("https://example.com", "<html/>")
+    result = await infer_selectors_with_llm("https://test-example.com", "<html/>")
     assert result == {"content": "#c", "title": ".t", "next_chapter": "a"}
     mock_call.assert_awaited_once()
     kwargs = mock_call.await_args.kwargs
@@ -355,7 +355,7 @@ async def test_infer_dispatches_to_xai_with_base_url(monkeypatch):
     mock_call = AsyncMock(return_value=json.dumps({"content": "#c"}))
     monkeypatch.setattr(selector_inference, "_call_openai_compatible", mock_call)
 
-    result = await infer_selectors_with_llm("https://example.com", "<html/>")
+    result = await infer_selectors_with_llm("https://test-example.com", "<html/>")
     assert result == {"content": "#c"}
     kwargs = mock_call.await_args.kwargs
     assert kwargs["base_url"] == "https://api.x.ai/v1"
@@ -369,7 +369,7 @@ async def test_infer_model_param_overrides_default(monkeypatch):
     mock_call = AsyncMock(return_value=json.dumps({"content": "#c"}))
     monkeypatch.setattr(selector_inference, "_call_gemini", mock_call)
 
-    await infer_selectors_with_llm("https://example.com", "<html/>", model="gemini-2.5-pro")
+    await infer_selectors_with_llm("https://test-example.com", "<html/>", model="gemini-2.5-pro")
     args = mock_call.await_args.args
     assert args[1] == "gemini-2.5-pro"
 
@@ -382,7 +382,7 @@ async def test_infer_llm_caller_returns_invalid_json(monkeypatch):
         return "invalid { json"
 
     result = await infer_selectors_with_llm(
-        "https://example.com",
+        "https://test-example.com",
         "<html/>",
         llm_caller=fake_caller,
     )
@@ -397,7 +397,7 @@ async def test_infer_llm_caller_returns_unexpected_type(monkeypatch):
         return [1, 2, 3]  # Unexpected type
 
     result = await infer_selectors_with_llm(
-        "https://example.com",
+        "https://test-example.com",
         "<html/>",
         llm_caller=fake_caller,
     )
@@ -413,7 +413,7 @@ async def test_infer_domain_extraction_protocol_less(monkeypatch):
 
     # Test with // protocol-less URL
     result = await infer_selectors_with_llm(
-        "//example.com/path",
+        "//test-example.com/path",
         "<html/>",
         llm_caller=fake_caller,
     )
@@ -587,7 +587,7 @@ async def test_infer_dispatches_to_anthropic(monkeypatch):
     mock_call = AsyncMock(return_value=json.dumps({"content": "#a"}))
     monkeypatch.setattr(selector_inference, "_call_anthropic", mock_call)
 
-    result = await infer_selectors_with_llm("https://example.com", "<html/>")
+    result = await infer_selectors_with_llm("https://test-example.com", "<html/>")
     assert result == {"content": "#a"}
     mock_call.assert_awaited_once()
 
@@ -599,7 +599,7 @@ async def test_infer_gemini_vertex_missing_project_logs_warning(monkeypatch, cap
     _inject_fake_genai(monkeypatch, text="{}", capture={})
 
     # Explicitly request gemini provider but without any credentials/project
-    result = await infer_selectors_with_llm("https://example.com", "<html></html>", provider="gemini")
+    result = await infer_selectors_with_llm("https://test-example.com", "<html></html>", provider="gemini")
 
     assert result == {}
     assert "GOOGLE_CLOUD_PROJECT" in caplog.text
@@ -621,7 +621,7 @@ def test_infer_no_provider_second_call_no_warning(monkeypatch, caplog):
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    result = loop.run_until_complete(infer_selectors_with_llm("https://example.com", "<html/>"))
+    result = loop.run_until_complete(infer_selectors_with_llm("https://test-example.com", "<html/>"))
 
     assert result == {}
     assert "no LLM provider configured" not in caplog.text
@@ -647,7 +647,7 @@ async def test_infer_llm_caller_returns_raw_json_string(monkeypatch):
         return '{"content": "#raw", "title": ".raw"}'
 
     result = await infer_selectors_with_llm(
-        "https://example.com",
+        "https://test-example.com",
         "<html/>",
         llm_caller=fake_caller,
     )
