@@ -68,6 +68,7 @@ def extract_domain(url: str) -> str:
     return domain_part.partition("/")[0].partition("?")[0].partition("#")[0]
 
 
+@functools.lru_cache(maxsize=1024)
 def normalize_url(url: str) -> str:
     """Normalize a URL for deduplication.
 
