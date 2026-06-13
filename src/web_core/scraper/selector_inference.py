@@ -310,11 +310,7 @@ async def _call_anthropic(prompt: str, model: str) -> str:
             }
         ],
     )
-    parts: list[str] = []
-    for block in response.content:
-        text = getattr(block, "text", None)
-        if isinstance(text, str):
-            parts.append(text)
+    parts = [text for block in response.content if isinstance(text := getattr(block, "text", None), str)]
     return "".join(parts)
 
 
