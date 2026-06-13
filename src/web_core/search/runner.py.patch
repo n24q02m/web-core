@@ -1,0 +1,94 @@
+<<<<<<< SEARCH
+    try:
+        if sys.platform != "win32":
+            try:
+                os.killpg(os.getpgid(pid), signal.SIGTERM)
+            except (ProcessLookupError, PermissionError):
+                proc.terminate()
+
+            try:
+                proc.wait(timeout=3)
+                logger.debug("SearXNG process (PID=%d) terminated gracefully", pid)
+                return
+            except subprocess.TimeoutExpired:
+                pass
+
+            try:
+                os.killpg(os.getpgid(pid), _SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                proc.kill()
+=======
+    try:
+        if sys.platform != "win32":
+            # Try killing the process group to catch children.
+            # Use getattr to avoid AttributeError on non-Unix platforms during tests.
+            killpg = getattr(os, "killpg", None)
+            getpgid = getattr(os, "getpgid", None)
+
+            if killpg and getpgid:
+                try:
+                    killpg(getpgid(pid), signal.SIGTERM)
+                except (ProcessLookupError, PermissionError):
+                    proc.terminate()
+
+                try:
+                    proc.wait(timeout=3)
+                    logger.debug("SearXNG process (PID=%d) terminated gracefully", pid)
+                    return
+                except subprocess.TimeoutExpired:
+                    pass
+
+                try:
+                    killpg(getpgid(pid), _SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    proc.kill()
+            else:
+                proc.terminate()
+>>>>>>> REPLACE
+<<<<<<< SEARCH
+    try:
+        if sys.platform != "win32":
+            try:
+                os.killpg(os.getpgid(pid), signal.SIGTERM)
+            except (ProcessLookupError, PermissionError):
+                proc.terminate()
+
+            try:
+                await asyncio.to_thread(proc.wait, timeout=3)
+                logger.debug("SearXNG process (PID=%d) terminated gracefully", pid)
+                return
+            except subprocess.TimeoutExpired:
+                pass
+
+            try:
+                os.killpg(os.getpgid(pid), _SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                proc.kill()
+=======
+    try:
+        if sys.platform != "win32":
+            # Try killing the process group to catch children.
+            # Use getattr to avoid AttributeError on non-Unix platforms during tests.
+            killpg = getattr(os, "killpg", None)
+            getpgid = getattr(os, "getpgid", None)
+
+            if killpg and getpgid:
+                try:
+                    killpg(getpgid(pid), signal.SIGTERM)
+                except (ProcessLookupError, PermissionError):
+                    proc.terminate()
+
+                try:
+                    await asyncio.to_thread(proc.wait, timeout=3)
+                    logger.debug("SearXNG process (PID=%d) terminated gracefully", pid)
+                    return
+                except subprocess.TimeoutExpired:
+                    pass
+
+                try:
+                    killpg(getpgid(pid), _SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    proc.kill()
+            else:
+                proc.terminate()
+>>>>>>> REPLACE

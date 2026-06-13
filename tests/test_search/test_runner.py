@@ -119,7 +119,7 @@ class TestIsPidAlive:
         # Mock /proc/{pid}/status with zombie state
         pid = 99999
         with (
-            patch("os.kill") as mock_kill,
+            patch("web_core.search.runner.os.kill") as mock_kill,
             patch.object(Path, "exists", return_value=True),
             patch.object(Path, "read_text", return_value="State:\tZ (zombie)\n"),
         ):
@@ -521,14 +521,14 @@ class TestGetSettingsPath:
 
     def test_http2_disabled_on_windows(self, tmp_config_dir):
         """HTTP/2 is disabled on Windows to avoid deadlocks."""
-        with patch("sys.platform", "win32"):
+        with patch("web_core.search.runner.sys.platform", "win32"):
             path = _get_settings_path(18888)
             content = path.read_text()
             assert "enable_http2: false" in content
 
     def test_http2_enabled_on_linux(self, tmp_config_dir):
         """HTTP/2 is enabled on non-Windows platforms."""
-        with patch("sys.platform", "linux"):
+        with patch("web_core.search.runner.sys.platform", "linux"):
             path = _get_settings_path(18888)
             content = path.read_text()
             assert "enable_http2: true" in content
@@ -542,7 +542,7 @@ class TestGetSettingsPath:
 class TestGetProcessKwargs:
     def test_unix_uses_start_new_session(self):
         """On Unix, uses start_new_session=True for process group management."""
-        with patch("sys.platform", "linux"), patch("os.getuid", return_value=1000, create=True):
+        with patch("web_core.search.runner.sys.platform", "linux"), patch("os.getuid", return_value=1000, create=True):
             kwargs = _get_process_kwargs()
             assert kwargs.get("start_new_session") is True
             assert "preexec_fn" not in kwargs
@@ -555,7 +555,7 @@ class TestGetProcessKwargs:
         mock_pwd = MagicMock()
         mock_pwd.getpwnam.return_value = mock_pw
         with (
-            patch("sys.platform", "linux"),
+            patch("web_core.search.runner.sys.platform", "linux"),
             patch("os.getuid", return_value=0, create=True),
             patch.dict("sys.modules", {"pwd": mock_pwd}),
         ):
@@ -566,7 +566,7 @@ class TestGetProcessKwargs:
     @pytest.mark.skipif(sys.platform != "win32", reason="CREATE_NEW_PROCESS_GROUP only exists on Windows")
     def test_windows_uses_creation_flags(self):
         """On Windows, uses CREATE_NEW_PROCESS_GROUP."""
-        with patch("sys.platform", "win32"):
+        with patch("web_core.search.runner.sys.platform", "win32"):
             kwargs = _get_process_kwargs()
             assert "creationflags" in kwargs
             assert kwargs["creationflags"] == subprocess.CREATE_NEW_PROCESS_GROUP
@@ -1151,7 +1151,7 @@ class TestStartDockerSearxng:
         """Returns None and logs error on unexpected exceptions."""
         with (
             patch("shutil.which", return_value="/usr/bin/docker"),
-            patch("asyncio.to_thread", side_effect=Exception("unexpected")),
+            patch("web_core.search.runner.asyncio.to_thread", side_effect=Exception("unexpected")),
         ):
             url = await _start_docker_searxng(8888)
             assert url is None
@@ -1260,9 +1260,9 @@ class TestSigtermThenKill:
     def test_sigterm_then_kill_sync_success(self):
         """SIGTERM stops the process gracefully."""
         with (
-            patch("os.kill") as mock_kill,
+            patch("web_core.search.runner.os.kill") as mock_kill,
             patch("web_core.search.runner._is_process_dead", side_effect=[False, True]),
-            patch("time.sleep") as mock_sleep,
+            patch("web_core.search.runner.time.sleep") as mock_sleep,
         ):
             assert _sigterm_then_kill_sync(123, "test") is True
             mock_kill.assert_called_once_with(123, signal.SIGTERM)
@@ -1271,9 +1271,9 @@ class TestSigtermThenKill:
     def test_sigterm_then_kill_sync_fallback(self):
         """SIGKILL is sent if SIGTERM fails to stop the process."""
         with (
-            patch("os.kill") as mock_kill,
+            patch("web_core.search.runner.os.kill") as mock_kill,
             patch("web_core.search.runner._is_process_dead", return_value=False),
-            patch("time.sleep") as mock_sleep,
+            patch("web_core.search.runner.time.sleep") as mock_sleep,
         ):
             assert _sigterm_then_kill_sync(123, "test") is True
             assert mock_kill.call_count == 2
@@ -1283,16 +1283,16 @@ class TestSigtermThenKill:
 
     def test_sigterm_then_kill_sync_lookup_error(self):
         """Handles ProcessLookupError gracefully."""
-        with patch("os.kill", side_effect=ProcessLookupError):
+        with patch("web_core.search.runner.os.kill", side_effect=ProcessLookupError):
             assert _sigterm_then_kill_sync(123, "test") is True
 
     @pytest.mark.asyncio
     async def test_sigterm_then_kill_async_success(self):
         """SIGTERM stops the process gracefully (async)."""
         with (
-            patch("os.kill") as mock_kill,
+            patch("web_core.search.runner.os.kill") as mock_kill,
             patch("web_core.search.runner._is_process_dead", side_effect=[False, True]),
-            patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch("web_core.search.runner.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
         ):
             assert await _sigterm_then_kill(123, "test") is True
             mock_kill.assert_called_once_with(123, signal.SIGTERM)
@@ -1302,9 +1302,9 @@ class TestSigtermThenKill:
     async def test_sigterm_then_kill_async_fallback(self):
         """SIGKILL is sent if SIGTERM fails (async)."""
         with (
-            patch("os.kill") as mock_kill,
+            patch("web_core.search.runner.os.kill") as mock_kill,
             patch("web_core.search.runner._is_process_dead", return_value=False),
-            patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch("web_core.search.runner.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
         ):
             assert await _sigterm_then_kill(123, "test") is True
             assert mock_kill.call_count == 2
@@ -1328,9 +1328,9 @@ class TestForceKillProcess:
         proc.poll.return_value = None
         proc.pid = 123
         with (
-            patch("sys.platform", "linux"),
-            patch("os.getpgid", create=True, return_value=456),
-            patch("os.killpg", create=True) as mock_killpg,
+            patch("web_core.search.runner.sys.platform", "linux"),
+            patch("web_core.search.runner.os.getpgid", return_value=456, create=True),
+            patch("web_core.search.runner.os.killpg", create=True) as mock_killpg,
             patch.object(proc, "wait") as mock_wait,
         ):
             _force_kill_process_sync(proc)
@@ -1343,8 +1343,8 @@ class TestForceKillProcess:
         proc.poll.return_value = None
         proc.pid = 123
         with (
-            patch("sys.platform", "linux"),
-            patch("os.getpgid", create=True, side_effect=ProcessLookupError),
+            patch("web_core.search.runner.sys.platform", "linux"),
+            patch("web_core.search.runner.os.getpgid", side_effect=ProcessLookupError, create=True),
             patch.object(proc, "terminate") as mock_terminate,
             patch.object(proc, "wait", side_effect=subprocess.TimeoutExpired(cmd="test", timeout=3)),
             patch.object(proc, "kill") as mock_kill,
@@ -1359,7 +1359,7 @@ class TestForceKillProcess:
         proc.poll.return_value = None
         proc.pid = 123
         with (
-            patch("sys.platform", "win32"),
+            patch("web_core.search.runner.sys.platform", "win32"),
             patch("web_core.search.runner._sigterm_then_kill_sync") as mock_sigterm,
             patch.object(proc, "wait") as mock_wait,
         ):
@@ -1374,10 +1374,10 @@ class TestForceKillProcess:
         proc.poll.return_value = None
         proc.pid = 123
         with (
-            patch("sys.platform", "linux"),
-            patch("os.getpgid", create=True, return_value=456),
-            patch("os.killpg", create=True) as mock_killpg,
-            patch("asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread,
+            patch("web_core.search.runner.sys.platform", "linux"),
+            patch("web_core.search.runner.os.getpgid", return_value=456, create=True),
+            patch("web_core.search.runner.os.killpg", create=True) as mock_killpg,
+            patch("web_core.search.runner.asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread,
         ):
             await _force_kill_process(proc)
             mock_killpg.assert_any_call(456, signal.SIGTERM)
@@ -1390,9 +1390,9 @@ class TestForceKillProcess:
         proc.poll.return_value = None
         proc.pid = 123
         with (
-            patch("sys.platform", "win32"),
+            patch("web_core.search.runner.sys.platform", "win32"),
             patch("web_core.search.runner._sigterm_then_kill", new_callable=AsyncMock) as mock_sigterm,
-            patch("asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread,
+            patch("web_core.search.runner.asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread,
         ):
             await _force_kill_process(proc)
             mock_sigterm.assert_called_once_with(123, "SearXNG")
@@ -1405,11 +1405,11 @@ class TestForceKillProcess:
         proc.poll.return_value = None
         proc.pid = 123
         with (
-            patch("sys.platform", "linux"),
-            patch("os.getpgid", create=True, side_effect=ProcessLookupError),
+            patch("web_core.search.runner.sys.platform", "linux"),
+            patch("web_core.search.runner.os.getpgid", side_effect=ProcessLookupError, create=True),
             patch.object(proc, "terminate") as mock_terminate,
             patch.object(proc, "kill") as mock_kill,
-            patch("asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread,
+            patch("web_core.search.runner.asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread,
         ):
             # First wait times out
             mock_to_thread.side_effect = [
@@ -1424,17 +1424,17 @@ class TestForceKillProcess:
 class TestIsProcessDead:
     def test_is_process_dead_alive(self):
         """Returns False if process is alive."""
-        with patch("os.kill", return_value=None):
+        with patch("web_core.search.runner.os.kill", return_value=None):
             assert _is_process_dead(123) is False
 
     def test_is_process_dead_dead(self):
         """Returns True if process is dead."""
-        with patch("os.kill", side_effect=ProcessLookupError):
+        with patch("web_core.search.runner.os.kill", side_effect=ProcessLookupError):
             assert _is_process_dead(123) is True
 
     def test_is_process_dead_permission(self):
         """Returns True if permission denied (assumed dead or inaccessible)."""
-        with patch("os.kill", side_effect=PermissionError):
+        with patch("web_core.search.runner.os.kill", side_effect=PermissionError):
             assert _is_process_dead(123) is True
 
 
@@ -1442,9 +1442,9 @@ class TestTerminationEdgeCases:
     def test_sigterm_then_kill_sync_fallback_error(self):
         """Fallback SIGKILL also handles ProcessLookupError."""
         with (
-            patch("os.kill") as mock_kill,
+            patch("web_core.search.runner.os.kill") as mock_kill,
             patch("web_core.search.runner._is_process_dead", return_value=False),
-            patch("time.sleep"),
+            patch("web_core.search.runner.time.sleep"),
         ):
             mock_kill.side_effect = [None, ProcessLookupError]
             assert _sigterm_then_kill_sync(123, "test") is True
@@ -1452,16 +1452,16 @@ class TestTerminationEdgeCases:
     @pytest.mark.asyncio
     async def test_sigterm_then_kill_async_initial_error(self):
         """Initial SIGTERM handles ProcessLookupError (async)."""
-        with patch("os.kill", side_effect=ProcessLookupError):
+        with patch("web_core.search.runner.os.kill", side_effect=ProcessLookupError):
             assert await _sigterm_then_kill(123, "test") is True
 
     @pytest.mark.asyncio
     async def test_sigterm_then_kill_async_fallback_error(self):
         """Fallback SIGKILL handles ProcessLookupError (async)."""
         with (
-            patch("os.kill") as mock_kill,
+            patch("web_core.search.runner.os.kill") as mock_kill,
             patch("web_core.search.runner._is_process_dead", return_value=False),
-            patch("asyncio.sleep", new_callable=AsyncMock),
+            patch("web_core.search.runner.asyncio.sleep", new_callable=AsyncMock),
         ):
             mock_kill.side_effect = [None, ProcessLookupError]
             assert await _sigterm_then_kill(123, "test") is True
@@ -1481,7 +1481,7 @@ class TestTerminationEdgeCases:
         proc.poll.return_value = None
         proc.pid = 123
         with (
-            patch("sys.platform", "win32"),
+            patch("web_core.search.runner.sys.platform", "win32"),
             patch("web_core.search.runner._sigterm_then_kill_sync"),
             patch.object(proc, "wait", side_effect=subprocess.TimeoutExpired(cmd="test", timeout=3)),
             patch.object(proc, "kill") as mock_kill,
@@ -1495,7 +1495,7 @@ class TestTerminationEdgeCases:
         proc.poll.return_value = None
         proc.pid = 123
         with (
-            patch("sys.platform", "win32"),
+            patch("web_core.search.runner.sys.platform", "win32"),
             patch("web_core.search.runner._sigterm_then_kill_sync", side_effect=RuntimeError("boom")),
         ):
             # Should not raise
@@ -1508,9 +1508,11 @@ class TestTerminationEdgeCases:
         proc.poll.return_value = None
         proc.pid = 123
         with (
-            patch("sys.platform", "win32"),
+            patch("web_core.search.runner.sys.platform", "win32"),
             patch("web_core.search.runner._sigterm_then_kill", new_callable=AsyncMock),
-            patch("asyncio.to_thread", side_effect=subprocess.TimeoutExpired(cmd="test", timeout=3)),
+            patch(
+                "web_core.search.runner.asyncio.to_thread", side_effect=subprocess.TimeoutExpired(cmd="test", timeout=3)
+            ),
             patch.object(proc, "kill") as mock_kill,
         ):
             await _force_kill_process(proc)
@@ -1523,7 +1525,7 @@ class TestTerminationEdgeCases:
         proc.poll.return_value = None
         proc.pid = 123
         with (
-            patch("sys.platform", "win32"),
+            patch("web_core.search.runner.sys.platform", "win32"),
             patch("web_core.search.runner._sigterm_then_kill", side_effect=RuntimeError("boom")),
         ):
             # Should not raise
@@ -1535,9 +1537,9 @@ class TestTerminationEdgeCases:
         proc.poll.return_value = None
         proc.pid = 123
         with (
-            patch("sys.platform", "linux"),
-            patch("os.getpgid", create=True, return_value=456),
-            patch("os.killpg", create=True) as mock_killpg,
+            patch("web_core.search.runner.sys.platform", "linux"),
+            patch("web_core.search.runner.os.getpgid", return_value=456, create=True),
+            patch("web_core.search.runner.os.killpg", create=True) as mock_killpg,
             patch.object(proc, "wait", side_effect=subprocess.TimeoutExpired(cmd="test", timeout=3)),
             patch.object(proc, "kill") as mock_kill,
         ):
@@ -1554,10 +1556,12 @@ class TestTerminationEdgeCases:
         proc.poll.return_value = None
         proc.pid = 123
         with (
-            patch("sys.platform", "linux"),
-            patch("os.getpgid", create=True, return_value=456),
-            patch("os.killpg", create=True) as mock_killpg,
-            patch("asyncio.to_thread", side_effect=subprocess.TimeoutExpired(cmd="test", timeout=3)),
+            patch("web_core.search.runner.sys.platform", "linux"),
+            patch("web_core.search.runner.os.getpgid", return_value=456, create=True),
+            patch("web_core.search.runner.os.killpg", create=True) as mock_killpg,
+            patch(
+                "web_core.search.runner.asyncio.to_thread", side_effect=subprocess.TimeoutExpired(cmd="test", timeout=3)
+            ),
             patch.object(proc, "kill") as mock_kill,
         ):
             mock_killpg.side_effect = [None, ProcessLookupError]

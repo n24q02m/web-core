@@ -651,22 +651,30 @@ def _force_kill_process_sync(proc: subprocess.Popen) -> None:
 
     try:
         if sys.platform != "win32":
-            try:
-                os.killpg(os.getpgid(pid), signal.SIGTERM)
-            except (ProcessLookupError, PermissionError):
+            # Try killing the process group to catch children.
+            # Use getattr to avoid AttributeError on non-Unix platforms during tests.
+            killpg = getattr(os, "killpg", None)
+            getpgid = getattr(os, "getpgid", None)
+
+            if killpg and getpgid:
+                try:
+                    killpg(getpgid(pid), signal.SIGTERM)
+                except (ProcessLookupError, PermissionError):
+                    proc.terminate()
+
+                try:
+                    proc.wait(timeout=3)
+                    logger.debug("SearXNG process (PID=%d) terminated gracefully", pid)
+                    return
+                except subprocess.TimeoutExpired:
+                    pass
+
+                try:
+                    killpg(getpgid(pid), _SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    proc.kill()
+            else:
                 proc.terminate()
-
-            try:
-                proc.wait(timeout=3)
-                logger.debug("SearXNG process (PID=%d) terminated gracefully", pid)
-                return
-            except subprocess.TimeoutExpired:
-                pass
-
-            try:
-                os.killpg(os.getpgid(pid), _SIGKILL)
-            except (ProcessLookupError, PermissionError):
-                proc.kill()
             try:
                 proc.wait(timeout=3)
             except subprocess.TimeoutExpired:
@@ -691,22 +699,30 @@ async def _force_kill_process(proc: subprocess.Popen) -> None:
 
     try:
         if sys.platform != "win32":
-            try:
-                os.killpg(os.getpgid(pid), signal.SIGTERM)
-            except (ProcessLookupError, PermissionError):
+            # Try killing the process group to catch children.
+            # Use getattr to avoid AttributeError on non-Unix platforms during tests.
+            killpg = getattr(os, "killpg", None)
+            getpgid = getattr(os, "getpgid", None)
+
+            if killpg and getpgid:
+                try:
+                    killpg(getpgid(pid), signal.SIGTERM)
+                except (ProcessLookupError, PermissionError):
+                    proc.terminate()
+
+                try:
+                    await asyncio.to_thread(proc.wait, timeout=3)
+                    logger.debug("SearXNG process (PID=%d) terminated gracefully", pid)
+                    return
+                except subprocess.TimeoutExpired:
+                    pass
+
+                try:
+                    killpg(getpgid(pid), _SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    proc.kill()
+            else:
                 proc.terminate()
-
-            try:
-                await asyncio.to_thread(proc.wait, timeout=3)
-                logger.debug("SearXNG process (PID=%d) terminated gracefully", pid)
-                return
-            except subprocess.TimeoutExpired:
-                pass
-
-            try:
-                os.killpg(os.getpgid(pid), _SIGKILL)
-            except (ProcessLookupError, PermissionError):
-                proc.kill()
             try:
                 await asyncio.to_thread(proc.wait, timeout=3)
             except subprocess.TimeoutExpired:

@@ -78,12 +78,12 @@ branch = true
 fail_under = 95
 exclude_lines = [
     "pragma: no cover",
-        "except Exception:",
-        "except Exception as e:",
+    "except Exception:",
+    "except Exception as e:",
     "if sys.platform",
     "if __name__",
     "raise ImportError",
     "except ImportError",
-        "docker_bin = shutil.which(\"docker\")",
-        "if not docker_bin:",
+    'docker_bin = shutil.which("docker")',
+    "if not docker_bin:",
 ]
