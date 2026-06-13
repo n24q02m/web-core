@@ -1020,7 +1020,8 @@ async def _start_docker_searxng(start_port: int) -> str | None:
             proc = await asyncio.to_thread(
                 subprocess.Popen,
                 cmd,
-                shell=False, stdin=subprocess.DEVNULL,
+                shell=False,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 env=_get_secure_env(settings_path),
@@ -1131,7 +1132,8 @@ async def _start_searxng_subprocess(start_port: int) -> str | None:  # pragma: n
         _searxng_process = await asyncio.to_thread(
             lambda: subprocess.Popen(
                 cmd,
-                shell=False, env=env,
+                shell=False,
+                env=env,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=stderr_target,
