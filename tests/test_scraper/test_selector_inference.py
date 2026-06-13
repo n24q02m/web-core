@@ -59,6 +59,11 @@ def test_merge_selectors_no_existing():
     assert merge_selectors({}, inferred) == {"title": ".title"}
 
 
+def test_merge_selectors_no_existing_full():
+    inferred = {"title": ".title", "content": "#content", "next_chapter": ".next"}
+    assert merge_selectors({}, inferred) == inferred
+
+
 def test_get_domain_selectors_wildcard(monkeypatch):
     # Verify wildcard-pattern matching infrastructure works correctly + does not
     # leak via subdomain-bypass (e.g. attacker spoofs `attacker.com.<wildcard>.evil.com`).
@@ -93,30 +98,30 @@ def test_get_domain_selectors_wildcard(monkeypatch):
     assert get_domain_selectors("https://testsite123.com") is not None
     assert get_domain_selectors("https://testsite.com") is not None
 
+    # Exact match works along with wildcard
+    monkeypatch.setitem(selector_inference.DOMAIN_CONFIGS, "testsite.com", fixture_config)
+    assert get_domain_selectors("https://testsite.com") is not None
+
     # Invalid matches (verify wildcard-bypass guards still hold)
     assert get_domain_selectors("https://testsite.com.evil.com") is None
     assert get_domain_selectors("https://eviltestsite.com") is None
     assert get_domain_selectors("https://testsite.com.co") is None
 
-    # Non-wildcard exact matches via existing config (ncode.syosetu.com general novels)
-    assert get_domain_selectors("https://ncode.syosetu.com") is not None
-    assert get_domain_selectors("https://ncode.syosetu.com.evil.com") is None
-
 
 def test_load_domain_cookies_from_env(monkeypatch):
-    # Mock environment variable
-    custom_cookies = {"test.com": {"cookie_name": "cookie_value"}}
+    # Test demonstrates generic env-var injection API: any domain can supply
+    # cookies via WEB_CORE_DOMAIN_COOKIES.
+    custom_cookies = {"example.com": {"session": "123"}}
     monkeypatch.setenv("WEB_CORE_DOMAIN_COOKIES", json.dumps(custom_cookies))
 
-    # Reload module to re-initialize DOMAIN_COOKIES
+    # Force re-load of the module-level DOMAIN_COOKIES
     importlib.reload(selector_inference)
 
-    assert selector_inference.DOMAIN_COOKIES["test.com"] == {"cookie_name": "cookie_value"}
-    assert "other.example.com" not in selector_inference.DOMAIN_COOKIES
+    assert "example.com" in selector_inference.DOMAIN_COOKIES
+    assert selector_inference.DOMAIN_COOKIES["example.com"] == {"session": "123"}
 
 
 def test_load_domain_cookies_empty_env(monkeypatch):
-    # Mock empty/missing environment variable
     monkeypatch.delenv("WEB_CORE_DOMAIN_COOKIES", raising=False)
 
     # Reload module
@@ -149,6 +154,20 @@ def test_load_domain_cookies_invalid_json(monkeypatch):
     assert selector_inference.DOMAIN_COOKIES == {}
 
 
+def test_load_domain_cookies_not_a_dict(monkeypatch):
+    monkeypatch.setenv("WEB_CORE_DOMAIN_COOKIES", json.dumps(["not", "a", "dict"]))
+    importlib.reload(selector_inference)
+    assert selector_inference.DOMAIN_COOKIES == {}
+
+
+def test_load_domain_cookies_unexpected_error(monkeypatch):
+    # Mock json.loads to raise an unexpected Exception
+    monkeypatch.setattr(json, "loads", MagicMock(side_effect=RuntimeError("boom")))
+    monkeypatch.setenv("WEB_CORE_DOMAIN_COOKIES", "{}")
+    importlib.reload(selector_inference)
+    assert selector_inference.DOMAIN_COOKIES == {}
+
+
 # -----------------------------------------------------------------------------
 # Multi-provider auto-detection (issue #177)
 # -----------------------------------------------------------------------------
@@ -162,6 +181,7 @@ def _clear_llm_env(monkeypatch):
         "ANTHROPIC_API_KEY",
         "XAI_API_KEY",
         "WEB_CORE_LLM_MODEL",
+        "GOOGLE_CLOUD_PROJECT",
     ):
         monkeypatch.delenv(var, raising=False)
 
@@ -465,7 +485,6 @@ async def test_call_gemini_vertex_mode(monkeypatch):
 async def test_call_gemini_vertex_missing_project_raises(monkeypatch):
     _clear_llm_env(monkeypatch)
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
-    monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
     # Inject a fake so an accidental client build would not hit the real SDK.
     _inject_fake_genai(monkeypatch, text="{}", capture={})
 
@@ -571,3 +590,75 @@ async def test_infer_dispatches_to_anthropic(monkeypatch):
     result = await infer_selectors_with_llm("https://example.com", "<html/>")
     assert result == {"content": "#a"}
     mock_call.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_infer_gemini_vertex_missing_project_logs_warning(monkeypatch, caplog):
+    _clear_llm_env(monkeypatch)
+    # Inject fake genai so it doesn't try to import real one if it was missing
+    _inject_fake_genai(monkeypatch, text="{}", capture={})
+
+    # Explicitly request gemini provider but without any credentials/project
+    result = await infer_selectors_with_llm("https://example.com", "<html></html>", provider="gemini")
+
+    assert result == {}
+    assert "GOOGLE_CLOUD_PROJECT" in caplog.text
+    assert "LLM selector inference failed" in caplog.text
+
+
+def test_detect_provider_missing_xai_key(monkeypatch):
+    _clear_llm_env(monkeypatch)
+    assert _detect_provider_from_env() is None
+
+
+def test_infer_no_provider_second_call_no_warning(monkeypatch, caplog):
+    _clear_llm_env(monkeypatch)
+    # Ensure warning flag is True
+    monkeypatch.setattr(selector_inference, "_NO_PROVIDER_WARNED", True)
+
+    caplog.clear()
+    import asyncio
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    result = loop.run_until_complete(infer_selectors_with_llm("https://example.com", "<html/>"))
+
+    assert result == {}
+    assert "no LLM provider configured" not in caplog.text
+
+
+def test_parse_selector_json_not_dict():
+    # Covers line 196 (if isinstance(result, dict) is False)
+    assert selector_inference._parse_selector_json("[]") == {}
+
+
+def test_parse_selector_json_values_not_strings():
+    # Covers line 199's false branch
+    data = {"content": 123, "title": None, "next_chapter": ["abc"]}
+    assert selector_inference._parse_selector_json(json.dumps(data)) == {}
+
+
+@pytest.mark.asyncio
+async def test_infer_llm_caller_returns_raw_json_string(monkeypatch):
+    _clear_llm_env(monkeypatch)
+
+    async def fake_caller(_prompt, _html):
+        # Explicitly return a JSON string to exercise the 'if isinstance(raw, str):' branch
+        return '{"content": "#raw", "title": ".raw"}'
+
+    result = await infer_selectors_with_llm(
+        "https://example.com",
+        "<html/>",
+        llm_caller=fake_caller,
+    )
+    assert result == {"content": "#raw", "title": ".raw"}
+
+
+def test_get_domain_selectors_completely_unknown_miss(monkeypatch):
+    # Covers line 139
+    # Ensure we don't match any existing hardcoded domains or wildcards
+    monkeypatch.setattr(selector_inference, "DOMAIN_CONFIGS", {})
+    monkeypatch.setattr(selector_inference, "_WILDCARD_CONFIGS", [])
+
+    url = "https://unknown.com"
+    assert selector_inference.get_domain_selectors(url) is None
