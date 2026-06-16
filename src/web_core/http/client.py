@@ -92,16 +92,6 @@ def _check_ip_safe(ip_str: str, hostname: str) -> bool:
 _BLOCKED_HOSTNAMES = frozenset({"localhost", "localhost.localdomain", "127.0.0.1", "::1"})
 
 
-def _is_dns_cached(hostname: str) -> bool:
-    """Return True if hostname is already resolved and pinned in cache."""
-    with _dns_cache_lock:
-        entry = _dns_cache.get(hostname)
-        if entry is None:
-            return False
-        _, cached_at = entry
-        return (time.monotonic() - cached_at) < _DNS_CACHE_TTL
-
-
 def is_safe_url(url: str, *, allow_private: bool = False) -> bool:
     """Validate that *url* is safe to fetch (no SSRF).
 
@@ -125,8 +115,17 @@ def is_safe_url(url: str, *, allow_private: bool = False) -> bool:
         return False
 
     # Fast path: already resolved, validated, and pinned
-    if _is_dns_cached(hostname):
-        return True
+    with _dns_cache_lock:
+        entry = _dns_cache.get(hostname)
+        if entry is not None:
+            results, cached_at = entry
+            if (time.monotonic() - cached_at) < _DNS_CACHE_TTL:
+                if not allow_private:
+                    for res in results:
+                        ip_str = str(res[4][0])
+                        if not _check_ip_safe(ip_str, hostname):
+                            return False
+                return True
 
     try:
         results = _original_getaddrinfo(hostname, None)
