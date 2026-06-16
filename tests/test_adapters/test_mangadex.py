@@ -544,17 +544,17 @@ class TestGetChapterFeed:
     async def test_get_chapter_feed_no_offsets(self):
         """Verify get_chapter_feed returns early when _MAX_FEED_PAGES is reached."""
 
-        # Total 300, but first page returns 100.
+        # Total 1500, but first page returns 500.
         def make_page(total):
             return {
                 "data": [
                     {"id": f"ch-{i}", "attributes": {"chapter": str(i), "translatedLanguage": "en", "pages": 10}}
-                    for i in range(100)
+                    for i in range(500)
                 ],
                 "total": total,
             }
 
-        mock_resp = _make_mock_response(make_page(300))
+        mock_resp = _make_mock_response(make_page(1500))
         mock_client = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_resp)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -565,9 +565,9 @@ class TestGetChapterFeed:
             patch("web_core.adapters.mangadex._MAX_FEED_PAGES", 1),
         ):
             client = MangaDexClient()
-            chapters = await client.get_chapter_feed("manga-001", limit=300)
-            # Should only have 100 chapters from the first page
-            assert len(chapters) == 100
+            chapters = await client.get_chapter_feed("manga-001", limit=1500)
+            # Should only have 500 chapters from the first page
+            assert len(chapters) == 500
 
 
 class TestGetChapterImages:
@@ -840,9 +840,9 @@ class TestSsrfSafety:
 
     async def test_pagination_parallel_fetching(self):
         """Verify that multiple pages are fetched when total > batch size."""
-        # Total 300, limit 300.
-        # First page returns 100.
-        # We expect 2 more pages of 100.
+        # Total 1500, limit 1500.
+        # First page returns 500.
+        # We expect 2 more pages of 500.
 
         def make_page(start_id, count, total):
             return {
@@ -861,9 +861,9 @@ class TestSsrfSafety:
             call_count += 1
             params = kwargs.get("params", {})
             offset = params.get("offset", 0)
-            limit = params.get("limit", 100)
+            limit = params.get("limit", 500)
             offsets_called.append(offset)
-            return _make_mock_response(make_page(offset + 1, limit, 300))
+            return _make_mock_response(make_page(offset + 1, limit, 1500))
 
         mock_client = AsyncMock()
         mock_client.get = mock_get
@@ -872,8 +872,8 @@ class TestSsrfSafety:
 
         with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
             client = MangaDexClient()
-            chapters = await client.get_chapter_feed("manga-001", limit=300)
+            chapters = await client.get_chapter_feed("manga-001", limit=1500)
 
-        assert len(chapters) == 300
+        assert len(chapters) == 1500
         assert call_count == 3
-        assert sorted(offsets_called) == [0, 100, 200]
+        assert sorted(offsets_called) == [0, 500, 1000]

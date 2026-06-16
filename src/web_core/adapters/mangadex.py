@@ -224,7 +224,8 @@ class MangaDexClient:
             return batch_chapters
 
         # Fetch first page to get total
-        first_batch_limit = min(limit, 100)
+        # Performance Optimization: MangaDex API allows up to 500 chapters per feed request
+        first_batch_limit = min(limit, 500)
         data = await self._get(
             f"/manga/{manga_id}/feed",
             params={
@@ -249,7 +250,7 @@ class MangaDexClient:
         curr_offset = len(chapters)
         pages_to_fetch = 1  # We already fetched one page
         while curr_offset < effective_limit and pages_to_fetch < _MAX_FEED_PAGES:
-            next_batch_limit = min(limit - curr_offset, 100)
+            next_batch_limit = min(limit - curr_offset, 500)
             offsets.append((curr_offset, next_batch_limit))
             curr_offset += next_batch_limit
             pages_to_fetch += 1
