@@ -68,8 +68,13 @@ def extract_domain(url: str) -> str:
     return domain_part.partition("/")[0].partition("?")[0].partition("#")[0]
 
 
+@functools.lru_cache(maxsize=4096)
 def normalize_url(url: str) -> str:
     """Normalize a URL for deduplication.
+
+    Performance Optimization: Memoized with lru_cache to reduce overhead
+    (urlparse, regex) when processing duplicate URLs during operations like
+    search deduplication.
 
     Transformations applied:
     - Lowercase scheme and netloc
