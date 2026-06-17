@@ -209,6 +209,22 @@ class TestIsSafeUrl:
         assert is_safe_url("http://LOCALHOST") is False
         assert is_safe_url("http://LocalHost.LocalDomain") is False
 
+    def test_ssrf_bypass_with_cached_private_ip(self):
+        """is_safe_url should reject cached private IPs when allow_private=False."""
+        hostname = "private-cache.example.com"
+        mock_results = [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("10.0.0.1", 0))]
+
+        # First call with allow_private=True to cache the private IP
+        with patch("web_core.http.client._original_getaddrinfo", return_value=mock_results):
+            assert is_safe_url(f"http://{hostname}", allow_private=True) is True
+
+        # Second call with allow_private=False must fail and not use the fast path bypass
+        assert is_safe_url(f"http://{hostname}", allow_private=False) is False
+
+        # Clean up cache
+        with _dns_cache_lock:
+            _dns_cache.pop(hostname, None)
+
     def test_handles_expired_cache_entry(self):
         """is_safe_url should re-resolve if the cache entry is expired."""
         hostname = "expired-cache.example.com"
