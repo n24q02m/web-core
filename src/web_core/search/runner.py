@@ -483,7 +483,8 @@ def _install_searxng() -> bool:  # pragma: no cover
 
         logger.debug("Installing SearXNG build dependencies...")
         deps_result = subprocess.run(
-            [*pip_cmd, "--quiet", *build_deps],
+            [*pip_cmd, "--quiet", "--", *build_deps],
+            shell=False,
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
@@ -503,7 +504,8 @@ def _install_searxng() -> bool:  # pragma: no cover
 
         # Install SearXNG with --no-build-isolation (uses pre-installed deps).
         result = subprocess.run(
-            [*pip_cmd, "--quiet", "--no-build-isolation", _SEARXNG_INSTALL_URL],
+            [*pip_cmd, "--quiet", "--no-build-isolation", "--", _SEARXNG_INSTALL_URL],
+            shell=False,
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
@@ -733,6 +735,7 @@ async def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
             result = await asyncio.to_thread(
                 subprocess.run,
                 ["netstat", "-ano"],
+                shell=False,
                 stdin=subprocess.DEVNULL,
                 capture_output=True,
                 text=True,
@@ -757,6 +760,7 @@ async def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
             result = await asyncio.to_thread(
                 subprocess.run,
                 ["lsof", "-ti", f":{port}"],
+                shell=False,
                 stdin=subprocess.DEVNULL,
                 capture_output=True,
                 text=True,
@@ -776,6 +780,7 @@ async def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
                 await asyncio.to_thread(
                     subprocess.run,
                     ["fuser", "-k", f"{port}/tcp"],
+                    shell=False,
                     stdin=subprocess.DEVNULL,
                     capture_output=True,
                     timeout=5,
@@ -821,6 +826,7 @@ def _cleanup_process() -> None:  # pragma: no cover
             if docker_bin:
                 subprocess.run(
                     [docker_bin, "rm", "-f", _searxng_docker_container],
+                    shell=False,
                     stdin=subprocess.DEVNULL,
                     capture_output=True,
                     check=False,
@@ -867,6 +873,7 @@ def _is_process_alive() -> bool:
                     "{{.State.Running}}",
                     _searxng_docker_container,
                 ],
+                shell=False,
                 stdin=subprocess.DEVNULL,
                 capture_output=True,
                 text=True,
@@ -933,6 +940,7 @@ async def _start_docker_searxng(start_port: int) -> str | None:
         res = await asyncio.to_thread(
             subprocess.run,
             [docker_bin, "info"],
+            shell=False,
             stdin=subprocess.DEVNULL,
             capture_output=True,
             check=False,
@@ -957,6 +965,7 @@ async def _start_docker_searxng(start_port: int) -> str | None:
             ps_res = await asyncio.to_thread(
                 subprocess.run,
                 [docker_bin, "ps", "-q", "-f", f"name={container_name}"],
+                shell=False,
                 stdin=subprocess.DEVNULL,
                 capture_output=True,
                 check=False,
@@ -976,6 +985,7 @@ async def _start_docker_searxng(start_port: int) -> str | None:
             await asyncio.to_thread(
                 subprocess.run,
                 [docker_bin, "rm", "-f", container_name],
+                shell=False,
                 stdin=subprocess.DEVNULL,
                 capture_output=True,
                 check=False,
@@ -1010,6 +1020,7 @@ async def _start_docker_searxng(start_port: int) -> str | None:
             proc = await asyncio.to_thread(
                 subprocess.Popen,
                 cmd,
+                shell=False,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
@@ -1032,6 +1043,7 @@ async def _start_docker_searxng(start_port: int) -> str | None:
         await asyncio.to_thread(
             subprocess.run,
             [docker_bin, "rm", "-f", container_name],
+            shell=False,
             stdin=subprocess.DEVNULL,
             capture_output=True,
             check=False,
@@ -1120,6 +1132,7 @@ async def _start_searxng_subprocess(start_port: int) -> str | None:  # pragma: n
         _searxng_process = await asyncio.to_thread(
             lambda: subprocess.Popen(
                 cmd,
+                shell=False,
                 env=env,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,

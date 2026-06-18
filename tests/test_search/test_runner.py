@@ -611,6 +611,7 @@ class TestKillStalePortProcess:
             assert mock_run.call_count == 2
             mock_run.assert_any_call(
                 ["lsof", "-ti", ":18888"],
+                shell=False,
                 stdin=subprocess.DEVNULL,
                 capture_output=True,
                 text=True,
@@ -618,6 +619,7 @@ class TestKillStalePortProcess:
             )
             mock_run.assert_any_call(
                 ["fuser", "-k", "18888/tcp"],
+                shell=False,
                 stdin=subprocess.DEVNULL,
                 capture_output=True,
                 timeout=5,
