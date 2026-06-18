@@ -45,48 +45,6 @@ from web_core.search.runner import (
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _reset_module_state():
-    """Reset module-level state between tests."""
-    import web_core.search.runner as mod
-
-    mod._searxng_process = None
-    mod._searxng_port = None
-    mod._restart_count = 0
-    mod._last_restart_time = 0.0
-    mod._is_owner = False
-    mod._startup_lock = None
-    mod._docker_lock = None
-
-
-@pytest.fixture(autouse=True)
-def _clean_state():
-    """Reset module state before and after each test."""
-    _reset_module_state()
-    yield
-    _reset_module_state()
-
-
-@pytest.fixture
-def tmp_discovery(tmp_path, monkeypatch):
-    """Use a temporary discovery file."""
-    discovery = tmp_path / "searxng_instance.json"
-    monkeypatch.setattr("web_core.search.runner._DISCOVERY_FILE", discovery)
-    return discovery
-
-
-@pytest.fixture
-def tmp_config_dir(tmp_path, monkeypatch):
-    """Use a temporary config directory."""
-    config_dir = tmp_path / ".web-core"
-    config_dir.mkdir()
-    monkeypatch.setattr("web_core.search.runner._CONFIG_DIR", config_dir)
-    monkeypatch.setattr("web_core.search.runner._DISCOVERY_FILE", config_dir / "searxng_instance.json")
-    return config_dir
-
-
-# ===========================================================================
 # _is_pid_alive
 # ===========================================================================
 

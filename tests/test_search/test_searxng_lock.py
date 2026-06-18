@@ -12,50 +12,10 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from web_core.search.runner import PINNED_SEARXNG_PORT, _start_docker_searxng
 
 # Fake docker binary path used across tests (avoids shutil.which("docker") returning None on CI).
 _FAKE_DOCKER = "/usr/bin/docker"
-
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def tmp_config_dir(tmp_path, monkeypatch):
-    """Use a temporary config directory."""
-    import web_core.search.runner as mod
-
-    config_dir = tmp_path / ".web-core"
-    config_dir.mkdir()
-    monkeypatch.setattr(mod, "_CONFIG_DIR", config_dir)
-    monkeypatch.setattr(mod, "_DISCOVERY_FILE", config_dir / "searxng_instance.json")
-    return config_dir
-
-
-@pytest.fixture(autouse=True)
-def _reset_docker_state():
-    """Reset module-level Docker state before and after each test."""
-    import web_core.search.runner as mod
-
-    def _reset():
-        mod._searxng_process = None
-        mod._searxng_port = None
-        mod._searxng_docker_container = None
-        mod._searxng_settings_path = None
-        mod._restart_count = 0
-        mod._last_restart_time = 0.0
-        mod._is_owner = False
-        mod._startup_lock = None
-        mod._docker_lock = None  # Reset lazy filelock so tmp_path dir is used
-
-    _reset()
-    yield
-    _reset()
 
 
 # ---------------------------------------------------------------------------
