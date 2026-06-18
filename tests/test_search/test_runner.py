@@ -28,6 +28,7 @@ from web_core.search.runner import (
     _get_process_kwargs,
     _get_settings_path,
     _get_startup_lock,
+    _handle_restart_and_start,
     _install_searxng,
     _is_pid_alive,
     _is_process_alive,
@@ -1201,3 +1202,181 @@ class TestGetDockerLock:
         if sys.platform != "win32":
             mode = os.stat(config_dir).st_mode
             assert (mode & 0o777) == 0o700
+
+
+# ===========================================================================
+# _handle_restart_and_start
+# ===========================================================================
+
+
+class TestHandleRestartAndStart:
+    @pytest.fixture(autouse=True)
+    def _reset_state(self):
+        import web_core.search.runner as mod
+
+        mod._searxng_process = None
+        mod._searxng_port = None
+        mod._restart_count = 0
+        mod._last_restart_time = 0.0
+        mod._searxng_docker_container = None
+        yield
+
+    async def test_crash_detection_logging(self):
+        """Verifies crashed process is logged and cleared."""
+        import web_core.search.runner as mod
+
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = -1
+        mock_proc.stderr.read.return_value = b"some error"
+        mod._searxng_process = mock_proc
+
+        with (
+            patch("web_core.search.runner.logger") as mock_logger,
+            patch("web_core.search.runner._start_docker_searxng", new_callable=AsyncMock, return_value="http://ok"),
+            patch("asyncio.to_thread", side_effect=lambda f, *args: f(*args)),
+        ):
+            await _handle_restart_and_start(start_port=8888)
+            assert mod._searxng_process is None
+            # Check warning call - first argument to warning
+            warning_call = [call for call in mock_logger.warning.call_args_list if "crashed" in call.args[0]]
+            assert len(warning_call) > 0
+
+    async def test_crash_detection_stderr_read_failure(self):
+        """Verifies crash detection handles stderr read failure gracefully."""
+        import web_core.search.runner as mod
+
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = -1
+        mock_proc.stderr.read.side_effect = Exception("read error")
+        mod._searxng_process = mock_proc
+
+        with (
+            patch("web_core.search.runner.logger") as mock_logger,
+            patch("web_core.search.runner._start_docker_searxng", new_callable=AsyncMock, return_value="http://ok"),
+            patch("asyncio.to_thread", side_effect=lambda f, *args: f(*args)),
+        ):
+            await _handle_restart_and_start(start_port=8888)
+            assert mod._searxng_process is None
+            warning_call = [call for call in mock_logger.warning.call_args_list if "crashed" in call.args[0]]
+            assert len(warning_call) > 0
+            # stderr should be empty in the log message
+            assert "stderr: " in warning_call[0].args[0]
+
+    async def test_restart_counter_reset(self):
+        """Resets restart count if enough time passed."""
+        import web_core.search.runner as mod
+
+        mod._restart_count = 5
+        mod._last_restart_time = time.time() - 301
+
+        with patch("web_core.search.runner._start_docker_searxng", new_callable=AsyncMock, return_value="http://ok"):
+            await _handle_restart_and_start(start_port=8888)
+            assert mod._restart_count == 0
+
+    async def test_docker_fallback_success(self):
+        """Returns Docker URL if successful."""
+        import web_core.search.runner as mod
+
+        with patch(
+            "web_core.search.runner._start_docker_searxng", new_callable=AsyncMock, return_value="http://docker-url"
+        ):
+            url = await _handle_restart_and_start(start_port=8888)
+            assert url == "http://docker-url"
+            assert mod._restart_count == 0
+
+    async def test_subprocess_success_after_docker_fail(self):
+        """Falls back to subprocess if Docker fails."""
+        import web_core.search.runner as mod
+
+        with (
+            patch("web_core.search.runner._start_docker_searxng", new_callable=AsyncMock, return_value=None),
+            patch("web_core.search.runner._is_searxng_installed", return_value=True),
+            patch(
+                "web_core.search.runner._start_searxng_subprocess",
+                new_callable=AsyncMock,
+                return_value="http://sub-url",
+            ),
+        ):
+            url = await _handle_restart_and_start(start_port=8888)
+            assert url == "http://sub-url"
+            assert mod._restart_count == 0
+
+    async def test_restart_limit_reached(self):
+        """Raises RuntimeError if limit reached."""
+        import web_core.search.runner as mod
+
+        mod._restart_count = 3
+        mod._last_restart_time = time.time()
+
+        with pytest.raises(RuntimeError, match="restart limit reached"):
+            await _handle_restart_and_start(start_port=8888)
+
+    async def test_install_failure(self):
+        """Raises RuntimeError if installation fails."""
+        with (
+            patch("web_core.search.runner._start_docker_searxng", new_callable=AsyncMock, return_value=None),
+            patch("web_core.search.runner._is_searxng_installed", return_value=False),
+            patch("web_core.search.runner._install_searxng", return_value=False),
+            pytest.raises(RuntimeError, match="installation failed"),
+        ):
+            await _handle_restart_and_start(start_port=8888)
+
+    async def test_cooldown_applied(self):
+        """Applies cooldown if restart count > 0."""
+        import web_core.search.runner as mod
+
+        mod._restart_count = 1
+        mod._last_restart_time = time.time()
+
+        with (
+            patch("web_core.search.runner._start_docker_searxng", new_callable=AsyncMock, return_value=None),
+            patch("web_core.search.runner._is_searxng_installed", return_value=True),
+            patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch("web_core.search.runner._start_searxng_subprocess", new_callable=AsyncMock, return_value="http://ok"),
+        ):
+            await _handle_restart_and_start(start_port=8888)
+            mock_sleep.assert_called_once_with(2.0)  # _RESTART_COOLDOWN * 1
+
+    async def test_subprocess_failure_raises(self):
+        """Raises RuntimeError if subprocess also fails."""
+        with (
+            patch("web_core.search.runner._start_docker_searxng", new_callable=AsyncMock, return_value=None),
+            patch("web_core.search.runner._is_searxng_installed", return_value=True),
+            patch("web_core.search.runner._start_searxng_subprocess", new_callable=AsyncMock, return_value=None),
+            pytest.raises(RuntimeError, match="start failed after all attempts"),
+        ):
+            await _handle_restart_and_start(start_port=8888)
+
+    async def test_crash_detection_no_stderr(self):
+        """Verifies crash detection handles missing stderr."""
+        import web_core.search.runner as mod
+
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = -1
+        mock_proc.stderr = None
+        mod._searxng_process = mock_proc
+
+        with (
+            patch("web_core.search.runner.logger") as mock_logger,
+            patch("web_core.search.runner._start_docker_searxng", new_callable=AsyncMock, return_value="http://ok"),
+        ):
+            await _handle_restart_and_start(start_port=8888)
+            assert mod._searxng_process is None
+            warning_call = [call for call in mock_logger.warning.call_args_list if "crashed" in call.args[0]]
+            assert len(warning_call) > 0
+
+    async def test_install_required_and_success(self):
+        """Verifies it proceeds if installation is required and succeeds."""
+
+        with (
+            patch("web_core.search.runner._start_docker_searxng", new_callable=AsyncMock, return_value=None),
+            patch("web_core.search.runner._is_searxng_installed", return_value=False),
+            patch("web_core.search.runner._install_searxng", return_value=True),
+            patch(
+                "web_core.search.runner._start_searxng_subprocess",
+                new_callable=AsyncMock,
+                return_value="http://sub-url",
+            ),
+        ):
+            url = await _handle_restart_and_start(start_port=8888)
+            assert url == "http://sub-url"
