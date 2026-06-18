@@ -80,7 +80,7 @@ def test_natural_sort_mixed():
 
 
 def test_drive_file_defaults():
-    f = DriveFile(file_id="abc123", name="chapter-01.txt")
+    f = DriveFile(file_id="A" * 33, name="chapter-01.txt")
     assert f.mime_type == "text/plain"
 
 
@@ -209,7 +209,7 @@ async def test_list_folder_files_fallback_to_html():
         ),
         patch(
             "web_core.adapters.google_drive._list_folder_via_html",
-            return_value=[DriveFile(file_id="f1", name="ch1.txt")],
+            return_value=[DriveFile(file_id="A" * 33, name="ch1.txt")],
         ) as mock_html,
     ):
         result = await list_folder_files("folder_id")
@@ -233,7 +233,7 @@ async def test_download_text_file_success():
         mock_gdown.download.return_value = temp_path
 
         with patch.dict("sys.modules", {"gdown": mock_gdown}):
-            result = await download_text_file("test_file_id")
+            result = await download_text_file("A" * 33)
 
         assert "Chapter 1 content" in result
     finally:
@@ -246,7 +246,7 @@ async def test_download_text_file_returns_empty_on_failure():
     mock_gdown.download.return_value = None
 
     with patch.dict("sys.modules", {"gdown": mock_gdown}):
-        result = await download_text_file("bad_file_id")
+        result = await download_text_file("B" * 33)
 
     assert result == ""
 
@@ -254,8 +254,8 @@ async def test_download_text_file_returns_empty_on_failure():
 async def test_fetch_folder_chapters_success():
     """fetch_folder_chapters returns sorted chapters."""
     files = [
-        DriveFile(file_id="f2", name="chapter-2.txt"),
-        DriveFile(file_id="f1", name="chapter-1.txt"),
+        DriveFile(file_id="B" * 33, name="chapter-2.txt"),
+        DriveFile(file_id="A" * 33, name="chapter-1.txt"),
     ]
 
     with (
@@ -293,7 +293,7 @@ async def test_fetch_folder_chapters_no_files():
 
 async def test_fetch_folder_chapters_skips_empty_content():
     """fetch_folder_chapters skips files with empty content."""
-    files = [DriveFile(file_id="f1", name="ch1.txt"), DriveFile(file_id="f2", name="ch2.txt")]
+    files = [DriveFile(file_id="A" * 33, name="ch1.txt"), DriveFile(file_id="B" * 33, name="ch2.txt")]
 
     with (
         patch("web_core.adapters.google_drive.list_folder_files", return_value=files),
@@ -309,7 +309,7 @@ async def test_fetch_folder_chapters_skips_empty_content():
 
 async def test_fetch_folder_chapters_handles_download_error():
     """fetch_folder_chapters handles download errors gracefully."""
-    files = [DriveFile(file_id="f1", name="ch1.txt"), DriveFile(file_id="f2", name="ch2.txt")]
+    files = [DriveFile(file_id="A" * 33, name="ch1.txt"), DriveFile(file_id="B" * 33, name="ch2.txt")]
 
     with (
         patch("web_core.adapters.google_drive.list_folder_files", return_value=files),
@@ -326,7 +326,7 @@ async def test_fetch_folder_chapters_handles_download_error():
 
 async def test_fetch_folder_chapters_max_chapters():
     """fetch_folder_chapters respects max_chapters limit."""
-    files = [DriveFile(file_id=f"f{i}", name=f"ch{i}.txt") for i in range(10)]
+    files = [DriveFile(file_id="A" * 33 + str(i), name=f"ch{i}.txt") for i in range(10)]
 
     with (
         patch("web_core.adapters.google_drive.list_folder_files", return_value=files),
@@ -347,9 +347,9 @@ async def test_fetch_folder_chapters_is_concurrent():
     """Verify that fetch_folder_chapters downloads files concurrently."""
 
     files = [
-        DriveFile(file_id="f1", name="ch1.txt"),
-        DriveFile(file_id="f2", name="ch2.txt"),
-        DriveFile(file_id="f3", name="ch3.txt"),
+        DriveFile(file_id="A" * 33, name="ch1.txt"),
+        DriveFile(file_id="B" * 33, name="ch2.txt"),
+        DriveFile(file_id="C" * 33, name="ch3.txt"),
     ]
 
     async def slow_download(file_id):
@@ -368,3 +368,17 @@ async def test_fetch_folder_chapters_is_concurrent():
     assert len(chapters) == 3
     # If sequential, it would take at least 0.3s. If concurrent, ~0.1s.
     assert duration < 0.2
+
+
+async def test_download_text_file_invalid_id():
+    """download_text_file raises ValueError for invalid file IDs."""
+    invalid_ids = [
+        "short",
+        "too_long_" + "a" * 100,
+        "../../etc/passwd",
+        "id with spaces",
+        "id_with_special_#",
+    ]
+    for fid in invalid_ids:
+        with pytest.raises(ValueError, match="Invalid Google Drive file ID format"):
+            await download_text_file(fid)

@@ -45,6 +45,7 @@ logger = logging.getLogger(__name__)
 FOLDER_URL_PATTERN = re.compile(r"drive\.google\.com/drive/(?:u/\d+/)?folders/([A-Za-z0-9_-]+)")
 _ID_NAME_RE = re.compile(r'"([A-Za-z0-9_-]{28,44})","([^"]+\.(txt|epub|pdf|md|html?|docx?))"')
 _NATURAL_SORT_RE = re.compile(r"(\d+)")
+_FILE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{28,64}$")
 
 
 @dataclass
@@ -149,6 +150,9 @@ async def download_text_file(file_id: str) -> str:
 
     Su dung gdown de download file text tu Google Drive public.
     """
+    if not _FILE_ID_RE.match(file_id):
+        raise ValueError(f"Invalid Google Drive file ID format: {file_id}")
+
     gdown_mod = await _get_gdown()
 
     loop = asyncio.get_running_loop()
@@ -156,8 +160,7 @@ async def download_text_file(file_id: str) -> str:
     def _download_sync() -> str:
         with tempfile.TemporaryDirectory() as tmpdir:
             dest = os.path.join(tmpdir, "file.txt")
-            dl_url = f"https://drive.google.com/uc?id={file_id}"
-            result = gdown_mod.download(dl_url, dest, quiet=True)
+            result = gdown_mod.download(id=file_id, output=dest, quiet=True)
             if result and os.path.exists(result):
                 return Path(result).read_text(encoding="utf-8", errors="replace")
             return ""
