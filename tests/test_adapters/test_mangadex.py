@@ -100,6 +100,31 @@ class TestChapterImages:
         assert ci.data == []
         assert ci.data_saver == []
 
+    def test_images_property(self):
+        ci = ChapterImages(
+            base_url="https://example.com",
+            hash="abc123",
+            data=["1.png", "2.png"],
+            data_saver=["1.jpg", "2.jpg"],
+        )
+        result = ci.images
+        assert len(result) == 2
+        assert result[0].url == "https://example.com/data/abc123/1.png"
+        assert result[1].url == "https://example.com/data/abc123/2.png"
+        assert any(img.url.endswith("1.png") for img in result)
+        assert any(img.url.endswith("2.png") for img in result)
+
+    def test_images_saver_property(self):
+        ci = ChapterImages(
+            base_url="https://example.com",
+            hash="abc123",
+            data=["1.png"],
+            data_saver=["1.jpg"],
+        )
+        result = ci.images_saver
+        assert len(result) == 1
+        assert result[0].url == "https://example.com/data-saver/abc123/1.jpg"
+
 
 # ---------------------------------------------------------------------------
 # URL construction helpers
@@ -189,29 +214,35 @@ class TestMangaDexClientConfig:
 
 # Fixture data mocking the MangaDex API responses
 
+MOCK_MANGA_RESPONSE = {
+    "result": "ok",
+    "response": "entity",
+    "data": {
+        "id": "manga-001",
+        "type": "manga",
+        "attributes": {
+            "title": {"en": "One Piece"},
+            "altTitles": [{"ja": "Wan Piisu"}, {"ko": "Won Piseu"}],
+            "description": {"en": "A pirate adventure."},
+            "status": "ongoing",
+            "year": 1997,
+            "contentRating": "safe",
+        },
+        "relationships": [
+            {
+                "type": "cover_art",
+                "id": "cover-001",
+                "attributes": {"fileName": "one-piece-cover.jpg"},
+            },
+        ],
+    },
+}
+
 MOCK_SEARCH_RESPONSE = {
     "result": "ok",
     "response": "collection",
     "data": [
-        {
-            "id": "manga-001",
-            "type": "manga",
-            "attributes": {
-                "title": {"en": "One Piece"},
-                "altTitles": [{"ja": "Wan Piisu"}, {"ko": "Won Piseu"}],
-                "description": {"en": "A pirate adventure."},
-                "status": "ongoing",
-                "year": 1997,
-                "contentRating": "safe",
-            },
-            "relationships": [
-                {
-                    "type": "cover_art",
-                    "id": "cover-001",
-                    "attributes": {"fileName": "one-piece-cover.jpg"},
-                },
-            ],
-        },
+        MOCK_MANGA_RESPONSE["data"],
         {
             "id": "manga-002",
             "type": "manga",
@@ -254,17 +285,7 @@ MOCK_FEED_RESPONSE = {
     "result": "ok",
     "response": "collection",
     "data": [
-        {
-            "id": "ch-1",
-            "type": "chapter",
-            "attributes": {
-                "volume": "1",
-                "chapter": "1",
-                "title": "Chapter 1",
-                "translatedLanguage": "en",
-                "pages": 20,
-            },
-        },
+        MOCK_CHAPTER_RESPONSE["data"],
         {
             "id": "ch-2",
             "type": "chapter",
@@ -345,6 +366,44 @@ def _make_mock_response(json_data: dict | None = None, content: bytes = b"") -> 
     resp.json = MagicMock(return_value=json_data or {})
     resp.content = content
     return resp
+
+
+class TestGetManga:
+    """Test get_manga with mocked HTTP."""
+
+    async def test_returns_parsed_manga(self):
+        mock_resp = _make_mock_response(MOCK_MANGA_RESPONSE)
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+            client = MangaDexClient()
+            result = await client.get_manga("manga-001")
+
+        assert result.id == "manga-001"
+        assert result.title == "One Piece"
+        assert result.cover_url == "https://uploads.mangadex.org/covers/manga-001/one-piece-cover.jpg"
+
+
+class TestGetChapter:
+    """Test get_chapter with mocked HTTP."""
+
+    async def test_returns_parsed_chapter(self):
+        mock_resp = _make_mock_response(MOCK_CHAPTER_RESPONSE)
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+            client = MangaDexClient()
+            result = await client.get_chapter("ch-1")
+
+        assert result.id == "ch-1"
+        assert result.chapter == "1"
+        assert result.title == "Chapter 1"
 
 
 class TestSearchManga:
@@ -602,8 +661,8 @@ class TestGetChapterImages:
             client = MangaDexClient()
             await client.get_chapter_images("chapter-uuid-xyz")
 
-        call_args = mock_client.get.call_args
-        assert call_args.args[0] == "https://api.mangadex.org/at-home/server/chapter-uuid-xyz"
+        mock_client.get.assert_called_once()
+        assert mock_client.get.call_args.args[0] == "https://api.mangadex.org/at-home/server/chapter-uuid-xyz"
 
     async def test_get_chapter_images_rate_limit(self):
         """Verify get_chapter_images rate limiting sleep."""
@@ -618,18 +677,20 @@ class TestGetChapterImages:
             patch("web_core.adapters.mangadex.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
         ):
             client = MangaDexClient()
-            # First call sets the time
+            # First call no sleep
             await client.get_chapter_images("ch-1")
-            # Second call should trigger sleep
+            assert mock_sleep.call_count == 0
+
+            # Second call too fast
             await client.get_chapter_images("ch-2")
-            assert mock_sleep.call_count >= 1
+            assert mock_sleep.call_count == 2
 
 
 class TestDownloadImage:
     """Test download_image with mocked HTTP."""
 
-    async def test_downloads_full_quality(self):
-        image_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
+    async def test_download_standard(self):
+        image_bytes = b"fake-image-data"
         mock_resp = _make_mock_response(content=image_bytes)
         mock_client = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_resp)
@@ -643,13 +704,13 @@ class TestDownloadImage:
                 "abcdef",
                 "page1.png",
             )
+            assert result == image_bytes
 
-        assert result == image_bytes
         call_args = mock_client.get.call_args
         assert call_args.args[0] == "https://server.example.com/data/abcdef/page1.png"
 
-    async def test_downloads_saver_quality(self):
-        mock_resp = _make_mock_response(content=b"jpeg-data")
+    async def test_download_saver(self):
+        mock_resp = _make_mock_response(content=b"saver-data")
         mock_client = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_resp)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -703,9 +764,6 @@ class TestDownloadImage:
                     "page1.png",
                 )
                 assert result == image_bytes
-                # Initial call to _get or similar would have used client if it was in context
-                # but here we only call download_image.
-                # In MangaDexClient.__aenter__, it sets self._client = safe_httpx_client(...)
                 mock_client.get.assert_called_once()
 
     async def test_download_image_http_error_reused_client(self):
@@ -785,8 +843,6 @@ class TestSsrfSafety:
         # client._client is None initially
         await client.__aexit__(None, None, None)
         # Should not raise
-
-    """Verify the adapter uses safe_httpx_client, not raw httpx.AsyncClient."""
 
     async def test_uses_context_manager_client(self):
         """Verify the client uses the shared context manager client when available."""
