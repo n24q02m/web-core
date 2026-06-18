@@ -1126,12 +1126,12 @@ requires-dist = [
     { name = "patchright", specifier = ">=1.60.1" },
     { name = "pillow", specifier = ">=12.2.0" },
     { name = "pydantic", specifier = ">=2.12.5" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.3" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.1.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=1.4.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=7.1.0" },
     { name = "pytest-timeout", marker = "extra == 'dev'", specifier = ">=2.4.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15.17" },
-    { name = "ty", marker = "extra == 'dev'", specifier = ">=0.0.49" },
+    { name = "ty", marker = "extra == 'dev'", specifier = ">=0.0.50" },
 ]
 provides-extras = ["dev"]
 
