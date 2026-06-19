@@ -122,6 +122,7 @@ async def search(
     include_domains: list[str] | None = None,
     exclude_domains: list[str] | None = None,
     max_retries: int = 3,
+    auth: tuple[str, str] | None = None,
 ) -> list[SearchResult]:
     """Search SearXNG and return deduplicated, domain-capped results.
 
@@ -145,6 +146,10 @@ async def search(
         Exclude results from these domains (max 10).
     max_retries:
         Number of retry attempts on transient (5xx / connection) errors.
+    auth:
+        Optional ``(username, password)`` for HTTP Basic auth — for a SearXNG
+        instance behind a reverse-proxy auth gate (e.g. Caddy basic-auth). When
+        omitted, no auth header is sent (unchanged for local SearXNG).
 
     Returns
     -------
@@ -173,12 +178,16 @@ async def search(
     # SSRF-safe client blocks localhost/private IPs by design, but SearXNG
     # runs on localhost. External URL fetching still uses safe_httpx_client.
     client = _get_shared_client()
+    # Only forward auth when configured, so the default (local SearXNG) request
+    # stays byte-identical to today (no auth header).
+    auth_kwarg: dict[str, Any] = {"auth": auth} if auth else {}
     for attempt in range(1, max_retries + 1):
         try:
             response = await client.get(
                 f"{searxng_url}/search",
                 params=params,
                 headers={"X-Real-IP": "127.0.0.1", "X-Forwarded-For": "127.0.0.1"},
+                **auth_kwarg,
             )
             response.raise_for_status()
             data = response.json()
