@@ -22,7 +22,7 @@ from web_core.scraper.selector_inference import (
     merge_selectors,
 )
 from web_core.scraper.state import ScrapingError, ScrapingState
-from web_core.scraper.utils import is_cloudflare_challenge
+from web_core.scraper.utils import is_cloudflare_challenge, looks_under_rendered
 
 
 class ScrapingAgent:
@@ -210,6 +210,9 @@ class ScrapingAgent:
         - Have non-2xx/3xx status codes
         - Are shorter than min_content_length
         - Contain Cloudflare challenge HTML (JS challenge, Turnstile, managed)
+        - Are an under-rendered JS shell (200 OK + ``Loading…`` + scripts but no
+          visible content) — so the graph escalates to a headless browser
+          instead of extracting the empty shell.
         """
         content = state.get("content", "")
         status_code = state.get("status_code", 0)
@@ -218,18 +221,26 @@ class ScrapingAgent:
         status_ok = 200 <= status_code < 400
         length_ok = len(content) >= self.min_content_length
         cf_challenge = is_cloudflare_challenge(content) if content else False
+        under_rendered = looks_under_rendered(content) if content else False
 
         if cf_challenge:
             strategy = state.get("metadata", {}).get("last_strategy", "unknown")
             errors.append(f"{strategy}: Cloudflare challenge detected in response")
+        if under_rendered:
+            strategy = state.get("metadata", {}).get("last_strategy", "unknown")
+            errors.append(f"{strategy}: under-rendered JS shell; escalating to a headless browser")
 
-        valid = status_ok and length_ok and not cf_challenge
-        return {**state, "success": valid, "errors": errors}
+        valid = status_ok and length_ok and not cf_challenge and not under_rendered
+        return {**state, "success": valid, "under_rendered": under_rendered, "errors": errors}
 
     def _route_after_validate(self, state: ScrapingState) -> str:
         """Route to extract on success, try LLM inference if enabled, else escalate."""
         if state.get("success", False):
             return "extract"
+        # An under-rendered JS shell has no DOM content to infer selectors from,
+        # so skip LLM inference and escalate straight to a heavier strategy.
+        if state.get("under_rendered", False):
+            return "escalate"
         # If we have HTML content but it was too short / didn't pass validation,
         # and we haven't tried LLM inference yet, try it
         content = state.get("content", "")

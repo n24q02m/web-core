@@ -1,13 +1,25 @@
 """web-core: Shared web infrastructure for search, scraping, HTTP security, and browsers."""
 
-from web_core.browsers import BrowserProvider, PatchrightProvider
+from web_core.browsers import (
+    BrowserlessClient,
+    BrowserProvider,
+    CFBrowserRenderingClient,
+    CFBrowserRenderingError,
+    PatchrightProvider,
+)
 from web_core.http import is_safe_url, is_valid_domain, normalize_url, safe_httpx_client, strip_tracking_params
 from web_core.scraper import ScrapingAgent, StrategyCache
+from web_core.scraper.strategies import RemoteRenderStrategy, RenderClient
 from web_core.search import SearchResult, ensure_searxng, shutdown_searxng
 
 __all__ = [
     "BrowserProvider",
+    "BrowserlessClient",
+    "CFBrowserRenderingClient",
+    "CFBrowserRenderingError",
     "PatchrightProvider",
+    "RemoteRenderStrategy",
+    "RenderClient",
     "ScrapingAgent",
     "SearchResult",
     "StrategyCache",

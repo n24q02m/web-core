@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from html import unescape
 
 # Cloudflare challenge detection patterns
 # Performance Optimization: Using static lowercase strings and `in` checks is ~20-30x faster
@@ -89,3 +90,61 @@ def extract_turnstile_sitekey(html: str) -> str | None:
 def is_cloudflare_challenge(html: str) -> bool:
     """Quick check: is this HTML a Cloudflare challenge page?"""
     return detect_cloudflare_challenge(html) is not None
+
+
+# ---------------------------------------------------------------------------
+# Under-rendered (JS-shell) detection
+# ---------------------------------------------------------------------------
+
+# Empty SPA mount roots a client framework hydrates into (React/Vue/Next/Nuxt).
+_SPA_ROOT_RE = re.compile(
+    r"""<[a-z][\w-]*\b[^>]*\bid\s*=\s*["'](?:root|app|__next|__nuxt|app-root|main|application)["']""",
+    re.IGNORECASE,
+)
+_SCRIPT_TAG_RE = re.compile(r"<script\b", re.IGNORECASE)
+_SCRIPT_BLOCK_RE = re.compile(r"<script\b[^>]*>.*?</script>", re.IGNORECASE | re.DOTALL)
+_STYLE_BLOCK_RE = re.compile(r"<style\b[^>]*>.*?</style>", re.IGNORECASE | re.DOTALL)
+_TAG_RE = re.compile(r"<[^>]+>")
+_WS_RE = re.compile(r"\s+")
+
+
+def visible_text(html: str) -> str:
+    """Approximate the human-visible text of an HTML document.
+
+    Strips ``<script>``/``<style>`` blocks and all tags, unescapes entities,
+    and collapses whitespace. This is a cheap regex pass — not a full DOM parse
+    — which is all the under-rendered heuristic needs (it only counts the length
+    of rendered text, never interprets it).
+    """
+    if not html:
+        return ""
+    stripped = _SCRIPT_BLOCK_RE.sub(" ", html)
+    stripped = _STYLE_BLOCK_RE.sub(" ", stripped)
+    stripped = _TAG_RE.sub(" ", stripped)
+    return _WS_RE.sub(" ", unescape(stripped)).strip()
+
+
+def looks_under_rendered(html: str, *, min_visible_text: int = 64) -> bool:
+    """True when *html* is a JS shell whose real content has not rendered.
+
+    A single-page-app route commonly returns HTTP 200 with a small
+    ``Loading…`` + inline-script shell. The scraper's status/length checks pass
+    on that shell, so the agent would extract the empty page instead of
+    escalating to a headless browser. This flags the case so ``_validate_node``
+    fails and the graph escalates.
+
+    Conservative by design — flags a page ONLY when BOTH hold:
+      1. the visible text (scripts/styles/tags stripped) is shorter than
+         ``min_visible_text`` characters, AND
+      2. the page shows JS-render evidence — a ``<script>`` tag or an empty SPA
+         mount root (``<div id="root">`` / ``#app`` / ``#__next`` ...).
+
+    A legitimately short-but-complete page with no scripts (a small JSON API
+    body, a one-line article) has visible text equal to its body and no script
+    tag, so it is never flagged — avoiding false escalation.
+    """
+    if not html:
+        return False
+    if len(visible_text(html)) >= min_visible_text:
+        return False
+    return bool(_SCRIPT_TAG_RE.search(html) or _SPA_ROOT_RE.search(html))

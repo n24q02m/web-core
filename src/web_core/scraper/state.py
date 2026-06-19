@@ -31,3 +31,6 @@ class ScrapingState(TypedDict, total=False):
     # LLM selector inference
     inferred_selectors: dict[str, str]
     selector_inference_attempted: bool
+    # True when validation rejected the response as an under-rendered JS shell;
+    # routes straight to escalate (selector inference cannot help an empty DOM).
+    under_rendered: bool
