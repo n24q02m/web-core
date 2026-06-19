@@ -2,6 +2,107 @@
 
 <!-- version list -->
 
+## v2.3.0-beta.1 (2026-06-19)
+
+### Bug Fixes
+
+- Add extract_domain coverage and parametrize url validation tests
+  ([`dabaec6`](https://github.com/n24q02m/web-core/commit/dabaec6c40117593eafbab9f8c4400d11552b5eb))
+
+- Add unit tests for SearXNG _handle_restart_and_start and remove pragma no cover
+  ([`983b6f5`](https://github.com/n24q02m/web-core/commit/983b6f530b636e6a578a2ef6859a715f77543af8))
+
+- Cache normalize_url with lru_cache to avoid repeated URL parsing
+  ([`9874c88`](https://github.com/n24q02m/web-core/commit/9874c8899e51e7e1771fec568b10fcc384ed03dd))
+
+- Centralize and unify search test fixtures in conftest
+  ([`2efeb52`](https://github.com/n24q02m/web-core/commit/2efeb525800dd71ed56db2788dd0107143c27f4d))
+
+- Cover missing GOOGLE_CLOUD_PROJECT and selector-inference edge cases in tests
+  ([`54551dc`](https://github.com/n24q02m/web-core/commit/54551dc4c4a8d789f98331ff3e8457acf9917453))
+
+- Drop unused DriveChapter re-export from adapters package init
+  ([`637598e`](https://github.com/n24q02m/web-core/commit/637598ec2782fd758642e071b4ecc7da58b4a55c))
+
+- Re-validate cached DNS IPs against allow_private in is_safe_url to close SSRF bypass
+  ([`281b8d4`](https://github.com/n24q02m/web-core/commit/281b8d4a63df5e389899e65fd632d1cc5776f5f6))
+
+- Refresh lockfile (renovate maintenance)
+  ([`85043d8`](https://github.com/n24q02m/web-core/commit/85043d8965d8fb2e8f22e963f1ab8b52c3909ab2))
+
+- Remove orphaned Qodo pr-agent config and stale comment
+  ([#483](https://github.com/n24q02m/web-core/pull/483),
+  [`2ec09b5`](https://github.com/n24q02m/web-core/commit/2ec09b57acddbf7c94ed45c10175a998381fd486))
+
+- Replace private knowledge-core reference with public wet-mcp consumer
+  ([#484](https://github.com/n24q02m/web-core/pull/484),
+  [`d6bee8d`](https://github.com/n24q02m/web-core/commit/d6bee8d09c2e1364cb021b4f9d0055fbffae6151))
+
+- Reuse cached extract_domain util in selector_inference
+  ([`b4753a6`](https://github.com/n24q02m/web-core/commit/b4753a60fe9a39af558418faf4fdd187d4dd5490))
+
+- Reuse shared HTTP connection and raise feed batch size in MangaDexClient pagination
+  ([`e9a5c6b`](https://github.com/n24q02m/web-core/commit/e9a5c6bfe5439541a82e9b4363ee344c574306df))
+
+- Set explicit shell=False and add -- separator to subprocess calls in search runner
+  ([`8ef2714`](https://github.com/n24q02m/web-core/commit/8ef2714490a16670368ebf270d9f731f0c723dd3))
+
+- Sync cross-promo section and tagline to current descriptions
+  ([#487](https://github.com/n24q02m/web-core/pull/487),
+  [`b07599f`](https://github.com/n24q02m/web-core/commit/b07599fae8ced6b8d1fa4db94892359edaef41a5))
+
+- Sync README tagline to current capability description
+  ([#486](https://github.com/n24q02m/web-core/pull/486),
+  [`fa602e6`](https://github.com/n24q02m/web-core/commit/fa602e6fa706be2f98cac3dd2e730bee9f4ec523))
+
+- Update non-major dependencies
+  ([`9addd55`](https://github.com/n24q02m/web-core/commit/9addd55db4e6f341bd85e9b78ba74dd6ebe7c99b))
+
+- Use os.path for GoogleDriveFileToDownload name and extension parsing
+  ([`1e6b12d`](https://github.com/n24q02m/web-core/commit/1e6b12dae1f6e80c61bce9cfc2cd55b0114822e7))
+
+- Validate Google Drive file ID format to prevent path traversal in download_text_file
+  ([`f9f17c3`](https://github.com/n24q02m/web-core/commit/f9f17c34dc74169bf34258d95521d74e8202a28e))
+
+- **deps**: Lock file maintenance ([#481](https://github.com/n24q02m/web-core/pull/481),
+  [`dbffd21`](https://github.com/n24q02m/web-core/commit/dbffd21cd5d2c4403c1c3200792d8a6380f0338a))
+
+- **deps**: Update ghcr.io/astral-sh/uv:latest Docker digest to ff07b86
+  ([#479](https://github.com/n24q02m/web-core/pull/479),
+  [`cfce954`](https://github.com/n24q02m/web-core/commit/cfce954cc0ac42b6133f835e80d526426c7b2907))
+
+- **deps**: Update non-major dependencies ([#480](https://github.com/n24q02m/web-core/pull/480),
+  [`44c2cbb`](https://github.com/n24q02m/web-core/commit/44c2cbbbd6ada03e5313ef2a0e3db673cb5df963))
+
+- **deps**: Update python:3.13-slim-bookworm Docker digest to 05b9539
+  ([#488](https://github.com/n24q02m/web-core/pull/488),
+  [`c9ca670`](https://github.com/n24q02m/web-core/commit/c9ca670f0e9f9e2b2f9ed14eef4435a62d60c900))
+
+### Features
+
+- Add get_manga/get_chapter methods and full page-URL properties to MangaDex adapter
+  ([`9343e55`](https://github.com/n24q02m/web-core/commit/9343e55239abf75d9bb139b1d55af9f1ed32448b))
+
+- Escalate past under-rendered JS shells + add remote render backends
+  ([#530](https://github.com/n24q02m/web-core/pull/530),
+  [`a66d054`](https://github.com/n24q02m/web-core/commit/a66d05477a0496767342c4591e43d406d969b83d))
+
+- **http**: Centralize and memoize fast-path `extract_domain`
+  ([#485](https://github.com/n24q02m/web-core/pull/485),
+  [`caa8c0e`](https://github.com/n24q02m/web-core/commit/caa8c0e156ac960a18e73f3a56951ea5a21c7a78))
+
+### Testing
+
+- Add unit tests for _handle_restart_and_start
+  ([`983b6f5`](https://github.com/n24q02m/web-core/commit/983b6f530b636e6a578a2ef6859a715f77543af8))
+
+- Add unit tests for _handle_restart_and_start and fix formatting/lint
+  ([`983b6f5`](https://github.com/n24q02m/web-core/commit/983b6f530b636e6a578a2ef6859a715f77543af8))
+
+- Add unit tests for _handle_restart_and_start and fix lint
+  ([`983b6f5`](https://github.com/n24q02m/web-core/commit/983b6f530b636e6a578a2ef6859a715f77543af8))
+
+
 ## v2.2.2-beta.3 (2026-06-10)
 
 ### Bug Fixes
