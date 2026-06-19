@@ -668,3 +668,21 @@ class TestSearch:
             with pytest.raises(SearchError) as exc:
                 await search(SEARXNG_URL, "q")
             assert exc.value.reason == "forced"
+
+    async def test_forwards_basic_auth_when_provided(self, mock_httpx_client):
+        """auth=(user, pass) is forwarded to the GET for a basic-auth SearXNG."""
+        mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response([]))
+
+        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
+            await search(SEARXNG_URL, "test", auth=("user", "pass"))
+
+        assert mock_httpx_client.get.call_args.kwargs["auth"] == ("user", "pass")
+
+    async def test_no_auth_kwarg_when_not_provided(self, mock_httpx_client):
+        """Default (no auth) forwards no auth kwarg — byte-identical to today."""
+        mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response([]))
+
+        with patch("httpx.AsyncClient", return_value=mock_httpx_client):
+            await search(SEARXNG_URL, "test")
+
+        assert "auth" not in mock_httpx_client.get.call_args.kwargs
