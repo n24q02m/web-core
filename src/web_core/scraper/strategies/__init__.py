@@ -5,6 +5,7 @@ from web_core.scraper.strategies.basic_http import BasicHTTPStrategy
 from web_core.scraper.strategies.captcha import CaptchaStrategy
 from web_core.scraper.strategies.headless import HeadlessStrategy
 from web_core.scraper.strategies.patchright_browser import PatchrightStrategy
+from web_core.scraper.strategies.remote_render import RemoteRenderStrategy, RenderClient
 from web_core.scraper.strategies.tls_spoof import TLSSpoofStrategy
 
 __all__ = [
@@ -13,5 +14,7 @@ __all__ = [
     "CaptchaStrategy",
     "HeadlessStrategy",
     "PatchrightStrategy",
+    "RemoteRenderStrategy",
+    "RenderClient",
     "TLSSpoofStrategy",
 ]

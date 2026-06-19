@@ -4,6 +4,8 @@ from web_core.scraper.utils import (
     detect_cloudflare_challenge,
     extract_turnstile_sitekey,
     is_cloudflare_challenge,
+    looks_under_rendered,
+    visible_text,
 )
 
 # ---------------------------------------------------------------------------
@@ -164,3 +166,96 @@ def test_is_cf_challenge_true():
 def test_is_cf_challenge_false():
     assert is_cloudflare_challenge(NORMAL_HTML) is False
     assert is_cloudflare_challenge("") is False
+
+
+# ---------------------------------------------------------------------------
+# visible_text
+# ---------------------------------------------------------------------------
+
+
+def test_visible_text_strips_scripts_styles_and_tags():
+    html = (
+        "<html><head><style>.a{color:red}</style></head>"
+        "<body><h1>Title</h1><script>var x = 1;</script><p>Body&nbsp;text.</p></body></html>"
+    )
+    text = visible_text(html)
+    assert "Title" in text
+    assert "Body" in text and "text." in text
+    # Script / style contents must not leak into visible text.
+    assert "var x" not in text
+    assert "color:red" not in text
+
+
+def test_visible_text_empty():
+    assert visible_text("") == ""
+
+
+def test_visible_text_unescapes_entities():
+    assert visible_text("<p>A &amp; B &lt;ok&gt;</p>") == "A & B <ok>"
+
+
+# ---------------------------------------------------------------------------
+# looks_under_rendered
+# ---------------------------------------------------------------------------
+
+# An SPA shell: empty mount root + scripts + a Loading marker, no real content.
+UNDER_RENDERED_SPA = (
+    "<html><head><title>App</title></head><body>"
+    '<div id="root"></div>'
+    '<script src="/static/app.js"></script>'
+    "<script>window.__INIT__ = {};</script>"
+    "<p>Loading…</p></body></html>"
+)
+
+# A rendered page that ALSO has a script + SPA root, but real visible content.
+RENDERED_WITH_SCRIPTS = (
+    "<html><head><title>Quotes</title></head><body><div id='root'>"
+    "<blockquote>The world as we have created it is a process of our thinking. "
+    "It cannot be changed without changing our thinking. - Albert Einstein</blockquote>"
+    "</div><script src='/app.js'></script></body></html>"
+)
+
+# Short but complete, no scripts -> must NOT be flagged (false-escalation guard).
+TINY_JSON_API = '{"id": 1, "name": "ok", "status": "active"}'
+TINY_ARTICLE = "<html><body><p>Short but complete.</p></body></html>"
+
+
+def test_under_rendered_flags_spa_shell():
+    assert looks_under_rendered(UNDER_RENDERED_SPA) is True
+
+
+def test_under_rendered_flags_loading_with_empty_app_root():
+    html = "<html><body><div id='app'>Loading…</div><script>boot()</script></body></html>"
+    assert looks_under_rendered(html) is True
+
+
+def test_under_rendered_false_for_rendered_page_with_scripts():
+    # Visible text is well over the threshold, so the script + #root are ignored.
+    assert looks_under_rendered(RENDERED_WITH_SCRIPTS) is False
+
+
+def test_under_rendered_false_for_short_json_no_script():
+    # Short body but no JS-render evidence -> a complete API response, not a shell.
+    assert looks_under_rendered(TINY_JSON_API) is False
+
+
+def test_under_rendered_false_for_tiny_article_no_script():
+    assert looks_under_rendered(TINY_ARTICLE) is False
+
+
+def test_under_rendered_false_for_empty():
+    assert looks_under_rendered("") is False
+
+
+def test_under_rendered_script_only_shell_flagged():
+    # Pure inline-script bootstrap with no visible body text.
+    html = "<html><body><script>document.write('later')</script></body></html>"
+    assert looks_under_rendered(html) is True
+
+
+def test_under_rendered_respects_custom_threshold():
+    html = "<html><body><div id='root'>Hello</div><script>x()</script></body></html>"
+    # "Hello" (5 chars) is under a high threshold -> flagged.
+    assert looks_under_rendered(html, min_visible_text=100) is True
+    # ...but under a tiny threshold the visible text already qualifies.
+    assert looks_under_rendered(html, min_visible_text=4) is False
