@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v2.3.0-beta.2 (2026-06-19)
+
+### Features
+
+- Optional HTTP basic-auth for the SearXNG search client
+  ([`852170d`](https://github.com/n24q02m/web-core/commit/852170d1bef6642609433fe67fb380dee0fdb846))
+
+
 ## v2.3.0-beta.1 (2026-06-19)
 
 ### Bug Fixes
