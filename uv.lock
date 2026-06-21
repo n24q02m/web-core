@@ -1103,7 +1103,7 @@ dev = [
 requires-dist = [
     { name = "browserforge", specifier = ">=1.2.4" },
     { name = "capsolver", specifier = ">=1.0.7" },
-    { name = "crawl4ai", specifier = ">=0.8.9" },
+    { name = "crawl4ai", specifier = ">=0.9.0" },
     { name = "curl-cffi", specifier = ">=0.15.0" },
     { name = "gdown", specifier = ">=6.1.0" },
     { name = "httpx", specifier = ">=0.28.1" },
