@@ -27,3 +27,6 @@ docs/superpowers/
 *.bak
 /*.patch
 /*.diff
+
+# AI planning/trace artifacts -- belong in .private/superpower/, never the public repo
+plan.md
