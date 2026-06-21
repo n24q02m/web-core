@@ -31,15 +31,24 @@
 
 - [Installation](#installation)
 - [Quick Usage](#quick-usage)
+- [Configuration](#configuration)
 - [Architecture](#architecture)
 - [Development](#development)
 - [License](#license)
 
+Shared web infrastructure package providing:
 
+- **SearXNG search** -- cross-process singleton runner plus a retry/dedup/domain-filtering client.
+- **Multi-strategy scraping** -- a LangGraph agent that escalates across API-direct, basic HTTP, TLS-fingerprint spoofing, headless rendering, remote rendering, and CAPTCHA-solving strategies.
+- **SSRF-safe HTTP client** -- DNS-pinned `httpx` client plus URL normalization and domain validation helpers.
+- **Stealth + remote browsers** -- a Patchright (undetected Playwright) provider, plus remote render clients (Cloudflare Browser Rendering, self-host browserless) for slim containers that offload JS rendering.
+- **robots.txt compliance** -- per-domain cached `robots.txt` checks before fetching.
+- **LLM selector inference** -- optional, env-key-gated CSS-selector inference when built-in selectors fail.
+- **External API adapters** -- typed, SSRF-safe clients for Google Drive and MangaDex.
 
-Shared web infrastructure package: SearXNG search, multi-strategy scraping (basic, TLS spoof, Patchright stealth, Cloudflare CAPTCHA), SSRF-safe HTTP client, and stealth browser primitives. Used by [wet-mcp](https://github.com/n24q02m/wet-mcp) and downstream applications.
+Used by [wet-mcp](https://github.com/n24q02m/wet-mcp) and downstream applications.
 
-**Site-specific selectors moved to consumer applications.** This package provides generic infrastructure only. Consumers bring their own per-domain selectors via the `WEB_CORE_DOMAIN_COOKIES` env-var pattern documented below.
+**Site-specific selectors live in consumer applications.** This package provides generic infrastructure only. Consumers supply per-domain cookies and selectors via the environment variables in the [Configuration](#configuration) section.
 
 ## Installation
 
@@ -83,9 +92,9 @@ await shutdown_searxng()
 from web_core.scraper import ScrapingAgent
 from web_core.scraper.strategies import BasicHTTPStrategy, TLSSpoofStrategy
 
-# Initialize agent with desired strategies
-# Note: Some strategies (e.g., HeadlessStrategy, PatchrightStrategy)
-# require optional dependencies like crawl4ai or patchright.
+# Initialize the agent with the strategies you want, in escalation order.
+# All scraping dependencies (crawl4ai, patchright, curl-cffi, capsolver)
+# ship as core dependencies, so every built-in strategy is importable.
 agent = ScrapingAgent(strategies={
     "basic": BasicHTTPStrategy(),
     "tls": TLSSpoofStrategy(),
@@ -123,6 +132,48 @@ is_valid_domain("example.com")   # True
 is_valid_domain("localhost")     # False
 ```
 
+## Configuration
+
+All configuration is read from environment variables. Every variable is optional;
+omitting one disables the feature it controls (no variable is required to import or
+use the package).
+
+### Search
+
+| Variable | Used by | Purpose |
+|---|---|---|
+| `SEARXNG_URL` | `search.runner` | Use an already-running SearXNG instance instead of starting a managed one. |
+| `SEARXNG_USER` | `search.runner` | User the managed SearXNG container runs as (default `nobody`). |
+
+### Scraping
+
+| Variable | Used by | Purpose |
+|---|---|---|
+| `WEB_CORE_DOMAIN_COOKIES` | `scraper.selector_inference` | JSON object `{"domain": {"cookie": "value"}}` of per-domain cookies (e.g. age-gate tokens). Keeps secrets out of source. |
+
+### LLM selector inference (optional)
+
+When built-in selectors fail to extract content, the scraper can ask an LLM to infer
+CSS selectors. A provider is auto-detected from whichever key is present; if none is
+set, inference is skipped silently. Consumers may also inject a custom `llm_caller`.
+
+| Variable | Provider |
+|---|---|
+| `GEMINI_API_KEY` / `GOOGLE_API_KEY` | Google Gemini |
+| `OPENAI_API_KEY` | OpenAI |
+| `ANTHROPIC_API_KEY` | Anthropic |
+| `XAI_API_KEY` | xAI |
+| `WEB_CORE_LLM_MODEL` | Override the per-provider default model. |
+| `GOOGLE_CLOUD_PROJECT` / `GOOGLE_CLOUD_LOCATION` | Route Gemini through Vertex AI instead of the public API. |
+
+### Remote render backends (optional)
+
+Credentials are passed as constructor arguments to the render clients; consumers
+typically source them from their own config/env:
+
+- `CFBrowserRenderingClient(account_id, api_token)` -- Cloudflare Browser Rendering.
+- `BrowserlessClient(base_url, token=...)` -- a self-hosted browserless `/content` endpoint.
+
 ## Architecture
 
 ```
@@ -130,8 +181,8 @@ src/web_core/
   __init__.py              -- Public API re-exports
   py.typed                 -- PEP 561 type stub marker
   http/                    -- Layer 1: SSRF-safe HTTP primitives
-    client.py              -- safe_httpx_client, DNS pinning, IP validation
-    url.py                 -- normalize_url, strip_tracking_params, is_valid_domain
+    client.py              -- safe_httpx_client, DNS pinning, IP validation, browser SSRF setup
+    url.py                 -- normalize_url, strip_tracking_params, is_valid_domain, extract_domain
   search/                  -- Layer 2: SearXNG search engine
     client.py              -- search() with retry, dedup, domain filtering
     models.py              -- SearchResult, SearchError dataclasses
@@ -140,24 +191,34 @@ src/web_core/
     agent.py               -- ScrapingAgent (LangGraph state machine)
     base.py                -- BaseStrategy ABC, ScrapingResult
     cache.py               -- StrategyCache (per-domain performance tracking)
+    robots.py              -- RobotsCache (per-domain robots.txt compliance)
+    selector_inference.py  -- LLM-based CSS selector inference + domain cookie loading
     state.py               -- ScrapingState TypedDict, ScrapingError
+    utils.py               -- Shared scraping helpers
     strategies/            -- Concrete strategy implementations
       api_direct.py        -- API endpoint detection and direct fetch
       basic_http.py        -- Simple httpx GET with SSRF protection
       captcha.py           -- CapSolver-backed captcha bypass
       headless.py          -- Crawl4AI headless browser rendering
+      patchright_browser.py -- Patchright stealth-browser rendering
+      remote_render.py     -- RemoteRenderStrategy over a RenderClient (CF / browserless)
       tls_spoof.py         -- curl_cffi TLS fingerprint spoofing
-  browsers/                -- Layer 2: Stealth browser abstraction
+  browsers/                -- Layer 2: Browser + remote render clients
     protocol.py            -- BrowserProvider Protocol (structural typing)
     patchright.py          -- Patchright (undetected Playwright) provider
+    browserless.py         -- BrowserlessClient (self-host /content render client)
+    cf_rendering.py        -- CFBrowserRenderingClient (Cloudflare Browser Rendering)
+  adapters/                -- Layer 2: External API adapters (typed, SSRF-safe)
+    google_drive.py        -- Google Drive folder/file fetch
+    mangadex.py            -- MangaDex client (manga, chapters, images)
 ```
 
 ### Key Design Decisions
 
 - **SSRF protection**: All outbound HTTP goes through `safe_httpx_client` with DNS pinning to prevent DNS rebinding attacks.
-- **Strategy escalation**: The scraping agent tries strategies in cache-recommended order, validates responses, and automatically escalates on failure.
+- **Strategy escalation**: The scraping agent tries strategies in cache-recommended order, validates responses, and automatically escalates on failure (including past under-rendered JS shells to a render backend).
 - **Cross-process SearXNG**: A file-lock singleton ensures exactly one SearXNG instance runs across all Python processes.
-- **Structural typing**: `BrowserProvider` uses `Protocol` so implementations don't need inheritance.
+- **Structural typing**: `BrowserProvider` and `RenderClient` use `Protocol` so implementations don't need inheritance.
 
 ## Development
 
