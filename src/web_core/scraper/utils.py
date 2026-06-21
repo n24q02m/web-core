@@ -118,8 +118,8 @@ _SPA_ROOT_RE = re.compile(
     re.IGNORECASE,
 )
 _SCRIPT_TAG_RE = re.compile(r"<script\b", re.IGNORECASE)
-_SCRIPT_BLOCK_RE = re.compile(r"<script\b[^>]*>.*?</script>", re.IGNORECASE | re.DOTALL)
-_STYLE_BLOCK_RE = re.compile(r"<style\b[^>]*>.*?</style>", re.IGNORECASE | re.DOTALL)
+_SCRIPT_BLOCK_RE = re.compile(r"<script\b[^>]*>.*?</script[^>]*>", re.IGNORECASE | re.DOTALL)
+_STYLE_BLOCK_RE = re.compile(r"<style\b[^>]*>.*?</style[^>]*>", re.IGNORECASE | re.DOTALL)
 _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"\s+")
 

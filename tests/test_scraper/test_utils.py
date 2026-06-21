@@ -186,6 +186,21 @@ def test_visible_text_strips_scripts_styles_and_tags():
     assert "color:red" not in text
 
 
+def test_visible_text_strips_script_end_tag_with_whitespace():
+    # End tags with whitespace or trailing junk before ">" (</script >,
+    # </style\n>, </script\t\n bar>) are tolerated by HTML parsers and must
+    # still be stripped, otherwise script/style contents leak into the
+    # visible-text length count (CodeQL py/bad-tag-filter).
+    html = (
+        "<html><head><style>.a{color:red}</style >\n</head>"
+        "<body><script>var secret = 1;</script\t\n bar><p>Body text.</p></body></html>"
+    )
+    text = visible_text(html)
+    assert "Body text." in text
+    assert "var secret" not in text
+    assert "color:red" not in text
+
+
 def test_visible_text_empty():
     assert visible_text("") == ""
 
