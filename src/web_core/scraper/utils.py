@@ -168,7 +168,4 @@ def looks_under_rendered(html: str, *, min_visible_text: int = 64) -> bool:
     if not (_SCRIPT_TAG_RE.search(html) or _SPA_ROOT_RE.search(html)):
         return False
 
-    if len(visible_text(html)) >= min_visible_text:
-        return False
-
-    return True
+    return not len(visible_text(html)) >= min_visible_text
