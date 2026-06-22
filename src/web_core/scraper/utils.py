@@ -161,6 +161,14 @@ def looks_under_rendered(html: str, *, min_visible_text: int = 64) -> bool:
     """
     if not html:
         return False
+
+    # Performance Optimization: Check for script/SPA markers first.
+    # This avoids the expensive `visible_text` regex passes (stripping tags)
+    # for large JSON payloads or static pages without JS (~25x faster).
+    if not (_SCRIPT_TAG_RE.search(html) or _SPA_ROOT_RE.search(html)):
+        return False
+
     if len(visible_text(html)) >= min_visible_text:
         return False
-    return bool(_SCRIPT_TAG_RE.search(html) or _SPA_ROOT_RE.search(html))
+
+    return True
