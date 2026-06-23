@@ -743,6 +743,7 @@ class TestCleanupProcess:
         _cleanup_process()
 
         assert not settings_file.exists()
+
     def test_cleanup_settings_file_error(self):
         """Cleanup handles errors when removing the settings file by logging."""
         import web_core.search.runner as mod
@@ -756,7 +757,6 @@ class TestCleanupProcess:
         with patch("web_core.search.runner.logger") as mock_logger:
             _cleanup_process()
             mock_logger.debug.assert_any_call("Failed to cleanup settings file: %s", ANY)
-
 
 
 # ===========================================================================
