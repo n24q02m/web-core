@@ -1,7 +1,4 @@
 import socket
-from typing import Iterable
-
-import pytest
 
 import web_core.http.client
 from web_core.http.client import _dns_cache, is_safe_url

@@ -18,7 +18,8 @@ import logging
 import socket
 import threading
 import time
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 from urllib.parse import urlparse
 
 import httpx
@@ -112,11 +113,13 @@ def is_safe_url(url: str, *, allow_private: bool | Iterable[str] = False) -> boo
 
     hostname = parsed.hostname
     is_private_allowed = False
-    if allow_private is True:
+    if allow_private is True or (
+        allow_private
+        and not isinstance(allow_private, bool)
+        and not isinstance(allow_private, str)
+        and hostname.lower() in {h.lower() for h in allow_private}
+    ):
         is_private_allowed = True
-    elif allow_private and not isinstance(allow_private, bool) and not isinstance(allow_private, str):
-        if hostname.lower() in {h.lower() for h in allow_private}:
-            is_private_allowed = True
 
     if not is_private_allowed and hostname.lower() in _BLOCKED_HOSTNAMES:
         return False
