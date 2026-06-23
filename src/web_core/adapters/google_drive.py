@@ -42,6 +42,7 @@ async def _get_gdown() -> Any:
 
 logger = logging.getLogger(__name__)
 
+_SUPPORTED_EXTS = {".txt", ".epub", ".pdf", ".md", ".html", ".htm", ".docx"}
 FOLDER_URL_PATTERN = re.compile(r"drive\.google\.com/drive/(?:u/\d+/)?folders/([A-Za-z0-9_-]+)")
 _ID_NAME_RE = re.compile(r'"([A-Za-z0-9_-]{28,44})","([^"]+\.(txt|epub|pdf|md|html?|docx?))"')
 _NATURAL_SORT_RE = re.compile(r"(\d+)")
@@ -91,8 +92,6 @@ async def _list_folder_via_gdown(folder_id: str) -> list[DriveFile]:
 
     url = f"https://drive.google.com/drive/folders/{folder_id}"
     loop = asyncio.get_running_loop()
-
-    _SUPPORTED_EXTS = {".txt", ".epub", ".pdf", ".md", ".html", ".htm", ".docx"}
 
     def _list_sync() -> list[DriveFile]:
         items = gdown_mod.download_folder(url, skip_download=True, quiet=True, use_cookies=False)
