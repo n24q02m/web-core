@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -37,7 +39,15 @@ def _get_shared_client() -> httpx.AsyncClient:
     """
     global _shared_client
     if _shared_client is None or getattr(_shared_client, "is_closed", False):
-        _shared_client = safe_httpx_client(allow_private=True, timeout=15.0)
+        # Whitelist loopback addresses and the configured SEARXNG_URL (if any).
+        whitelist = {"127.0.0.1", "localhost", "::1"}
+        env_url = os.environ.get("SEARXNG_URL")
+        if env_url:
+            hostname = urlparse(env_url).hostname
+            if hostname:
+                whitelist.add(hostname.lower())
+
+        _shared_client = safe_httpx_client(allow_private=whitelist, timeout=15.0)
     return _shared_client
 
 

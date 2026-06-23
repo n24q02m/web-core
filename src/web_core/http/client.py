@@ -18,6 +18,7 @@ import logging
 import socket
 import threading
 import time
+from collections.abc import Iterable
 from typing import Any
 from urllib.parse import urlparse
 
@@ -92,15 +93,21 @@ def _check_ip_safe(ip_str: str, hostname: str) -> bool:
 _BLOCKED_HOSTNAMES = frozenset({"localhost", "localhost.localdomain", "127.0.0.1", "::1"})
 
 
-def is_safe_url(url: str, *, allow_private: bool = False) -> bool:
+def is_safe_url(url: str, *, allow_private: bool | Iterable[str] = False) -> bool:
     """Validate that *url* is safe to fetch (no SSRF).
 
     Checks:
     1. Scheme must be ``http`` or ``https``
     2. Hostname must exist
-    3. Hostname must not be a known localhost alias (unless ``allow_private=True``)
-    4. All resolved IPs must be publicly routable (unless ``allow_private=True``)
+    3. Hostname must not be a known localhost alias (unless whitelisted)
+    4. All resolved IPs must be publicly routable (unless whitelisted)
     5. Results are cached to pin DNS and prevent rebinding
+
+    The *allow_private* parameter can be:
+    - ``True``: Allows all private/loopback IPs.
+    - ``False``: Blocks all private/loopback IPs (default).
+    - An iterable of hostnames (e.g. ``["localhost", "searxng.internal"]``):
+      Only these specific hostnames are allowed to resolve to private IPs.
     """
     try:
         parsed = urlparse(url)
@@ -111,7 +118,11 @@ def is_safe_url(url: str, *, allow_private: bool = False) -> bool:
         return False
 
     hostname = parsed.hostname
-    if not allow_private and hostname.lower() in _BLOCKED_HOSTNAMES:
+    is_whitelisted = allow_private is True or (
+        isinstance(allow_private, Iterable) and not isinstance(allow_private, str) and hostname.lower() in allow_private
+    )
+
+    if not is_whitelisted and hostname.lower() in _BLOCKED_HOSTNAMES:
         return False
 
     # Fast path: already resolved, validated, and pinned
@@ -120,7 +131,7 @@ def is_safe_url(url: str, *, allow_private: bool = False) -> bool:
         if entry is not None:
             results, cached_at = entry
             if (time.monotonic() - cached_at) < _DNS_CACHE_TTL:
-                if not allow_private:
+                if not is_whitelisted:
                     for res in results:
                         ip_str = str(res[4][0])
                         if not _check_ip_safe(ip_str, hostname):
@@ -132,7 +143,7 @@ def is_safe_url(url: str, *, allow_private: bool = False) -> bool:
     except (socket.gaierror, Exception):
         return False
 
-    if not allow_private:
+    if not is_whitelisted:
         for res in results:
             ip_str = str(res[4][0])
             if not _check_ip_safe(ip_str, hostname):
@@ -150,7 +161,7 @@ def is_safe_url(url: str, *, allow_private: bool = False) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _ssrf_event_hook_factory(allow_private: bool) -> Any:
+def _ssrf_event_hook_factory(allow_private: bool | Iterable[str]) -> Any:
     """Create an SSRF event hook with specific settings."""
 
     async def _ssrf_event_hook(request: httpx.Request) -> None:
@@ -171,6 +182,7 @@ def safe_httpx_client(**kwargs: Any) -> httpx.AsyncClient:
 
     Optional Parameter:
     - ``allow_private``: If ``True``, allows requests to loopback and private IPs.
+      Can also be an iterable of specific hostnames to whitelist.
       Defaults to ``False``.
 
     Usage::
@@ -178,7 +190,7 @@ def safe_httpx_client(**kwargs: Any) -> httpx.AsyncClient:
         async with safe_httpx_client() as client:
             resp = await client.get("https://example.com")
     """
-    allow_private = kwargs.pop("allow_private", False)
+    allow_private: bool | Iterable[str] = kwargs.pop("allow_private", False)
     hooks = kwargs.pop("event_hooks", {})
     request_hooks = list(hooks.get("request", []))
     request_hooks.insert(0, _ssrf_event_hook_factory(allow_private))
@@ -191,7 +203,7 @@ def safe_httpx_client(**kwargs: Any) -> httpx.AsyncClient:
 # ---------------------------------------------------------------------------
 
 
-async def setup_browser_ssrf_protection(page: Any, *, allow_private: bool = False) -> None:
+async def setup_browser_ssrf_protection(page: Any, *, allow_private: bool | Iterable[str] = False) -> None:
     """Setup SSRF protection for a Playwright/Patchright page.
 
     Uses page.route to intercept all requests (including redirects and
@@ -200,6 +212,7 @@ async def setup_browser_ssrf_protection(page: Any, *, allow_private: bool = Fals
     Args:
         page: The Playwright/Patchright Page object.
         allow_private: If True, allows requests to private/loopback IPs.
+          Can also be an iterable of specific hostnames to whitelist.
     """
 
     async def _route_handler(route: Any) -> None:
