@@ -594,7 +594,7 @@ def _sigterm_then_kill_sync(pid: int, label: str = "") -> bool:
     """
     tag = f" ({label})" if label else ""
     try:
-        os.kill(pid, signal.SIGTERM)
+        os.kill(pid, getattr(signal, "SIGTERM", 15))
     except (ProcessLookupError, PermissionError):
         return True
 
@@ -607,7 +607,7 @@ def _sigterm_then_kill_sync(pid: int, label: str = "") -> bool:
 
     # Force kill.
     try:
-        os.kill(pid, signal.SIGKILL)
+        os.kill(pid, getattr(signal, "SIGKILL", getattr(signal, "SIGTERM", 15)))
         logger.debug("Process PID=%d%s force-killed", pid, tag)
         return True
     except (ProcessLookupError, PermissionError):
@@ -621,7 +621,7 @@ async def _sigterm_then_kill(pid: int, label: str = "") -> bool:
     """
     tag = f" ({label})" if label else ""
     try:
-        os.kill(pid, signal.SIGTERM)
+        os.kill(pid, getattr(signal, "SIGTERM", 15))
     except (ProcessLookupError, PermissionError):
         return True
 
@@ -634,7 +634,7 @@ async def _sigterm_then_kill(pid: int, label: str = "") -> bool:
 
     # Force kill.
     try:
-        os.kill(pid, signal.SIGKILL)
+        os.kill(pid, getattr(signal, "SIGKILL", getattr(signal, "SIGTERM", 15)))
         logger.debug("Process PID=%d%s force-killed", pid, tag)
         return True
     except (ProcessLookupError, PermissionError):
@@ -652,7 +652,7 @@ def _force_kill_process_sync(proc: subprocess.Popen) -> None:
     try:
         if sys.platform != "win32":
             try:
-                os.killpg(os.getpgid(pid), signal.SIGTERM)
+                os.killpg(os.getpgid(pid), getattr(signal, "SIGTERM", 15))
             except (ProcessLookupError, PermissionError):
                 proc.terminate()
 
@@ -664,7 +664,7 @@ def _force_kill_process_sync(proc: subprocess.Popen) -> None:
                 pass
 
             try:
-                os.killpg(os.getpgid(pid), signal.SIGKILL)
+                os.killpg(os.getpgid(pid), getattr(signal, "SIGKILL", getattr(signal, "SIGTERM", 15)))
             except (ProcessLookupError, PermissionError):
                 proc.kill()
             try:
@@ -692,7 +692,7 @@ async def _force_kill_process(proc: subprocess.Popen) -> None:
     try:
         if sys.platform != "win32":
             try:
-                os.killpg(os.getpgid(pid), signal.SIGTERM)
+                os.killpg(os.getpgid(pid), getattr(signal, "SIGTERM", 15))
             except (ProcessLookupError, PermissionError):
                 proc.terminate()
 
@@ -704,7 +704,7 @@ async def _force_kill_process(proc: subprocess.Popen) -> None:
                 pass
 
             try:
-                os.killpg(os.getpgid(pid), signal.SIGKILL)
+                os.killpg(os.getpgid(pid), getattr(signal, "SIGKILL", getattr(signal, "SIGTERM", 15)))
             except (ProcessLookupError, PermissionError):
                 proc.kill()
             try:

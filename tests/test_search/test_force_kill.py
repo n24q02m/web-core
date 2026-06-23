@@ -50,7 +50,7 @@ class TestSigtermThenKill:
 
         assert _sigterm_then_kill_sync(12345, "test") is True
 
-        mock_kill.assert_any_call(12345, signal.SIGTERM)
+        mock_kill.assert_any_call(12345, getattr(signal, "SIGTERM", 15))
         assert mock_dead.call_count >= 2
 
     @patch("os.kill")
@@ -61,8 +61,8 @@ class TestSigtermThenKill:
 
         assert _sigterm_then_kill_sync(12345, "test") is True
 
-        mock_kill.assert_any_call(12345, signal.SIGTERM)
-        mock_kill.assert_any_call(12345, signal.SIGKILL)
+        mock_kill.assert_any_call(12345, getattr(signal, "SIGTERM", 15))
+        mock_kill.assert_any_call(12345, getattr(signal, "SIGKILL", getattr(signal, "SIGTERM", 15)))
         assert mock_dead.call_count == 30
 
     @patch("os.kill")
@@ -72,7 +72,7 @@ class TestSigtermThenKill:
 
         assert await _sigterm_then_kill(12345, "test") is True
 
-        mock_kill.assert_any_call(12345, signal.SIGTERM)
+        mock_kill.assert_any_call(12345, getattr(signal, "SIGTERM", 15))
 
     @patch("os.kill")
     @patch("web_core.search.runner._is_process_dead")
@@ -82,7 +82,7 @@ class TestSigtermThenKill:
 
         assert await _sigterm_then_kill(12345, "test") is True
 
-        mock_kill.assert_any_call(12345, signal.SIGKILL)
+        mock_kill.assert_any_call(12345, getattr(signal, "SIGKILL", getattr(signal, "SIGTERM", 15)))
 
     @patch("os.kill")
     def test_process_lookup_error(self, mock_kill):
@@ -97,7 +97,10 @@ class TestSigtermThenKill:
         with patch("os.kill") as mock_kill:
             # First call (SIGTERM) succeeds, second (SIGKILL) fails
             mock_kill.side_effect = [None, ProcessLookupError]
-            with patch("web_core.search.runner._is_process_dead", return_value=False), patch("time.sleep"):
+            with (
+                patch("web_core.search.runner._is_process_dead", return_value=False),
+                patch("time.sleep"),
+            ):
                 assert _sigterm_then_kill_sync(12345) is True
 
     @patch("os.kill")
@@ -108,7 +111,10 @@ class TestSigtermThenKill:
     @patch("os.kill")
     async def test_sigkill_lookup_error_async(self, mock_kill):
         mock_kill.side_effect = [None, ProcessLookupError]
-        with patch("web_core.search.runner._is_process_dead", return_value=False), patch("asyncio.sleep"):
+        with (
+            patch("web_core.search.runner._is_process_dead", return_value=False),
+            patch("asyncio.sleep", new_callable=AsyncMock),
+        ):
             assert await _sigterm_then_kill(12345) is True
 
 
@@ -125,8 +131,8 @@ class TestForceKillProcessSync:
         proc.wait.assert_not_called()
 
     @pytest.mark.skipif(sys.platform == "win32", reason="Unix branch test")
-    @patch("os.getpgid")
-    @patch("os.killpg")
+    @patch("os.getpgid", create=True)
+    @patch("os.killpg", create=True)
     def test_unix_graceful_success(self, mock_killpg, mock_getpgid):
         proc = MagicMock(spec=subprocess.Popen)
         proc.poll.return_value = None
@@ -135,12 +141,12 @@ class TestForceKillProcessSync:
 
         _force_kill_process_sync(proc)
 
-        mock_killpg.assert_any_call(5555, signal.SIGTERM)
+        mock_killpg.assert_any_call(5555, getattr(signal, "SIGTERM", 15))
         proc.wait.assert_called_with(timeout=3)
 
     @pytest.mark.skipif(sys.platform == "win32", reason="Unix branch test")
-    @patch("os.getpgid")
-    @patch("os.killpg")
+    @patch("os.getpgid", create=True)
+    @patch("os.killpg", create=True)
     def test_unix_force_kill_after_timeout(self, mock_killpg, mock_getpgid):
         proc = MagicMock(spec=subprocess.Popen)
         proc.poll.return_value = None
@@ -150,12 +156,12 @@ class TestForceKillProcessSync:
 
         _force_kill_process_sync(proc)
 
-        mock_killpg.assert_any_call(5555, signal.SIGTERM)
-        mock_killpg.assert_any_call(5555, signal.SIGKILL)
+        mock_killpg.assert_any_call(5555, getattr(signal, "SIGTERM", 15))
+        mock_killpg.assert_any_call(5555, getattr(signal, "SIGKILL", getattr(signal, "SIGTERM", 15)))
 
     @pytest.mark.skipif(sys.platform == "win32", reason="Unix branch test")
-    @patch("os.getpgid")
-    @patch("os.killpg")
+    @patch("os.getpgid", create=True)
+    @patch("os.killpg", create=True)
     def test_unix_killpg_error_fallback(self, mock_killpg, mock_getpgid):
         proc = MagicMock(spec=subprocess.Popen)
         proc.poll.return_value = None
@@ -168,8 +174,8 @@ class TestForceKillProcessSync:
         proc.terminate.assert_called_once()
 
     @pytest.mark.skipif(sys.platform == "win32", reason="Unix branch test")
-    @patch("os.getpgid")
-    @patch("os.killpg")
+    @patch("os.getpgid", create=True)
+    @patch("os.killpg", create=True)
     def test_unix_killpg_sigkill_error_fallback(self, mock_killpg, mock_getpgid):
         proc = MagicMock(spec=subprocess.Popen)
         proc.poll.return_value = None
@@ -196,6 +202,20 @@ class TestForceKillProcessSync:
         mock_sigterm.assert_called_once_with(12345, "SearXNG")
         proc.wait.assert_called_once()
 
+    @patch("web_core.search.runner.sys")
+    @patch("web_core.search.runner._sigterm_then_kill_sync")
+    def test_windows_timeout(self, mock_sigterm, mock_sys):
+        mock_sys.platform = "win32"
+        proc = MagicMock(spec=subprocess.Popen)
+        proc.poll.return_value = None
+        proc.pid = 12345
+        proc.wait.side_effect = subprocess.TimeoutExpired(cmd="", timeout=3)
+
+        _force_kill_process_sync(proc)
+
+        mock_sigterm.assert_called_once_with(12345, "SearXNG")
+        proc.kill.assert_called_once()
+
     @patch("web_core.search.runner.logger")
     def test_exception_handling(self, mock_logger):
         proc = MagicMock(spec=subprocess.Popen)
@@ -204,7 +224,7 @@ class TestForceKillProcessSync:
 
         with patch("web_core.search.runner.sys") as mock_sys:
             mock_sys.platform = "unix"
-            with patch("os.getpgid", side_effect=Exception("boom")):
+            with patch("os.getpgid", side_effect=Exception("boom"), create=True):
                 _force_kill_process_sync(proc)
 
         # Should not raise, but log
@@ -218,8 +238,8 @@ class TestForceKillProcessSync:
 
 class TestForceKillProcessAsync:
     @pytest.mark.skipif(sys.platform == "win32", reason="Unix branch test")
-    @patch("os.getpgid")
-    @patch("os.killpg")
+    @patch("os.getpgid", create=True)
+    @patch("os.killpg", create=True)
     @patch("asyncio.to_thread")
     async def test_unix_graceful_success(self, mock_to_thread, mock_killpg, mock_getpgid):
         proc = MagicMock(spec=subprocess.Popen)
@@ -230,12 +250,12 @@ class TestForceKillProcessAsync:
 
         await _force_kill_process(proc)
 
-        mock_killpg.assert_any_call(5555, signal.SIGTERM)
+        mock_killpg.assert_any_call(5555, getattr(signal, "SIGTERM", 15))
         mock_to_thread.assert_called_with(proc.wait, timeout=3)
 
     @pytest.mark.skipif(sys.platform == "win32", reason="Unix branch test")
-    @patch("os.getpgid")
-    @patch("os.killpg")
+    @patch("os.getpgid", create=True)
+    @patch("os.killpg", create=True)
     @patch("asyncio.to_thread")
     async def test_unix_killpg_sigkill_error_fallback(self, mock_to_thread, mock_killpg, mock_getpgid):
         proc = MagicMock(spec=subprocess.Popen)
@@ -264,6 +284,22 @@ class TestForceKillProcessAsync:
 
         mock_sigterm.assert_called_once_with(12345, "SearXNG")
         mock_to_thread.assert_called_with(proc.wait, timeout=3)
+
+    @patch("web_core.search.runner.sys")
+    @patch("web_core.search.runner._sigterm_then_kill")
+    @patch("asyncio.to_thread")
+    async def test_windows_timeout(self, mock_to_thread, mock_sigterm, mock_sys):
+        mock_sys.platform = "win32"
+        proc = MagicMock(spec=subprocess.Popen)
+        proc.poll.return_value = None
+        proc.pid = 12345
+        mock_sigterm.return_value = True
+        mock_to_thread.side_effect = subprocess.TimeoutExpired(cmd="", timeout=3)
+
+        await _force_kill_process(proc)
+
+        mock_sigterm.assert_called_once_with(12345, "SearXNG")
+        proc.kill.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -320,3 +356,15 @@ class TestKillStalePortProcess:
         await _kill_stale_port_process(8888)
 
         mock_sigterm.assert_called_with(12345, "stale port 8888")
+
+    @patch("web_core.search.runner.sys")
+    @patch("asyncio.to_thread")
+    @patch("web_core.search.runner.logger")
+    async def test_windows_netstat_exception(self, mock_logger, mock_to_thread, mock_sys):
+        mock_sys.platform = "win32"
+        mock_to_thread.side_effect = Exception("netstat failed")
+
+        await _kill_stale_port_process(8888)
+
+        # Should log debug but not raise
+        assert mock_logger.debug.called
