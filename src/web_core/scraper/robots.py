@@ -8,12 +8,12 @@ from __future__ import annotations
 
 import logging
 import time
-from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
 
 import httpx
 
 from web_core.http import safe_httpx_client
+from web_core.http.url import extract_domain
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ class RobotsDisallowedError(Exception):
         super().__init__(f"robots.txt disallows {user_agent} from fetching {url}")
 
 
-class RobotsCache:
+class RobotsTxtChecker:
     """Per-domain robots.txt cache with TTL-based expiry.
 
     Parameters
@@ -63,13 +63,8 @@ class RobotsCache:
         self._cache: dict[str, tuple[RobotFileParser, float]] = {}
 
     async def is_allowed(self, url: str) -> bool:
-        """Return True if ``user_agent`` may fetch *url* per robots.txt.
-
-        Missing or unreachable robots.txt defaults to **allow** (per RFC 9309).
-        """
-        parsed = urlparse(url)
-        origin = f"{parsed.scheme}://{parsed.netloc}"
-
+        """Check if the URL is allowed to be scraped."""
+        origin = extract_domain(url)
         parser = await self._get_parser(origin)
         return parser.can_fetch(self.user_agent, url)
 
@@ -81,7 +76,7 @@ class RobotsCache:
             if time.monotonic() - fetched_at < self.ttl_seconds:
                 return parser
 
-        robots_url = f"{origin}/robots.txt"
+        robots_url = f"https://{origin}/robots.txt"
         content = await self._fetch_robots_txt(robots_url)
 
         parser = RobotFileParser()

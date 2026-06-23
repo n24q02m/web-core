@@ -191,7 +191,7 @@ src/web_core/
     agent.py               -- ScrapingAgent (LangGraph state machine)
     base.py                -- BaseStrategy ABC, ScrapingResult
     cache.py               -- StrategyCache (per-domain performance tracking)
-    robots.py              -- RobotsCache (per-domain robots.txt compliance)
+    robots.py              -- RobotsTxtChecker (per-domain robots.txt compliance)
     selector_inference.py  -- LLM-based CSS selector inference + domain cookie loading
     state.py               -- ScrapingState TypedDict, ScrapingError
     utils.py               -- Shared scraping helpers

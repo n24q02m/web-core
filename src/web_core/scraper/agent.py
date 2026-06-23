@@ -16,7 +16,7 @@ from typing import Any
 from langgraph.graph import END, START, StateGraph
 
 from web_core.scraper.cache import StrategyCache
-from web_core.scraper.robots import RobotsCache, RobotsDisallowedError
+from web_core.scraper.robots import RobotsDisallowedError, RobotsTxtChecker
 from web_core.scraper.selector_inference import (
     get_domain_selectors,
     infer_selectors_with_llm,
@@ -41,7 +41,7 @@ class ScrapingAgent:
         self,
         strategies: dict[str, Any] | None = None,
         strategy_cache: StrategyCache | None = None,
-        robots_cache: RobotsCache | None = None,
+        robots_checker: RobotsTxtChecker | None = None,
         max_retries: int = 5,
         min_content_length: int = 100,
         enable_selector_inference: bool = True,
@@ -49,7 +49,7 @@ class ScrapingAgent:
     ):
         self.strategies = strategies or {}
         self.strategy_cache = strategy_cache or StrategyCache()
-        self.robots_cache = robots_cache or RobotsCache()
+        self.robots_checker = robots_checker or RobotsTxtChecker()
         self.max_retries = max_retries
         self.min_content_length = min_content_length
         self.enable_selector_inference = enable_selector_inference
@@ -352,8 +352,8 @@ class ScrapingAgent:
         If ``respect_robots`` is enabled (default), checks robots.txt first and
         raises ``RobotsDisallowedError`` when the target URL is disallowed.
         """
-        if self.respect_robots and not await self.robots_cache.is_allowed(url):
-            raise RobotsDisallowedError(url=url, user_agent=self.robots_cache.user_agent)
+        if self.respect_robots and not await self.robots_checker.is_allowed(url):
+            raise RobotsDisallowedError(url=url, user_agent=self.robots_checker.user_agent)
 
         initial_state: ScrapingState = {
             "url": url,
