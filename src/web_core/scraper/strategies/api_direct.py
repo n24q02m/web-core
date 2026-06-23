@@ -29,10 +29,7 @@ class APIDirectStrategy(BaseStrategy):
 
     def discover_apis(self, html: str) -> list[str]:
         """Extract unique API endpoint URLs from *html* source."""
-        apis: list[str] = []
-        for pattern in self._API_PATTERNS_COMPILED:
-            apis.extend(pattern.findall(html))
-        return list(dict.fromkeys(apis))
+        return list(dict.fromkeys(match for pattern in self._API_PATTERNS_COMPILED for match in pattern.findall(html)))
 
     async def fetch(self, url: str, selectors: dict[str, str] | None = None) -> ScrapingResult:
         """Discover and fetch from an API endpoint, or fall back to page source."""
