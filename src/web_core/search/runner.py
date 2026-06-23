@@ -251,8 +251,8 @@ def _read_discovery() -> dict | None:
             return None
 
         return data
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to read discovery file: %s", e)
     return None
 
 
@@ -287,8 +287,8 @@ def _remove_discovery() -> None:
     try:
         if _DISCOVERY_FILE.exists():
             _DISCOVERY_FILE.unlink()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to remove discovery file: %s", e)
 
 
 async def _quick_health_check(url: str, retries: int = 3) -> bool:
@@ -311,8 +311,8 @@ async def _quick_health_check(url: str, retries: int = 3) -> bool:
                 )
                 if response.status_code == 200:
                     return True
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Quick health check failed: %s", e)
             if attempt < retries - 1:
                 await asyncio.sleep(0.5 * (attempt + 1))
     return False
@@ -415,8 +415,8 @@ async def _wait_for_service(url: str, timeout: float = _STARTUP_HEALTH_TIMEOUT) 
                 )
                 if response.status_code == 200:
                     return True
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Service health check failed: %s", e)
             await asyncio.sleep(1.0)
     return False
 
@@ -854,8 +854,8 @@ def _cleanup_process() -> None:  # pragma: no cover
     try:
         if _searxng_settings_path is not None and _searxng_settings_path.exists():
             _searxng_settings_path.unlink()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to cleanup settings file: %s", e)
 
 
 def _is_process_alive() -> bool:
@@ -1287,8 +1287,8 @@ async def _handle_restart_and_start(*, start_port: int) -> str:
             try:
                 stderr_raw = await asyncio.to_thread(_searxng_process.stderr.read)
                 stderr_output = stderr_raw.decode(errors="replace")[:500]
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to read stderr from crashed process: %s", e)
         logger.warning("SearXNG process crashed (exit_code=%s). stderr: %s", exit_code, stderr_output)
         _searxng_process = None
 
