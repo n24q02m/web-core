@@ -380,7 +380,7 @@ class TestCheckIpSafe:
 
 
 # ---------------------------------------------------------------------------
-# _ssrf_event_hook_factory(allow_private=False)
+# _ssrf_event_hook_factory(allow_private=False, allow_loopback=False)
 # ---------------------------------------------------------------------------
 
 
@@ -390,7 +390,7 @@ class TestSsrfEventHook:
     async def test_blocks_unsafe_url(self):
         request = httpx.Request("GET", "http://localhost/secret")
         with pytest.raises(httpx.RequestError, match="SSRF blocked"):
-            await _ssrf_event_hook_factory(allow_private=False)(request)
+            await _ssrf_event_hook_factory(allow_private=False, allow_loopback=False)(request)
 
     async def test_allows_safe_url(self):
         """Safe URLs should pass through without raising."""
@@ -400,7 +400,7 @@ class TestSsrfEventHook:
         ):
             request = httpx.Request("GET", "https://example.com/page")
             # Should not raise
-            await _ssrf_event_hook_factory(allow_private=False)(request)
+            await _ssrf_event_hook_factory(allow_private=False, allow_loopback=False)(request)
 
 
 # ---------------------------------------------------------------------------

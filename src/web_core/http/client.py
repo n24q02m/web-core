@@ -65,7 +65,7 @@ socket.getaddrinfo = _pinned_getaddrinfo  # type: ignore[assignment]
 # ---------------------------------------------------------------------------
 
 
-def _check_ip_safe(ip_str: str, hostname: str) -> bool:
+def _check_ip_safe(ip_str: str, hostname: str, *, allow_loopback: bool = False) -> bool:
     """Return True if *ip_str* is a publicly-routable address.
 
     Blocks private (RFC 1918), loopback, link-local (169.254/16),
@@ -76,6 +76,10 @@ def _check_ip_safe(ip_str: str, hostname: str) -> bool:
         if "%" in ip_str:
             ip_str = ip_str.split("%")[0]
         ip = ipaddress.ip_address(ip_str)
+
+        if allow_loopback and ip.is_loopback:
+            return True
+
         if not ip.is_global or ip.is_multicast:
             logger.warning("Blocked private/unsafe IP: %s for host %s", ip, hostname)
             return False
@@ -92,14 +96,14 @@ def _check_ip_safe(ip_str: str, hostname: str) -> bool:
 _BLOCKED_HOSTNAMES = frozenset({"localhost", "localhost.localdomain", "127.0.0.1", "::1"})
 
 
-def is_safe_url(url: str, *, allow_private: bool = False) -> bool:
+def is_safe_url(url: str, *, allow_private: bool = False, allow_loopback: bool = False) -> bool:
     """Validate that *url* is safe to fetch (no SSRF).
 
     Checks:
     1. Scheme must be ``http`` or ``https``
     2. Hostname must exist
-    3. Hostname must not be a known localhost alias (unless ``allow_private=True``)
-    4. All resolved IPs must be publicly routable (unless ``allow_private=True``)
+    3. Hostname must not be a known localhost alias (unless ``allow_private`` or ``allow_loopback``)
+    4. All resolved IPs must be publicly routable (unless ``allow_private`` or ``allow_loopback``)
     5. Results are cached to pin DNS and prevent rebinding
     """
     try:
@@ -111,7 +115,7 @@ def is_safe_url(url: str, *, allow_private: bool = False) -> bool:
         return False
 
     hostname = parsed.hostname
-    if not allow_private and hostname.lower() in _BLOCKED_HOSTNAMES:
+    if not (allow_private or allow_loopback) and hostname.lower() in _BLOCKED_HOSTNAMES:
         return False
 
     # Fast path: already resolved, validated, and pinned
@@ -123,7 +127,7 @@ def is_safe_url(url: str, *, allow_private: bool = False) -> bool:
                 if not allow_private:
                     for res in results:
                         ip_str = str(res[4][0])
-                        if not _check_ip_safe(ip_str, hostname):
+                        if not _check_ip_safe(ip_str, hostname, allow_loopback=allow_loopback):
                             return False
                 return True
 
@@ -135,7 +139,7 @@ def is_safe_url(url: str, *, allow_private: bool = False) -> bool:
     if not allow_private:
         for res in results:
             ip_str = str(res[4][0])
-            if not _check_ip_safe(ip_str, hostname):
+            if not _check_ip_safe(ip_str, hostname, allow_loopback=allow_loopback):
                 return False
 
     # Pin the DNS result
@@ -150,13 +154,13 @@ def is_safe_url(url: str, *, allow_private: bool = False) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _ssrf_event_hook_factory(allow_private: bool) -> Any:
+def _ssrf_event_hook_factory(allow_private: bool, allow_loopback: bool) -> Any:
     """Create an SSRF event hook with specific settings."""
 
     async def _ssrf_event_hook(request: httpx.Request) -> None:
         """httpx request event hook that blocks SSRF attempts."""
         url_str = str(request.url)
-        if not is_safe_url(url_str, allow_private=allow_private):
+        if not is_safe_url(url_str, allow_private=allow_private, allow_loopback=allow_loopback):
             raise httpx.RequestError(f"SSRF blocked: {url_str}", request=request)
 
     return _ssrf_event_hook
@@ -169,9 +173,11 @@ def safe_httpx_client(**kwargs: Any) -> httpx.AsyncClient:
     it cannot be bypassed by earlier hooks.  Any additional ``event_hooks``
     passed via *kwargs* are preserved.
 
-    Optional Parameter:
+    Optional Parameters:
     - ``allow_private``: If ``True``, allows requests to loopback and private IPs.
       Defaults to ``False``.
+    - ``allow_loopback``: If ``True``, allows requests to loopback IPs but still
+      blocks other private IPs. Defaults to ``False``.
 
     Usage::
 
@@ -179,9 +185,10 @@ def safe_httpx_client(**kwargs: Any) -> httpx.AsyncClient:
             resp = await client.get("https://example.com")
     """
     allow_private = kwargs.pop("allow_private", False)
+    allow_loopback = kwargs.pop("allow_loopback", False)
     hooks = kwargs.pop("event_hooks", {})
     request_hooks = list(hooks.get("request", []))
-    request_hooks.insert(0, _ssrf_event_hook_factory(allow_private))
+    request_hooks.insert(0, _ssrf_event_hook_factory(allow_private, allow_loopback))
     hooks["request"] = request_hooks
     return httpx.AsyncClient(event_hooks=hooks, **kwargs)
 
@@ -191,7 +198,9 @@ def safe_httpx_client(**kwargs: Any) -> httpx.AsyncClient:
 # ---------------------------------------------------------------------------
 
 
-async def setup_browser_ssrf_protection(page: Any, *, allow_private: bool = False) -> None:
+async def setup_browser_ssrf_protection(
+    page: Any, *, allow_private: bool = False, allow_loopback: bool = False
+) -> None:
     """Setup SSRF protection for a Playwright/Patchright page.
 
     Uses page.route to intercept all requests (including redirects and
@@ -200,6 +209,8 @@ async def setup_browser_ssrf_protection(page: Any, *, allow_private: bool = Fals
     Args:
         page: The Playwright/Patchright Page object.
         allow_private: If True, allows requests to private/loopback IPs.
+        allow_loopback: If True, allows requests to loopback IPs but still
+          blocks other private IPs.
     """
 
     async def _route_handler(route: Any) -> None:
@@ -209,7 +220,7 @@ async def setup_browser_ssrf_protection(page: Any, *, allow_private: bool = Fals
             await route.continue_()
             return
 
-        if not is_safe_url(url, allow_private=allow_private):
+        if not is_safe_url(url, allow_private=allow_private, allow_loopback=allow_loopback):
             logger.warning("SSRF blocked browser request: %s", url)
             await route.abort("blockedbyclient")
             return

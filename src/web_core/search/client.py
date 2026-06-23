@@ -37,7 +37,7 @@ def _get_shared_client() -> httpx.AsyncClient:
     """
     global _shared_client
     if _shared_client is None or getattr(_shared_client, "is_closed", False):
-        _shared_client = safe_httpx_client(allow_private=True, timeout=15.0)
+        _shared_client = safe_httpx_client(allow_loopback=True, timeout=15.0)
     return _shared_client
 
 
