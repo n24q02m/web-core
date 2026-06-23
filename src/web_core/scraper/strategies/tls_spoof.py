@@ -46,8 +46,10 @@ class TLSSpoofStrategy(BaseStrategy):
 
     def _extract_cookies(self, selectors: dict[str, Any] | None) -> dict[str, str] | None:
         """Extract cookies from selectors dictionary."""
-        if selectors and isinstance(selectors.get("cookies"), dict):
-            return selectors["cookies"]
+        if isinstance(selectors, dict):
+            cookies = selectors.get("cookies")
+            if isinstance(cookies, dict):
+                return cookies
         return None
 
     async def _perform_request(self, session: Any, url: str, cookies: dict[str, str] | None) -> Any:

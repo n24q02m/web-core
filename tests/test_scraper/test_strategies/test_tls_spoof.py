@@ -227,3 +227,25 @@ class TestTLSSpoofStrategy:
 
         with pytest.raises(ValueError, match="Too many redirects"):
             await strategy.fetch("https://example.com/loop")
+
+    def test_extract_cookies_none(self):
+        strategy = TLSSpoofStrategy()
+        assert strategy._extract_cookies(None) is None
+
+    def test_extract_cookies_empty_dict(self):
+        strategy = TLSSpoofStrategy()
+        assert strategy._extract_cookies({}) is None
+
+    def test_extract_cookies_invalid_type(self):
+        strategy = TLSSpoofStrategy()
+        # @split-line
+        assert strategy._extract_cookies(["not", "a", "dict"]) is None
+
+    def test_extract_cookies_not_a_dict_in_cookies(self):
+        strategy = TLSSpoofStrategy()
+        assert strategy._extract_cookies({"cookies": "not-a-dict"}) is None
+
+    def test_extract_cookies_valid(self):
+        strategy = TLSSpoofStrategy()
+        cookies = {"session": "123"}
+        assert strategy._extract_cookies({"cookies": cookies}) == cookies
