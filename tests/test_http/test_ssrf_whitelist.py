@@ -1,7 +1,8 @@
 import socket
-import pytest
+
 import web_core.http.client
 from web_core.http.client import _dns_cache, is_safe_url
+
 
 def test_ssrf_granular_whitelist():
     _dns_cache.clear()
@@ -32,6 +33,7 @@ def test_ssrf_granular_whitelist():
 
     finally:
         web_core.http.client._original_getaddrinfo = original_getaddrinfo
+
 
 def test_ssrf_localhost_whitelist():
     _dns_cache.clear()
