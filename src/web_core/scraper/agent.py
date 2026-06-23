@@ -10,6 +10,7 @@ Enhanced with:
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from typing import Any
 
@@ -24,6 +25,8 @@ from web_core.scraper.selector_inference import (
 )
 from web_core.scraper.state import ScrapingError, ScrapingState
 from web_core.scraper.utils import is_cloudflare_challenge, looks_under_rendered
+
+logger = logging.getLogger(__name__)
 
 
 class ScrapingAgent:
@@ -289,7 +292,7 @@ class ScrapingAgent:
                     "selector_inference_attempted": True,
                 }
         except Exception:
-            pass
+            logger.error("Selector inference failed", exc_info=True)
 
         return {**state, "selector_inference_attempted": True}
 
