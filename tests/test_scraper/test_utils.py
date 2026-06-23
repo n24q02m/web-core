@@ -274,3 +274,18 @@ def test_under_rendered_respects_custom_threshold():
     assert looks_under_rendered(html, min_visible_text=100) is True
     # ...but under a tiny threshold the visible text already qualifies.
     assert looks_under_rendered(html, min_visible_text=4) is False
+
+
+def test_extract_sitekey_from_iframe_src():
+    """Extract sitekey from Turnstile iframe src (0x-prefix and alphanumeric)."""
+    # Relative path with 0x-prefix
+    html = '<iframe src="/cdn-cgi/challenge-platform/h/g/0x4AAAAAAADnPIDROrmt1Wwj/light/normal"></iframe>'
+    assert extract_turnstile_sitekey(html) == "0x4AAAAAAADnPIDROrmt1Wwj"
+
+    # Absolute URL with 0x-prefix
+    html = '<iframe src="https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/0x4AAAAAAAB1234567890abcdef/light/normal"></iframe>'
+    assert extract_turnstile_sitekey(html) == "0x4AAAAAAAB1234567890abcdef"
+
+    # Absolute URL with alphanumeric string
+    html = '<iframe src="https://challenges.cloudflare.com/LongAlphanumericString12345/light/normal"></iframe>'
+    assert extract_turnstile_sitekey(html) == "LongAlphanumericString12345"
