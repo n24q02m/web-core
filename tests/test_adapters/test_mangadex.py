@@ -126,6 +126,152 @@ class TestChapterImages:
         assert result[0].url == "https://example.com/data-saver/abc123/1.jpg"
 
 
+# =============================================================================
+# Fixture data mocking the MangaDex API responses
+# =============================================================================
+
+MOCK_MANGA_RESPONSE = {
+    "result": "ok",
+    "response": "entity",
+    "data": {
+        "id": "manga-001",
+        "type": "manga",
+        "attributes": {
+            "title": {"en": "One Piece"},
+            "altTitles": [{"ja": "Wan Piisu"}, {"ko": "Won Piseu"}],
+            "description": {"en": "A pirate adventure."},
+            "status": "ongoing",
+            "year": 1997,
+            "contentRating": "safe",
+        },
+        "relationships": [
+            {
+                "id": "cover-001",
+                "type": "cover_art",
+                "attributes": {"fileName": "one-piece-cover.jpg"},
+            }
+        ],
+    },
+}
+
+MOCK_CHAPTER_RESPONSE = {
+    "result": "ok",
+    "response": "entity",
+    "data": {
+        "id": "ch-1",
+        "type": "chapter",
+        "attributes": {
+            "volume": "1",
+            "chapter": "1",
+            "title": "Chapter 1",
+            "translatedLanguage": "en",
+            "pages": 20,
+            "version": 1,
+        },
+        "relationships": [{"id": "manga-001", "type": "manga"}],
+    },
+}
+
+MOCK_SEARCH_RESPONSE = {
+    "result": "ok",
+    "response": "collection",
+    "data": [
+        MOCK_MANGA_RESPONSE["data"],
+        {
+            "id": "manga-002",
+            "type": "manga",
+            "attributes": {
+                "title": {"ja": "Naruto"},
+                "altTitles": [],
+                "description": {},
+                "status": "completed",
+                "year": 1999,
+            },
+            "relationships": [],
+        },
+    ],
+    "limit": 10,
+    "offset": 0,
+    "total": 2,
+}
+
+MOCK_FEED_RESPONSE = {
+    "result": "ok",
+    "response": "collection",
+    "data": [
+        MOCK_CHAPTER_RESPONSE["data"],
+        {
+            "id": "ch-2",
+            "type": "chapter",
+            "attributes": {
+                "volume": "1",
+                "chapter": "2",
+                "title": "Chapter 2",
+                "translatedLanguage": "en",
+                "pages": 18,
+            },
+        },
+    ],
+    "limit": 100,
+    "offset": 0,
+    "total": 2,
+}
+
+MOCK_AT_HOME_RESPONSE = {
+    "result": "ok",
+    "baseUrl": "https://cmdxd98sb0x3yprd.mangadex.network",
+    "chapter": {
+        "hash": "abcdef123456",
+        "data": ["1.png", "2.png", "3.png"],
+        "dataSaver": ["1.jpg", "2.jpg", "3.jpg"],
+    },
+}
+
+
+def _mock_search_response() -> dict:
+    return MOCK_SEARCH_RESPONSE
+
+
+def _mock_feed_response(offset: int = 0) -> dict:
+    """Simulate a single page of chapter feed."""
+    if offset == 0:
+        return MOCK_FEED_RESPONSE
+
+    # Dynamic response for pagination tests
+    return {
+        "result": "ok",
+        "data": [
+            {
+                "id": f"ch-{offset + 1}",
+                "type": "chapter",
+                "attributes": {
+                    "chapter": str(offset + 1),
+                    "title": f"Chapter {offset + 1}",
+                    "volume": "1",
+                    "translatedLanguage": "en",
+                    "pages": 20,
+                },
+            },
+            {
+                "id": f"ch-{offset + 2}",
+                "type": "chapter",
+                "attributes": {
+                    "chapter": str(offset + 2),
+                    "title": f"Chapter {offset + 2}",
+                    "volume": "1",
+                    "translatedLanguage": "en",
+                    "pages": 18,
+                },
+            },
+        ],
+        "total": 2,
+    }
+
+
+def _mock_at_home_response() -> dict:
+    return MOCK_AT_HOME_RESPONSE
+
+
 # ---------------------------------------------------------------------------
 # URL construction helpers
 # ---------------------------------------------------------------------------
@@ -211,151 +357,6 @@ class TestMangaDexClientConfig:
 # ---------------------------------------------------------------------------
 # MangaDexClient -- mocked HTTP calls
 # ---------------------------------------------------------------------------
-
-# Fixture data mocking the MangaDex API responses
-
-MOCK_MANGA_RESPONSE = {
-    "result": "ok",
-    "response": "entity",
-    "data": {
-        "id": "manga-001",
-        "type": "manga",
-        "attributes": {
-            "title": {"en": "One Piece"},
-            "altTitles": [{"ja": "Wan Piisu"}, {"ko": "Won Piseu"}],
-            "description": {"en": "A pirate adventure."},
-            "status": "ongoing",
-            "year": 1997,
-            "contentRating": "safe",
-        },
-        "relationships": [
-            {
-                "type": "cover_art",
-                "id": "cover-001",
-                "attributes": {"fileName": "one-piece-cover.jpg"},
-            },
-        ],
-    },
-}
-
-MOCK_SEARCH_RESPONSE = {
-    "result": "ok",
-    "response": "collection",
-    "data": [
-        MOCK_MANGA_RESPONSE["data"],
-        {
-            "id": "manga-002",
-            "type": "manga",
-            "attributes": {
-                "title": {"ja": "Naruto"},
-                "altTitles": [],
-                "description": {},
-                "status": "completed",
-                "year": 1999,
-            },
-            "relationships": [],
-        },
-    ],
-    "limit": 10,
-    "offset": 0,
-    "total": 2,
-}
-
-MOCK_CHAPTER_RESPONSE = {
-    "result": "ok",
-    "response": "entity",
-    "data": {
-        "id": "ch-1",
-        "type": "chapter",
-        "attributes": {
-            "volume": "1",
-            "chapter": "1",
-            "title": "Chapter 1",
-            "translatedLanguage": "en",
-            "pages": 20,
-            "version": 1,
-        },
-        "relationships": [
-            {"id": "manga-001", "type": "manga"},
-        ],
-    },
-}
-
-MOCK_FEED_RESPONSE = {
-    "result": "ok",
-    "response": "collection",
-    "data": [
-        MOCK_CHAPTER_RESPONSE["data"],
-        {
-            "id": "ch-2",
-            "type": "chapter",
-            "attributes": {
-                "volume": "1",
-                "chapter": "2",
-                "title": "Chapter 2",
-                "translatedLanguage": "en",
-                "pages": 18,
-            },
-        },
-    ],
-    "limit": 100,
-    "offset": 0,
-    "total": 2,
-}
-
-MOCK_AT_HOME_RESPONSE = {
-    "result": "ok",
-    "baseUrl": "https://cmdxd98sb0x3yprd.mangadex.network",
-    "chapter": {
-        "hash": "abcdef123456",
-        "data": ["p1-full.png", "p2-full.png", "p3-full.png"],
-        "dataSaver": ["p1-saver.jpg", "p2-saver.jpg", "p3-saver.jpg"],
-    },
-}
-
-
-def _mock_search_response() -> dict:
-    return MOCK_SEARCH_RESPONSE
-
-
-def _mock_feed_response(offset: int = 0) -> dict:
-    """Simulate a single page of chapter feed."""
-    if offset == 0:
-        return MOCK_FEED_RESPONSE
-
-    # Dynamic response for pagination tests
-    return {
-        "result": "ok",
-        "data": [
-            {
-                "id": f"ch-{offset + 1}",
-                "type": "chapter",
-                "attributes": {
-                    "chapter": str(offset + 1),
-                    "title": f"Chapter {offset + 1}",
-                    "volume": "1",
-                    "translatedLanguage": "en",
-                    "pages": 20,
-                },
-            },
-            {
-                "id": f"ch-{offset + 2}",
-                "type": "chapter",
-                "attributes": {
-                    "chapter": str(offset + 2),
-                    "title": f"Chapter {offset + 2}",
-                    "volume": "1",
-                    "translatedLanguage": "en",
-                    "pages": 18,
-                },
-            },
-        ],
-        "total": 2,
-    }
-
-
-def _mock_at_home_response() -> dict:
-    return MOCK_AT_HOME_RESPONSE
 
 
 def _make_mock_response(json_data: dict | None = None, content: bytes = b"") -> MagicMock:
@@ -647,8 +648,10 @@ class TestGetChapterImages:
         assert images.hash == "abcdef123456"
         assert len(images.data) == 3
         assert len(images.data_saver) == 3
-        assert images.data[0] == "p1-full.png"
-        assert images.data_saver[0] == "p1-saver.jpg"
+        assert images.data[0] == "1.png"
+        assert images.data_saver[0] == "1.jpg"
+        assert any(img.url.endswith("1.png") for img in images.images)
+        assert any(img.url.endswith("2.png") for img in images.images)
 
     async def test_calls_correct_endpoint(self):
         mock_resp = _make_mock_response(_mock_at_home_response())
