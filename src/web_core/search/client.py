@@ -222,11 +222,9 @@ async def search(
                         "source": {source} if source else set(),
                     }
 
-            # Convert sets back to sorted strings
-            for value in seen.values():
-                value["source"] = ", ".join(sorted(value["source"]))
-
             # Domain cap + final limit
+            # Performance Optimization: Postponing string normalization of "source"
+            # until after domain capping and result limiting.
             capped = _apply_domain_cap(list(seen.values()))[:max_results]
 
             return [
@@ -234,11 +232,10 @@ async def search(
                     url=r["url"],
                     title=r["title"],
                     snippet=r["snippet"],
-                    source=r["source"],
+                    source=", ".join(sorted(r["source"])),
                 )
                 for r in capped
             ]
-
         except httpx.HTTPStatusError as e:
             status = e.response.status_code
             last_error = f"HTTP {status}"
