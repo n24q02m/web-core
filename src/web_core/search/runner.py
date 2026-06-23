@@ -854,8 +854,8 @@ def _cleanup_process() -> None:  # pragma: no cover
     try:
         if _searxng_settings_path is not None and _searxng_settings_path.exists():
             _searxng_settings_path.unlink()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to cleanup settings file: %s", e)
 
 
 def _is_process_alive() -> bool:

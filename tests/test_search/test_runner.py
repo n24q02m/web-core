@@ -743,6 +743,20 @@ class TestCleanupProcess:
         _cleanup_process()
 
         assert not settings_file.exists()
+    def test_cleanup_settings_file_error(self):
+        """Cleanup handles errors when removing the settings file by logging."""
+        import web_core.search.runner as mod
+
+        mock_path = MagicMock()
+        mock_path.exists.return_value = True
+        mock_path.unlink.side_effect = Exception("permission denied")
+
+        mod._searxng_settings_path = mock_path
+
+        with patch("web_core.search.runner.logger") as mock_logger:
+            _cleanup_process()
+            mock_logger.debug.assert_any_call("Failed to cleanup settings file: %s", ANY)
+
 
 
 # ===========================================================================
