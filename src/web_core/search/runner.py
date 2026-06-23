@@ -218,7 +218,7 @@ def _is_pid_alive(pid: int) -> bool:  # pragma: no cover
                         return False
                     break
     except OSError:
-        pass
+        logger.debug("Failed to read status for PID %d", pid, exc_info=True)
 
     return True
 
