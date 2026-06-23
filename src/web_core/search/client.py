@@ -65,6 +65,9 @@ def _apply_domain_cap(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def _get_safe_domains(domains: list[str] | None, limit: int) -> list[str]:
     """Filter, deduplicate, and cap a list of domains."""
+    if limit <= 0:
+        return []
+
     if not domains:
         return []
 
