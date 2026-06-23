@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
-from web_core.scraper.robots import RobotsTxtChecker, RobotsDisallowedError
+from web_core.scraper.robots import RobotsDisallowedError, RobotsTxtChecker
 
 ROBOTS_DISALLOW_ALL = """\
 User-agent: *
