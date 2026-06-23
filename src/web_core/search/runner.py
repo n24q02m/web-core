@@ -1288,7 +1288,7 @@ async def _handle_restart_and_start(*, start_port: int) -> str:
                 stderr_raw = await asyncio.to_thread(_searxng_process.stderr.read)
                 stderr_output = stderr_raw.decode(errors="replace")[:500]
             except Exception:
-                pass
+                logger.debug("Failed to read SearXNG stderr", exc_info=True)
         logger.warning("SearXNG process crashed (exit_code=%s). stderr: %s", exit_code, stderr_output)
         _searxng_process = None
 
