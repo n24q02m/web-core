@@ -661,7 +661,7 @@ def _force_kill_process_sync(proc: subprocess.Popen) -> None:  # pragma: no cove
                 logger.debug("SearXNG process (PID=%d) terminated gracefully", pid)
                 return
             except subprocess.TimeoutExpired:
-                pass
+                logger.debug("SearXNG process (PID=%d) did not terminate gracefully, escalating to SIGKILL", pid)
 
             try:
                 os.killpg(os.getpgid(pid), signal.SIGKILL)
@@ -701,7 +701,7 @@ async def _force_kill_process(proc: subprocess.Popen) -> None:  # pragma: no cov
                 logger.debug("SearXNG process (PID=%d) terminated gracefully", pid)
                 return
             except subprocess.TimeoutExpired:
-                pass
+                logger.debug("SearXNG process (PID=%d) did not terminate gracefully, escalating to SIGKILL", pid)
 
             try:
                 os.killpg(os.getpgid(pid), signal.SIGKILL)
