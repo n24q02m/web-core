@@ -4,23 +4,23 @@ import os
 import signal
 import subprocess
 import sys
-import time
-import asyncio
-from unittest.mock import MagicMock, patch, AsyncMock, call
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
 from web_core.search.runner import (
-    _force_kill_process_sync,
     _force_kill_process,
-    _sigterm_then_kill_sync,
-    _sigterm_then_kill,
+    _force_kill_process_sync,
     _is_process_dead,
     _kill_stale_port_process,
+    _sigterm_then_kill,
+    _sigterm_then_kill_sync,
 )
 
 # ---------------------------------------------------------------------------
 # _is_process_dead
 # ---------------------------------------------------------------------------
+
 
 class TestIsProcessDead:
     def test_alive_process(self):
@@ -36,9 +36,11 @@ class TestIsProcessDead:
         with patch("os.kill", side_effect=PermissionError):
             assert _is_process_dead(1) is True
 
+
 # ---------------------------------------------------------------------------
 # _sigterm_then_kill_sync / _sigterm_then_kill
 # ---------------------------------------------------------------------------
+
 
 class TestSigtermThenKill:
     @patch("os.kill")
@@ -95,9 +97,8 @@ class TestSigtermThenKill:
         with patch("os.kill") as mock_kill:
             # First call (SIGTERM) succeeds, second (SIGKILL) fails
             mock_kill.side_effect = [None, ProcessLookupError]
-            with patch("web_core.search.runner._is_process_dead", return_value=False):
-                with patch("time.sleep"):
-                    assert _sigterm_then_kill_sync(12345) is True
+            with patch("web_core.search.runner._is_process_dead", return_value=False), patch("time.sleep"):
+                assert _sigterm_then_kill_sync(12345) is True
 
     @patch("os.kill")
     async def test_sigterm_lookup_error_async(self, mock_kill):
@@ -107,13 +108,14 @@ class TestSigtermThenKill:
     @patch("os.kill")
     async def test_sigkill_lookup_error_async(self, mock_kill):
         mock_kill.side_effect = [None, ProcessLookupError]
-        with patch("web_core.search.runner._is_process_dead", return_value=False):
-            with patch("asyncio.sleep"):
-                assert await _sigterm_then_kill(12345) is True
+        with patch("web_core.search.runner._is_process_dead", return_value=False), patch("asyncio.sleep"):
+            assert await _sigterm_then_kill(12345) is True
+
 
 # ---------------------------------------------------------------------------
 # _force_kill_process_sync
 # ---------------------------------------------------------------------------
+
 
 class TestForceKillProcessSync:
     def test_already_dead(self):
@@ -208,9 +210,11 @@ class TestForceKillProcessSync:
         # Should not raise, but log
         assert mock_logger.debug.called
 
+
 # ---------------------------------------------------------------------------
 # _force_kill_process (async)
 # ---------------------------------------------------------------------------
+
 
 class TestForceKillProcessAsync:
     @pytest.mark.skipif(sys.platform == "win32", reason="Unix branch test")
@@ -261,9 +265,11 @@ class TestForceKillProcessAsync:
         mock_sigterm.assert_called_once_with(12345, "SearXNG")
         mock_to_thread.assert_called_with(proc.wait, timeout=3)
 
+
 # ---------------------------------------------------------------------------
 # _kill_stale_port_process
 # ---------------------------------------------------------------------------
+
 
 class TestKillStalePortProcess:
     async def test_invalid_port(self):
