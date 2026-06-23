@@ -453,7 +453,21 @@ class TestSearchManga:
 
         with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
             client = MangaDexClient()
-            results = await client.search_manga("NonexistentManga12345")
+            results = await client.search_manga("Nonexistent")
+
+        assert results == []
+
+    async def test_search_manga_empty_response(self):
+        """Ensure it handles empty results gracefully and returns an empty list."""
+        mock_resp = _make_mock_response({"data": []})
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+            client = MangaDexClient()
+            results = await client.search_manga("EmptyQuery")
 
         assert results == []
 
@@ -473,7 +487,7 @@ class TestSearchManga:
         assert call_args.args[0] == "https://api.mangadex.org/manga"
         assert call_args.kwargs["params"]["title"] == "test"
         assert call_args.kwargs["params"]["limit"] == 5
-        assert call_args.kwargs["params"]["includes[]"] == "cover_art"
+        assert call_args.kwargs["params"]["includes[]"] == ["cover_art", "author", "artist"]
         assert call_args.kwargs["headers"]["User-Agent"] == "TestBot/1.0"
 
     async def test_raises_on_http_error(self):

@@ -218,17 +218,13 @@ class MangaDexClient:
         return self._parse_chapter_item(data.get("data", {}))
 
     async def search_manga(self, title: str, limit: int = 10) -> list[MangaInfo]:
-        """Search manga by title.
-
-        Includes ``cover_art`` relationship so cover URLs can be extracted
-        without a second request.
-        """
+        """Search for manga by title."""
         data = await self._get(
             "/manga",
             params={
                 "title": title,
                 "limit": limit,
-                "includes[]": "cover_art",
+                "includes[]": ["cover_art", "author", "artist"],
             },
         )
         results: list[MangaInfo] = []
