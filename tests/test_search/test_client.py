@@ -615,18 +615,18 @@ class TestSearch:
                 mock_client_class.side_effect = [m1, m2]
 
                 # 1. First call creates it
-                c1 = _get_shared_client('http://localhost:8888')
+                c1 = _get_shared_client("http://localhost:8888")
                 assert c1 is m1
                 assert mock_client_class.call_count == 1
 
                 # 2. Second call reuses it
-                c2 = _get_shared_client('http://localhost:8888')
+                c2 = _get_shared_client("http://localhost:8888")
                 assert c2 is c1
                 assert mock_client_class.call_count == 1
 
                 # 3. If closed, creates new one
                 m1.is_closed = True
-                c3 = _get_shared_client('http://localhost:8888')
+                c3 = _get_shared_client("http://localhost:8888")
                 assert c3 is m2
                 assert c3 is not c1
                 assert mock_client_class.call_count == 2
