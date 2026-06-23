@@ -287,8 +287,8 @@ def _remove_discovery() -> None:
     try:
         if _DISCOVERY_FILE.exists():
             _DISCOVERY_FILE.unlink()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to remove discovery file: %s", e)
 
 
 async def _quick_health_check(url: str, retries: int = 3) -> bool:
