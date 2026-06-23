@@ -1,16 +1,13 @@
-import re
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from web_core.http.client import safe_httpx_client
 from web_core.scraper.base import ScrapingResult
 from web_core.scraper.strategies.captcha import (
-    RECAPTCHA_V2_PROXYLESS,
     TURNSTILE_PROXYLESS,
     CaptchaStrategy,
 )
+
 
 class TestCaptchaStrategy:
     """Tests for CaptchaStrategy."""
@@ -104,8 +101,8 @@ class TestCaptchaStrategy:
             side_effect=[
                 [
                     "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/0x4AAAAAAADnPIDROrmt1Wwj/light/normal"
-                ],  # iframes
-                [],  # scripts (won't be called if iframe matches)
+                ],
+                [],
             ]
         )
 
@@ -242,7 +239,7 @@ class TestSolveCfTurnstileViaPatchright:
         mock_client.post = AsyncMock(return_value=mock_response)
 
         strategy = CaptchaStrategy(capsolver_api_key="key", http_client=mock_client)
-        mock_cls, _, mock_page = _make_mock_patchright(
+        mock_cls, _, _mock_page = _make_mock_patchright(
             page_content="<html>real content after solve</html>",
             page_url="https://example.com/real",
         )
@@ -269,7 +266,7 @@ class TestSolveCfTurnstileViaPatchright:
         mock_client.post = AsyncMock(return_value=mock_response)
 
         strategy = CaptchaStrategy(capsolver_api_key="key", http_client=mock_client)
-        mock_cls, _, mock_page = _make_mock_patchright(
+        mock_cls, _, _mock_page = _make_mock_patchright(
             page_content="<html>challenge content</html>",
             page_url="https://example.com/challenge",
         )
@@ -314,7 +311,6 @@ class TestCaptchaCoverageEnhancement:
         mock_page.query_selector = AsyncMock(return_value=None)
 
         # Strategy 2: /0x is present but it's not followed by hex chars as expected by _RE_CF_IFRAME_0X
-        # _RE_CF_IFRAME_0X = re.compile(r"/(0x[A-Za-z0-9]+)[/&]")
         mock_page.evaluate = AsyncMock(
             side_effect=[
                 ["https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/0x/invalid"],  # iframes
@@ -350,7 +346,6 @@ class TestCaptchaCoverageEnhancement:
         mock_page.query_selector = AsyncMock(return_value=None)
 
         # "sitekey" is present (triggers the continue check) but doesn't match _RE_SCRIPT_SITEKEY
-        # _RE_SCRIPT_SITEKEY = re.compile(r"sitekey['\"\s:=]+['"]([A-Za-z0-9_-]{10,})['"]", re.IGNORECASE)
         mock_page.evaluate = AsyncMock(
             side_effect=[
                 [],  # iframes
@@ -373,27 +368,33 @@ class TestCaptchaCoverageEnhancement:
     async def test_solve_cf_turnstile_ssrf_blocked(self):
         """_solve_cf_turnstile_via_patchright raises ValueError if SSRF blocked."""
         strategy = CaptchaStrategy(capsolver_api_key="key")
-        with patch("web_core.scraper.strategies.captcha.is_safe_url", return_value=False):
-            with pytest.raises(ValueError, match="SSRF blocked"):
-                await strategy._solve_cf_turnstile_via_patchright("http://unsafe.com")
+        with (
+            patch("web_core.scraper.strategies.captcha.is_safe_url", return_value=False),
+            pytest.raises(ValueError, match="SSRF blocked"),
+        ):
+            await strategy._solve_cf_turnstile_via_patchright("http://unsafe.com")
 
     async def test_fetch_ssrf_blocked(self):
         """fetch raises ValueError if SSRF blocked."""
         strategy = CaptchaStrategy(capsolver_api_key="key")
-        with patch("web_core.scraper.strategies.captcha.is_safe_url", return_value=False):
-            with pytest.raises(ValueError, match="SSRF blocked"):
-                await strategy.fetch("http://unsafe.com")
+        with (
+            patch("web_core.scraper.strategies.captcha.is_safe_url", return_value=False),
+            pytest.raises(ValueError, match="SSRF blocked"),
+        ):
+            await strategy.fetch("http://unsafe.com")
 
     async def test_fetch_explicit_captcha(self):
         """fetch solves captcha via fallback strategy if explicit site_key provided."""
         mock_fallback = AsyncMock()
-        mock_fallback.fetch = AsyncMock(return_value=ScrapingResult(
-            content="fallback content",
-            url="https://example.com",
-            strategy="fallback",
-            status_code=200,
-            metadata={}
-        ))
+        mock_fallback.fetch = AsyncMock(
+            return_value=ScrapingResult(
+                content="fallback content",
+                url="https://example.com",
+                strategy="fallback",
+                status_code=200,
+                metadata={},
+            )
+        )
 
         strategy = CaptchaStrategy(capsolver_api_key="key", fallback_strategy=mock_fallback)
         with patch.object(strategy, "solve_captcha", return_value="token") as mock_solve:
@@ -406,9 +407,13 @@ class TestCaptchaCoverageEnhancement:
     async def test_fetch_capsolver_key_only(self):
         """fetch calls _solve_cf_turnstile_via_patchright if capsolver_api_key set."""
         strategy = CaptchaStrategy(capsolver_api_key="key")
-        with patch.object(strategy, "_solve_cf_turnstile_via_patchright", return_value=ScrapingResult(
-            content="solved", url="https://example.com", strategy="captcha", status_code=200
-        )) as mock_solve:
+        with patch.object(
+            strategy,
+            "_solve_cf_turnstile_via_patchright",
+            return_value=ScrapingResult(
+                content="solved", url="https://example.com", strategy="captcha", status_code=200
+            ),
+        ) as mock_solve:
             result = await strategy.fetch("https://example.com")
             assert result.content == "solved"
             mock_solve.assert_called_once()
@@ -416,13 +421,15 @@ class TestCaptchaCoverageEnhancement:
     async def test_fetch_fallback_only(self):
         """fetch delegates to fallback strategy if no captcha solving configured."""
         mock_fallback = AsyncMock()
-        mock_fallback.fetch = AsyncMock(return_value=ScrapingResult(
-            content="fallback only",
-            url="https://example.com",
-            strategy="fallback",
-            status_code=200,
-            metadata={}
-        ))
+        mock_fallback.fetch = AsyncMock(
+            return_value=ScrapingResult(
+                content="fallback only",
+                url="https://example.com",
+                strategy="fallback",
+                status_code=200,
+                metadata={},
+            )
+        )
 
         strategy = CaptchaStrategy(fallback_strategy=mock_fallback)
         result = await strategy.fetch("https://example.com")
