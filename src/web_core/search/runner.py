@@ -218,7 +218,7 @@ def _is_pid_alive(pid: int) -> bool:  # pragma: no cover
                         return False
                     break
     except OSError:
-        pass
+        logger.debug("Could not read /proc/%d/status, assuming alive", pid)
 
     return True
 
@@ -252,7 +252,7 @@ def _read_discovery() -> dict | None:
 
         return data
     except Exception:
-        pass
+        logger.debug("Failed to parse discovery file")
     return None
 
 
@@ -288,7 +288,7 @@ def _remove_discovery() -> None:
         if _DISCOVERY_FILE.exists():
             _DISCOVERY_FILE.unlink()
     except Exception:
-        pass
+        logger.debug("Failed to remove stale discovery file")
 
 
 async def _quick_health_check(url: str, retries: int = 3) -> bool:
@@ -312,7 +312,7 @@ async def _quick_health_check(url: str, retries: int = 3) -> bool:
                 if response.status_code == 200:
                     return True
             except Exception:
-                pass
+                logger.debug("Quick health check probe failed for %s", url)
             if attempt < retries - 1:
                 await asyncio.sleep(0.5 * (attempt + 1))
     return False
@@ -416,7 +416,7 @@ async def _wait_for_service(url: str, timeout: float = _STARTUP_HEALTH_TIMEOUT) 
                 if response.status_code == 200:
                     return True
             except Exception:
-                pass
+                logger.debug("Service health check probe failed")
             await asyncio.sleep(1.0)
     return False
 
@@ -661,7 +661,7 @@ def _force_kill_process_sync(proc: subprocess.Popen) -> None:  # pragma: no cove
                 logger.debug("SearXNG process (PID=%d) terminated gracefully", pid)
                 return
             except subprocess.TimeoutExpired:
-                pass
+                logger.debug("SearXNG process (PID=%d) SIGTERM timed out, proceeding to SIGKILL", pid)
 
             try:
                 os.killpg(os.getpgid(pid), signal.SIGKILL)
@@ -701,7 +701,7 @@ async def _force_kill_process(proc: subprocess.Popen) -> None:  # pragma: no cov
                 logger.debug("SearXNG process (PID=%d) terminated gracefully", pid)
                 return
             except subprocess.TimeoutExpired:
-                pass
+                logger.debug("SearXNG process (PID=%d) SIGTERM timed out, proceeding to SIGKILL", pid)
 
             try:
                 os.killpg(os.getpgid(pid), signal.SIGKILL)
@@ -855,7 +855,7 @@ def _cleanup_process() -> None:  # pragma: no cover
         if _searxng_settings_path is not None and _searxng_settings_path.exists():
             _searxng_settings_path.unlink()
     except Exception:
-        pass
+        logger.debug("Failed to remove settings file")
 
 
 def _is_process_alive() -> bool:
@@ -1288,7 +1288,7 @@ async def _handle_restart_and_start(*, start_port: int) -> str:
                 stderr_raw = await asyncio.to_thread(_searxng_process.stderr.read)
                 stderr_output = stderr_raw.decode(errors="replace")[:500]
             except Exception:
-                pass
+                logger.debug("Failed to read stderr from crashed process")
         logger.warning("SearXNG process crashed (exit_code=%s). stderr: %s", exit_code, stderr_output)
         _searxng_process = None
 
