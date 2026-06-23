@@ -50,7 +50,7 @@ PINNED_SEARXNG_PORT = 41592
 _docker_lock: filelock.FileLock | None = None
 
 
-def _get_config_dir() -> Path:
+def _get_config_dir_sync() -> Path:
     """Get and ensure config directory exists with safe permissions."""
     _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     if sys.platform != "win32":
@@ -58,11 +58,16 @@ def _get_config_dir() -> Path:
     return _CONFIG_DIR
 
 
+async def _get_config_dir() -> Path:
+    """Async wrapper for _get_config_dir_sync."""
+    return await asyncio.to_thread(_get_config_dir_sync)
+
+
 def _get_docker_lock() -> filelock.FileLock:
     """Get or create the Docker spawn filelock (lazy init for config dir creation)."""
     global _docker_lock
     if _docker_lock is None:
-        lock_path = _get_config_dir() / "docker_startup.lock"
+        lock_path = _get_config_dir_sync() / "docker_startup.lock"
         _docker_lock = filelock.FileLock(str(lock_path), timeout=60.0)
     return _docker_lock
 
@@ -223,7 +228,7 @@ def _is_pid_alive(pid: int) -> bool:  # pragma: no cover
     return True
 
 
-def _read_discovery() -> dict | None:
+def _read_discovery_sync() -> dict | None:
     """Read SearXNG discovery file securely.
 
     Returns dict with ``{pid, port, owner_pid, started_at}`` or ``None``.
@@ -256,14 +261,14 @@ def _read_discovery() -> dict | None:
     return None
 
 
-def _write_secure_text(path: Path, content: str) -> None:
+def _write_secure_text_sync(path: Path, content: str) -> None:
     """Write text to a file with restrictive permissions (0o600)."""
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         f.write(content)
 
 
-def _write_discovery(port: int, pid: int) -> None:
+def _write_discovery_sync(port: int, pid: int) -> None:
     """Write SearXNG discovery file for other instances to find."""
     try:
         _DISCOVERY_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -282,13 +287,33 @@ def _write_discovery(port: int, pid: int) -> None:
         logger.debug("Failed to write discovery file: %s", e)
 
 
-def _remove_discovery() -> None:
+def _remove_discovery_sync() -> None:
     """Remove stale discovery file."""
     try:
         if _DISCOVERY_FILE.exists():
             _DISCOVERY_FILE.unlink()
     except Exception:
         pass
+
+
+async def _read_discovery() -> dict | None:
+    """Async wrapper for _read_discovery_sync."""
+    return await asyncio.to_thread(_read_discovery_sync)
+
+
+async def _write_discovery(port: int, pid: int) -> None:
+    """Async wrapper for _write_discovery_sync."""
+    await asyncio.to_thread(_write_discovery_sync, port, pid)
+
+
+async def _remove_discovery() -> None:
+    """Async wrapper for _remove_discovery_sync."""
+    await asyncio.to_thread(_remove_discovery_sync)
+
+
+async def _write_secure_text(path: Path, content: str) -> None:
+    """Async wrapper for _write_secure_text_sync."""
+    await asyncio.to_thread(_write_secure_text_sync, path, content)
 
 
 async def _quick_health_check(url: str, retries: int = 3) -> bool:
@@ -324,7 +349,7 @@ async def _try_reuse_existing() -> str | None:
     Reads the discovery file, verifies the process is alive and healthy,
     and returns the URL if reusable.
     """
-    data = await asyncio.to_thread(_read_discovery)
+    data = await _read_discovery()
     if not data:
         return None
 
@@ -336,7 +361,7 @@ async def _try_reuse_existing() -> str | None:
     # Check if the SearXNG process is still alive
     if not _is_pid_alive(pid):
         logger.debug("Discovery file points to dead process (PID=%d), cleaning up", pid)
-        _remove_discovery()
+        await _remove_discovery()
         return None
 
     # Health check the existing instance
@@ -345,7 +370,7 @@ async def _try_reuse_existing() -> str | None:
         return url
 
     logger.debug("Discovery file points to unhealthy instance at %s, cleaning up", url)
-    _remove_discovery()
+    await _remove_discovery()
     return None
 
 
@@ -532,7 +557,7 @@ def _install_searxng() -> bool:  # pragma: no cover
 # ---------------------------------------------------------------------------
 
 
-def _get_settings_path(port: int) -> Path:
+def _get_settings_path_sync(port: int) -> Path:
     """Get path to SearXNG settings file.
 
     Uses per-process file to avoid write conflicts when multiple
@@ -540,7 +565,7 @@ def _get_settings_path(port: int) -> Path:
     from the bundled template.
     """
     global _searxng_settings_path
-    _get_config_dir()
+    _get_config_dir_sync()
 
     secret = secrets.token_hex(32)
     enable_http2 = "false" if sys.platform == "win32" else "true"
@@ -571,6 +596,11 @@ def _get_settings_path(port: int) -> Path:
     logger.debug("SearXNG settings written to: %s", settings_file)
 
     return settings_file
+
+
+async def _get_settings_path(port: int) -> Path:
+    """Async wrapper for _get_settings_path_sync."""
+    return await asyncio.to_thread(_get_settings_path_sync, port)
 
 
 # ---------------------------------------------------------------------------
@@ -832,7 +862,7 @@ def _cleanup_process() -> None:  # pragma: no cover
                     check=False,
                     timeout=15,
                 )
-            _remove_discovery()
+            _remove_discovery_sync()
         _searxng_docker_container = None
 
     if _searxng_process is not None:
@@ -843,7 +873,7 @@ def _cleanup_process() -> None:  # pragma: no cover
                 logger.debug("SearXNG subprocess stopped")
             except Exception as e:
                 logger.debug("Error stopping SearXNG: %s", e)
-            _remove_discovery()
+            _remove_discovery_sync()
         else:
             logger.debug("Not owner, leaving SearXNG subprocess running")
         _searxng_process = None
@@ -995,12 +1025,8 @@ async def _start_docker_searxng(start_port: int) -> str | None:
             # Write Docker-specific settings (JSON format + limiter off) so the
             # container exposes a usable /search JSON API.
             settings_path = _CONFIG_DIR / f"searxng_docker_{port}.yml"
-            await asyncio.to_thread(_get_config_dir)
-            await asyncio.to_thread(
-                _write_secure_text,
-                settings_path,
-                _DOCKER_SETTINGS_TEMPLATE.format(secret_key=secrets.token_hex(32)),
-            )
+            await _get_config_dir()
+            await _write_secure_text(settings_path, _DOCKER_SETTINGS_TEMPLATE.format(secret_key=secrets.token_hex(32)))
 
             cmd = [
                 docker_bin,
@@ -1036,7 +1062,7 @@ async def _start_docker_searxng(start_port: int) -> str | None:
             _searxng_docker_container = container_name
             _searxng_port = port
             _is_owner = True
-            await asyncio.to_thread(_write_discovery, port, os.getpid())
+            await _write_discovery(port, os.getpid())
             return url
 
         # Cleanup on fail
@@ -1099,7 +1125,7 @@ async def _start_searxng_subprocess(start_port: int) -> str | None:  # pragma: n
         _searxng_port = port
 
         # Write settings with correct port.
-        settings_path = await asyncio.to_thread(_get_settings_path, port)
+        settings_path = await _get_settings_path(port)
 
         # Build environment for SearXNG.
         env = _get_secure_env(settings_path)
@@ -1149,7 +1175,7 @@ async def _start_searxng_subprocess(start_port: int) -> str | None:  # pragma: n
         # Wait for SearXNG to be healthy.
         if await _wait_for_service(url, timeout=_STARTUP_HEALTH_TIMEOUT):
             logger.info("SearXNG ready at %s", url)
-            await asyncio.to_thread(_write_discovery, port, _searxng_process.pid)
+            await _write_discovery(port, _searxng_process.pid)
             _is_owner = True
             return url
 

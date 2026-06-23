@@ -51,21 +51,21 @@ from web_core.search.runner import (
 
 
 class TestIsPidAlive:
-    def test_current_process_is_alive(self):
+    async def test_current_process_is_alive(self):
         """os.getpid() should always be alive."""
         assert _is_pid_alive(os.getpid()) is True
 
-    def test_pid_zero_is_not_alive(self):
+    async def test_pid_zero_is_not_alive(self):
         """PID 0 (kernel/idle) should not be considered alive."""
         assert _is_pid_alive(0) is False
 
-    def test_negative_pid_is_not_alive(self):
+    async def test_negative_pid_is_not_alive(self):
         """Negative PIDs are invalid and should not be alive."""
         assert _is_pid_alive(-1) is False
         assert _is_pid_alive(-9999) is False
 
     @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only zombie check")
-    def test_zombie_process_detected(self, tmp_path):
+    async def test_zombie_process_detected(self, tmp_path):
         """A zombie process on Linux should be detected as not alive."""
         # Mock /proc/{pid}/status with zombie state
         pid = 99999
@@ -78,12 +78,12 @@ class TestIsPidAlive:
             assert _is_pid_alive(pid) is False
 
     @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only ctypes check")
-    def test_windows_dead_process(self):
+    async def test_windows_dead_process(self):
         """A non-existent PID on Windows should return False."""
         # PID 4000000 is very unlikely to exist
         assert _is_pid_alive(4000000) is False
 
-    def test_very_large_pid_not_alive(self):
+    async def test_very_large_pid_not_alive(self):
         """An absurdly large PID should not be alive."""
         assert _is_pid_alive(999999999) is False
 
@@ -94,59 +94,59 @@ class TestIsPidAlive:
 
 
 class TestDiscovery:
-    def test_read_discovery_no_file(self, tmp_discovery):
+    async def test_read_discovery_no_file(self, tmp_discovery):
         """Returns None when discovery file doesn't exist."""
-        assert _read_discovery() is None
+        assert await _read_discovery() is None
 
-    def test_write_and_read_discovery(self, tmp_discovery):
+    async def test_write_and_read_discovery(self, tmp_discovery):
         """Write then read round-trips correctly."""
-        _write_discovery(18888, 12345)
-        data = _read_discovery()
+        await _write_discovery(18888, 12345)
+        data = await _read_discovery()
         assert data is not None
         assert data["port"] == 18888
         assert data["pid"] == 12345
         assert data["owner_pid"] == os.getpid()
         assert "started_at" in data
 
-    def test_read_discovery_invalid_json(self, tmp_discovery):
+    async def test_read_discovery_invalid_json(self, tmp_discovery):
         """Returns None on malformed JSON."""
         tmp_discovery.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(tmp_discovery, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w") as f:
             f.write("not json")
-        assert _read_discovery() is None
+        assert await _read_discovery() is None
 
-    def test_read_discovery_missing_keys(self, tmp_discovery):
+    async def test_read_discovery_missing_keys(self, tmp_discovery):
         """Returns None when required keys are missing."""
         tmp_discovery.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(tmp_discovery, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w") as f:
             f.write(json.dumps({"port": 8080}))  # Missing pid
-        assert _read_discovery() is None
+        assert await _read_discovery() is None
 
     @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions not supported on Windows")
-    def test_read_discovery_insecure_permissions(self, tmp_discovery):
+    async def test_read_discovery_insecure_permissions(self, tmp_discovery):
         """Returns None when discovery file has insecure permissions."""
-        _write_discovery(18888, 12345)
+        await _write_discovery(18888, 12345)
         os.chmod(tmp_discovery, 0o644)
-        assert _read_discovery() is None
+        assert await _read_discovery() is None
 
     @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions not supported on Windows")
-    def test_write_discovery_secure_permissions(self, tmp_discovery):
+    async def test_write_discovery_secure_permissions(self, tmp_discovery):
         """Discovery file is created with 0o600 permissions."""
-        _write_discovery(18888, 12345)
+        await _write_discovery(18888, 12345)
         assert (os.stat(tmp_discovery).st_mode & 0o777) == 0o600
 
-    def test_remove_discovery(self, tmp_discovery):
+    async def test_remove_discovery(self, tmp_discovery):
         """Removes the discovery file if it exists."""
-        _write_discovery(18888, 12345)
+        await _write_discovery(18888, 12345)
         assert tmp_discovery.exists()
-        _remove_discovery()
+        await _remove_discovery()
         assert not tmp_discovery.exists()
 
-    def test_remove_discovery_nonexistent(self, tmp_discovery):
+    async def test_remove_discovery_nonexistent(self, tmp_discovery):
         """Does not raise when file doesn't exist."""
-        _remove_discovery()  # Should not raise
+        await _remove_discovery()  # Should not raise
 
 
 # ===========================================================================
@@ -205,7 +205,7 @@ class TestQuickHealthCheck:
 class TestTryReuseExisting:
     async def test_returns_url_if_instance_running(self, tmp_discovery):
         """Returns URL if discovery file points to a healthy instance."""
-        _write_discovery(18888, os.getpid())
+        await _write_discovery(18888, os.getpid())
 
         with patch("web_core.search.runner._quick_health_check", new_callable=AsyncMock, return_value=True):
             url = await _try_reuse_existing()
@@ -213,7 +213,7 @@ class TestTryReuseExisting:
 
     async def test_returns_none_if_not_running(self, tmp_discovery):
         """Returns None if health check fails."""
-        _write_discovery(18888, os.getpid())
+        await _write_discovery(18888, os.getpid())
 
         with patch("web_core.search.runner._quick_health_check", new_callable=AsyncMock, return_value=False):
             url = await _try_reuse_existing()
@@ -226,7 +226,7 @@ class TestTryReuseExisting:
 
     async def test_returns_none_if_pid_dead(self, tmp_discovery):
         """Returns None and cleans up if PID in discovery is dead."""
-        _write_discovery(18888, 999999999)
+        await _write_discovery(18888, 999999999)
 
         with patch("web_core.search.runner._is_pid_alive", return_value=False):
             url = await _try_reuse_existing()
@@ -247,12 +247,12 @@ class TestTryReuseExisting:
 
 
 class TestFindAvailablePort:
-    def test_returns_valid_port(self):
+    async def test_returns_valid_port(self):
         """Returns a valid non-privileged port."""
         port = _find_available_port(18888, max_tries=50)
         assert 1024 <= port <= 65535
 
-    def test_raises_if_no_port_available(self):
+    async def test_raises_if_no_port_available(self):
         """Raises RuntimeError if all ports in range are in use."""
         with patch("socket.socket") as mock_socket_cls:
             mock_socket = MagicMock()
@@ -264,7 +264,7 @@ class TestFindAvailablePort:
             with pytest.raises(RuntimeError, match="No available port found"):
                 _find_available_port(18888, max_tries=5)
 
-    def test_skips_used_ports(self):
+    async def test_skips_used_ports(self):
         """Finds a free port even if some are in use."""
         # Bind a port to make it unavailable, then check the function works
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -276,7 +276,7 @@ class TestFindAvailablePort:
         assert isinstance(port, int)
         assert port >= 18888
 
-    def test_find_available_port_invalid_range(self):
+    async def test_find_available_port_invalid_range(self):
         """Covers the case where start_port is outside [1024, 65535]."""
         # Low port
         port = _find_available_port(80, max_tries=5)
@@ -286,7 +286,7 @@ class TestFindAvailablePort:
         port = _find_available_port(70000, max_tries=5)
         assert 49152 <= port <= 65535
 
-    def test_find_available_port_retries_on_bind_error(self):
+    async def test_find_available_port_retries_on_bind_error(self):
         """Covers OSError during s.bind()."""
         with patch("socket.socket") as mock_socket_cls:
             # First mock socket fails on bind, second succeeds
@@ -304,7 +304,7 @@ class TestFindAvailablePort:
             assert isinstance(port, int)
             assert mock_socket_cls.call_count == 2
 
-    def test_find_available_port_retries_on_socket_creation_error(self):
+    async def test_find_available_port_retries_on_socket_creation_error(self):
         """Covers OSError during socket.socket() instantiation."""
         with patch("socket.socket") as mock_socket_cls:
             # First call to socket.socket() fails
@@ -356,22 +356,22 @@ class TestWaitForService:
 
 
 class TestSearxngInstallation:
-    def test_is_searxng_installed_true(self):
+    async def test_is_searxng_installed_true(self):
         """Returns True when searx.webapp is importable."""
         with patch("importlib.util.find_spec", return_value=MagicMock()):
             assert _is_searxng_installed() is True
 
-    def test_is_searxng_installed_false(self):
+    async def test_is_searxng_installed_false(self):
         """Returns False when searx.webapp is not found."""
         with patch("importlib.util.find_spec", return_value=None):
             assert _is_searxng_installed() is False
 
-    def test_is_searxng_installed_module_not_found(self):
+    async def test_is_searxng_installed_module_not_found(self):
         """Returns False when find_spec raises ModuleNotFoundError."""
         with patch("importlib.util.find_spec", side_effect=ModuleNotFoundError):
             assert _is_searxng_installed() is False
 
-    def test_install_searxng_success(self):
+    async def test_install_searxng_success(self):
         """Returns True when pip install succeeds."""
         mock_result = MagicMock()
         mock_result.returncode = 0
@@ -383,7 +383,7 @@ class TestSearxngInstallation:
         ):
             assert _install_searxng() is True
 
-    def test_install_searxng_failure(self):
+    async def test_install_searxng_failure(self):
         """Returns False when pip install fails."""
         mock_ok = MagicMock()
         mock_ok.returncode = 0
@@ -399,7 +399,7 @@ class TestSearxngInstallation:
         ):
             assert _install_searxng() is False
 
-    def test_install_searxng_timeout(self):
+    async def test_install_searxng_timeout(self):
         """Returns False when pip install times out."""
         with (
             patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="pip", timeout=120)),
@@ -407,7 +407,7 @@ class TestSearxngInstallation:
         ):
             assert _install_searxng() is False
 
-    def test_install_searxng_deps_failure(self):
+    async def test_install_searxng_deps_failure(self):
         """Returns False when build deps installation fails."""
         mock_fail = MagicMock()
         mock_fail.returncode = 1
@@ -426,7 +426,7 @@ class TestSearxngInstallation:
 
 
 class TestGetPipCommand:
-    def test_prefers_uv(self):
+    async def test_prefers_uv(self):
         """Uses uv pip when uv is available."""
         with patch("shutil.which", side_effect=lambda x: "/usr/bin/uv" if x == "uv" else None):
             cmd = _get_pip_command()
@@ -434,13 +434,13 @@ class TestGetPipCommand:
             assert "pip" in cmd
             assert "--python" in cmd
 
-    def test_uses_pip(self):
+    async def test_uses_pip(self):
         """Uses pip when uv is not available."""
         with patch("shutil.which", side_effect=lambda x: "/usr/bin/pip" if x == "pip" else None):
             cmd = _get_pip_command()
             assert cmd == ["/usr/bin/pip", "install"]
 
-    def test_fallback_python_m_pip(self):
+    async def test_fallback_python_m_pip(self):
         """Falls back to python -m pip."""
         with patch("shutil.which", return_value=None):
             cmd = _get_pip_command()
@@ -453,9 +453,9 @@ class TestGetPipCommand:
 
 
 class TestGetSettingsPath:
-    def test_creates_settings_file(self, tmp_config_dir):
+    async def test_creates_settings_file(self, tmp_config_dir):
         """Creates a per-process settings file with correct port and secret."""
-        path = _get_settings_path(18888)
+        path = await _get_settings_path(18888)
         assert path.exists()
         content = path.read_text()
         assert "port: 18888" in content
@@ -464,23 +464,23 @@ class TestGetSettingsPath:
         assert "{secret_key}" not in content
         assert "{port}" not in content
 
-    def test_per_process_filename(self, tmp_config_dir):
+    async def test_per_process_filename(self, tmp_config_dir):
         """Settings file is securely named with a prefix and correct suffix."""
-        path = _get_settings_path(18888)
+        path = await _get_settings_path(18888)
         assert path.name.startswith("searxng_settings_")
         assert path.name.endswith(".yml")
 
-    def test_http2_disabled_on_windows(self, tmp_config_dir):
+    async def test_http2_disabled_on_windows(self, tmp_config_dir):
         """HTTP/2 is disabled on Windows to avoid deadlocks."""
         with patch("sys.platform", "win32"):
-            path = _get_settings_path(18888)
+            path = await _get_settings_path(18888)
             content = path.read_text()
             assert "enable_http2: false" in content
 
-    def test_http2_enabled_on_linux(self, tmp_config_dir):
+    async def test_http2_enabled_on_linux(self, tmp_config_dir):
         """HTTP/2 is enabled on non-Windows platforms."""
         with patch("sys.platform", "linux"):
-            path = _get_settings_path(18888)
+            path = await _get_settings_path(18888)
             content = path.read_text()
             assert "enable_http2: true" in content
 
@@ -491,14 +491,14 @@ class TestGetSettingsPath:
 
 
 class TestGetProcessKwargs:
-    def test_unix_uses_start_new_session(self):
+    async def test_unix_uses_start_new_session(self):
         """On Unix, uses start_new_session=True for process group management."""
         with patch("sys.platform", "linux"), patch("os.getuid", return_value=1000, create=True):
             kwargs = _get_process_kwargs()
             assert kwargs.get("start_new_session") is True
             assert "preexec_fn" not in kwargs
 
-    def test_unix_root_drops_privileges(self):
+    async def test_unix_root_drops_privileges(self):
         """On Unix as root, drops privileges to 'nobody'."""
         mock_pw = MagicMock()
         mock_pw.pw_uid = 65534
@@ -515,7 +515,7 @@ class TestGetProcessKwargs:
             assert kwargs["group"] == 65534
 
     @pytest.mark.skipif(sys.platform != "win32", reason="CREATE_NEW_PROCESS_GROUP only exists on Windows")
-    def test_windows_uses_creation_flags(self):
+    async def test_windows_uses_creation_flags(self):
         """On Windows, uses CREATE_NEW_PROCESS_GROUP."""
         with patch("sys.platform", "win32"):
             kwargs = _get_process_kwargs()
@@ -529,7 +529,7 @@ class TestGetProcessKwargs:
 
 
 class TestGetSecureEnv:
-    def test_filters_environment(self):
+    async def test_filters_environment(self):
         """Only whitelisted environment variables are kept."""
         from web_core.search.runner import _get_secure_env
 
@@ -543,11 +543,11 @@ class TestGetSecureEnv:
 
 
 class TestIsProcessAlive:
-    def test_returns_false_when_no_process(self):
+    async def test_returns_false_when_no_process(self):
         """Returns False when _searxng_process is None."""
         assert _is_process_alive() is False
 
-    def test_returns_true_when_alive(self):
+    async def test_returns_true_when_alive(self):
         """Returns True when process poll() returns None (alive)."""
         import web_core.search.runner as mod
 
@@ -556,7 +556,7 @@ class TestIsProcessAlive:
         mod._searxng_process = mock_proc
         assert _is_process_alive() is True
 
-    def test_returns_false_when_dead(self):
+    async def test_returns_false_when_dead(self):
         """Returns False when process poll() returns exit code."""
         import web_core.search.runner as mod
 
@@ -660,7 +660,7 @@ class TestKillStalePortProcess:
 
 
 class TestCleanupProcess:
-    def test_cleanup_as_owner(self, tmp_discovery, tmp_path):
+    async def test_cleanup_as_owner(self, tmp_discovery, tmp_path):
         """Owner kills process, removes discovery file, and deletes settings path."""
         import web_core.search.runner as mod
 
@@ -678,7 +678,7 @@ class TestCleanupProcess:
         dummy_settings.write_text("test")
         mod._searxng_settings_path = dummy_settings
 
-        _write_discovery(18888, 12345)
+        await _write_discovery(18888, 12345)
         assert tmp_discovery.exists()
 
         _cleanup_process()
@@ -689,7 +689,7 @@ class TestCleanupProcess:
         assert not tmp_discovery.exists()
         assert not dummy_settings.exists()
 
-    def test_cleanup_as_non_owner(self, tmp_discovery):
+    async def test_cleanup_as_non_owner(self, tmp_discovery):
         """Non-owner clears local refs but does not kill or remove discovery."""
         import web_core.search.runner as mod
 
@@ -701,7 +701,7 @@ class TestCleanupProcess:
         mod._searxng_port = 18888
         mod._is_owner = False
 
-        _write_discovery(18888, 12345)
+        await _write_discovery(18888, 12345)
 
         _cleanup_process()
 
@@ -710,11 +710,11 @@ class TestCleanupProcess:
         # Discovery file should still exist (not our responsibility)
         assert tmp_discovery.exists()
 
-    def test_cleanup_no_process(self):
+    async def test_cleanup_no_process(self):
         """Does not raise when no process exists."""
         _cleanup_process()  # Should not raise
 
-    def test_shutdown_searxng_calls_cleanup(self, tmp_discovery):
+    async def test_shutdown_searxng_calls_cleanup(self, tmp_discovery):
         """shutdown_searxng delegates to _cleanup_process."""
         import web_core.search.runner as mod
 
@@ -731,7 +731,7 @@ class TestCleanupProcess:
 
         assert mod._searxng_process is None
 
-    def test_cleanup_removes_settings_file(self, tmp_config_dir):
+    async def test_cleanup_removes_settings_file(self, tmp_config_dir):
         """Cleanup removes the dynamically generated settings file."""
         import web_core.search.runner as mod
 
@@ -778,7 +778,7 @@ class TestEnsureSearxng:
     async def test_returns_url_from_discovery(self, tmp_discovery, monkeypatch):
         """Returns URL from discovery file if valid instance is running."""
         monkeypatch.delenv("SEARXNG_URL", raising=False)
-        _write_discovery(18888, os.getpid())
+        await _write_discovery(18888, os.getpid())
 
         with patch("web_core.search.runner._quick_health_check", new_callable=AsyncMock, return_value=True):
             url = await ensure_searxng()
@@ -918,12 +918,12 @@ class TestEnsureSearxng:
 
 
 class TestGetStartupLock:
-    def test_returns_asyncio_lock(self):
+    async def test_returns_asyncio_lock(self):
         """Returns an asyncio.Lock instance."""
         lock = _get_startup_lock()
         assert isinstance(lock, asyncio.Lock)
 
-    def test_returns_same_lock(self):
+    async def test_returns_same_lock(self):
         """Returns the same lock on subsequent calls."""
         lock1 = _get_startup_lock()
         lock2 = _get_startup_lock()
@@ -1111,13 +1111,13 @@ class TestStartDockerSearxng:
 
 
 class TestSettingsTemplate:
-    def test_template_has_placeholders(self):
+    async def test_template_has_placeholders(self):
         """Template contains the expected format placeholders."""
         assert "{port}" in _SETTINGS_TEMPLATE
         assert "{secret_key}" in _SETTINGS_TEMPLATE
         assert "{enable_http2}" in _SETTINGS_TEMPLATE
 
-    def test_template_renders_cleanly(self):
+    async def test_template_renders_cleanly(self):
         """Template renders without errors."""
         rendered = _SETTINGS_TEMPLATE.format(
             port=18888,
@@ -1135,19 +1135,19 @@ class TestSettingsTemplate:
 
 
 class TestModuleExports:
-    def test_ensure_searxng_exported(self):
+    async def test_ensure_searxng_exported(self):
         """ensure_searxng is available from web_core.search."""
         from web_core.search import ensure_searxng as fn
 
         assert callable(fn)
 
-    def test_shutdown_searxng_exported(self):
+    async def test_shutdown_searxng_exported(self):
         """shutdown_searxng is available from web_core.search."""
         from web_core.search import shutdown_searxng as fn
 
         assert callable(fn)
 
-    def test_all_contains_runner_exports(self):
+    async def test_all_contains_runner_exports(self):
         """__all__ includes runner exports."""
         from web_core.search import __all__ as all_exports
 
@@ -1161,7 +1161,7 @@ class TestModuleExports:
 
 
 class TestGetDockerLock:
-    def test_returns_filelock(self, tmp_config_dir):
+    async def test_returns_filelock(self, tmp_config_dir):
         """Returns a filelock.FileLock instance with correct path and timeout."""
         import filelock
 
@@ -1170,13 +1170,13 @@ class TestGetDockerLock:
         assert Path(lock.lock_file).name == "docker_startup.lock"
         assert lock.timeout == 60.0
 
-    def test_returns_same_lock(self, tmp_config_dir):
+    async def test_returns_same_lock(self, tmp_config_dir):
         """Returns the same lock on subsequent calls."""
         lock1 = _get_docker_lock()
         lock2 = _get_docker_lock()
         assert lock1 is lock2
 
-    def test_creates_config_dir(self, tmp_path, monkeypatch):
+    async def test_creates_config_dir(self, tmp_path, monkeypatch):
         """Creates the config directory if it does not exist."""
         config_dir = tmp_path / "new-config-dir"
         monkeypatch.setattr("web_core.search.runner._CONFIG_DIR", config_dir)
@@ -1186,7 +1186,7 @@ class TestGetDockerLock:
         _get_docker_lock()
         assert config_dir.exists()
 
-    def test_get_config_dir_permissions(self, tmp_path, monkeypatch):
+    async def test_get_config_dir_permissions(self, tmp_path, monkeypatch):
         """_get_config_dir sets correct permissions (0o700) on non-Windows."""
         import os
         import sys
@@ -1196,7 +1196,7 @@ class TestGetDockerLock:
         config_dir = tmp_path / "perm-test-dir"
         monkeypatch.setattr("web_core.search.runner._CONFIG_DIR", config_dir)
 
-        _get_config_dir()
+        await _get_config_dir()
         assert config_dir.exists()
 
         if sys.platform != "win32":
