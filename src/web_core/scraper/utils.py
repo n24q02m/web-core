@@ -161,6 +161,13 @@ def looks_under_rendered(html: str, *, min_visible_text: int = 64) -> bool:
     """
     if not html:
         return False
-    if len(visible_text(html)) >= min_visible_text:
+
+    # Fast path: if there is no evidence of JS rendering (no scripts, no SPA root),
+    # then it can't possibly be an under-rendered JS shell.
+    # Performance Optimization: Checking this first avoids executing expensive
+    # regex tag-stripping (visible_text) on large documents (like JSON APIs)
+    # that lack script markers.
+    if not (_SCRIPT_TAG_RE.search(html) or _SPA_ROOT_RE.search(html)):
         return False
-    return bool(_SCRIPT_TAG_RE.search(html) or _SPA_ROOT_RE.search(html))
+
+    return len(visible_text(html)) < min_visible_text
