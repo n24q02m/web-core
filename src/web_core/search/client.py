@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -26,19 +27,23 @@ _MAX_PER_DOMAIN = 3
 _MAX_INCLUDE_DOMAINS = 5
 _MAX_EXCLUDE_DOMAINS = 10
 
-_shared_client: httpx.AsyncClient | None = None
+_shared_clients: dict[str, httpx.AsyncClient] = {}
 
 
-def _get_shared_client() -> httpx.AsyncClient:
-    """Lazy initialization of a shared httpx.AsyncClient.
+def _get_shared_client(hostname: str | None) -> httpx.AsyncClient:
+    """Lazy initialization of a shared httpx.AsyncClient per hostname.
 
     Performance Optimization: Reusing the client connection pool avoids the overhead
     of establishing new TCP/TLS connections for every search request.
     """
-    global _shared_client
-    if _shared_client is None or getattr(_shared_client, "is_closed", False):
-        _shared_client = safe_httpx_client(allow_private=True, timeout=15.0)
-    return _shared_client
+    global _shared_clients
+    cache_key = hostname or ""
+    client = _shared_clients.get(cache_key)
+    if client is None or getattr(client, "is_closed", False):
+        allow_list = [hostname] if hostname else False
+        client = safe_httpx_client(allow_private=allow_list, timeout=15.0)
+        _shared_clients[cache_key] = client
+    return client
 
 
 # ---------------------------------------------------------------------------
@@ -177,7 +182,8 @@ async def search(
     # SearXNG is a trusted local service — bypass SSRF protection.
     # SSRF-safe client blocks localhost/private IPs by design, but SearXNG
     # runs on localhost. External URL fetching still uses safe_httpx_client.
-    client = _get_shared_client()
+    hostname = urlparse(searxng_url).hostname
+    client = _get_shared_client(hostname)
     # Only forward auth when configured, so the default (local SearXNG) request
     # stays byte-identical to today (no auth header).
     auth_kwarg: dict[str, Any] = {"auth": auth} if auth else {}
