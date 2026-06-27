@@ -1,6 +1,8 @@
 import socket
-from web_core.http.client import is_safe_url, _dns_cache
+
 import web_core.http.client
+from web_core.http.client import _dns_cache, is_safe_url
+
 
 def test_ssrf_whitelist():
     _dns_cache.clear()
