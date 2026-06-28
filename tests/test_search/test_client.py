@@ -602,8 +602,8 @@ class TestSearch:
         from web_core.search.client import _get_shared_client
 
         # Reset global state for testing
-        old_client = client_mod._shared_client
-        client_mod._shared_client = None
+        old_client = client_mod._shared_clients.get("localhost")
+        client_mod._shared_clients.clear()
 
         try:
             with patch("httpx.AsyncClient") as mock_client_class:
@@ -615,23 +615,24 @@ class TestSearch:
                 mock_client_class.side_effect = [m1, m2]
 
                 # 1. First call creates it
-                c1 = _get_shared_client()
+                c1 = _get_shared_client("http://localhost:8888")
                 assert c1 is m1
                 assert mock_client_class.call_count == 1
 
                 # 2. Second call reuses it
-                c2 = _get_shared_client()
+                c2 = _get_shared_client("http://localhost:8888")
                 assert c2 is c1
                 assert mock_client_class.call_count == 1
 
                 # 3. If closed, creates new one
                 m1.is_closed = True
-                c3 = _get_shared_client()
+                c3 = _get_shared_client("http://localhost:8888")
                 assert c3 is m2
                 assert c3 is not c1
                 assert mock_client_class.call_count == 2
         finally:
-            client_mod._shared_client = old_client
+            if old_client:
+                client_mod._shared_clients["localhost"] = old_client
 
     async def test_dedup_with_empty_source(self, mock_httpx_client):
         """Branch 204->206: Existing result, but new hit has no engine/source."""

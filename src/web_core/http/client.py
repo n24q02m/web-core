@@ -18,6 +18,7 @@ import logging
 import socket
 import threading
 import time
+from collections.abc import Iterable
 from typing import Any
 from urllib.parse import urlparse
 
@@ -92,7 +93,7 @@ def _check_ip_safe(ip_str: str, hostname: str) -> bool:
 _BLOCKED_HOSTNAMES = frozenset({"localhost", "localhost.localdomain", "127.0.0.1", "::1"})
 
 
-def is_safe_url(url: str, *, allow_private: bool = False) -> bool:
+def is_safe_url(url: str, *, allow_private: bool | Iterable[str] = False) -> bool:
     """Validate that *url* is safe to fetch (no SSRF).
 
     Checks:
@@ -111,7 +112,8 @@ def is_safe_url(url: str, *, allow_private: bool = False) -> bool:
         return False
 
     hostname = parsed.hostname
-    if not allow_private and hostname.lower() in _BLOCKED_HOSTNAMES:
+    is_host_allowed = allow_private if isinstance(allow_private, bool) else (hostname in allow_private)
+    if not is_host_allowed and hostname.lower() in _BLOCKED_HOSTNAMES:
         return False
 
     # Fast path: already resolved, validated, and pinned
@@ -120,7 +122,7 @@ def is_safe_url(url: str, *, allow_private: bool = False) -> bool:
         if entry is not None:
             results, cached_at = entry
             if (time.monotonic() - cached_at) < _DNS_CACHE_TTL:
-                if not allow_private:
+                if not is_host_allowed:
                     for res in results:
                         ip_str = str(res[4][0])
                         if not _check_ip_safe(ip_str, hostname):
@@ -132,7 +134,7 @@ def is_safe_url(url: str, *, allow_private: bool = False) -> bool:
     except (socket.gaierror, Exception):
         return False
 
-    if not allow_private:
+    if not is_host_allowed:
         for res in results:
             ip_str = str(res[4][0])
             if not _check_ip_safe(ip_str, hostname):
@@ -150,7 +152,7 @@ def is_safe_url(url: str, *, allow_private: bool = False) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _ssrf_event_hook_factory(allow_private: bool) -> Any:
+def _ssrf_event_hook_factory(allow_private: bool | Iterable[str]) -> Any:
     """Create an SSRF event hook with specific settings."""
 
     async def _ssrf_event_hook(request: httpx.Request) -> None:
@@ -191,7 +193,7 @@ def safe_httpx_client(**kwargs: Any) -> httpx.AsyncClient:
 # ---------------------------------------------------------------------------
 
 
-async def setup_browser_ssrf_protection(page: Any, *, allow_private: bool = False) -> None:
+async def setup_browser_ssrf_protection(page: Any, *, allow_private: bool | Iterable[str] = False) -> None:
     """Setup SSRF protection for a Playwright/Patchright page.
 
     Uses page.route to intercept all requests (including redirects and
@@ -199,7 +201,7 @@ async def setup_browser_ssrf_protection(page: Any, *, allow_private: bool = Fals
 
     Args:
         page: The Playwright/Patchright Page object.
-        allow_private: If True, allows requests to private/loopback IPs.
+        allow_private: If True or an iterable of hostnames, allows requests to private/loopback IPs for those hosts.
     """
 
     async def _route_handler(route: Any) -> None:

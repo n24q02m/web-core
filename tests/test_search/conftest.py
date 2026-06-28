@@ -32,12 +32,7 @@ def _clean_client_state():
     import web_core.search.client as mod
 
     def _reset():
-        if mod._shared_client is not None:
-            # We don't necessarily want to close it here as it might be in use,
-            # but for test isolation it's safer to reset the reference.
-            # test_client.py usually handles the actual client lifecycle if needed,
-            # but resetting to None forces re-init.
-            mod._shared_client = None
+        mod._shared_clients.clear()
 
     _reset()
     yield
