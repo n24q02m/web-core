@@ -331,3 +331,30 @@ class TestPatchrightStrategy:
             result = await strategy.fetch("https://managed-timeout.com")
 
         assert result.strategy == "patchright"
+
+    async def test_fetch_ssrf_blocked(self):
+        """Line 89: fetch raises ValueError if URL is unsafe."""
+        strategy = PatchrightStrategy()
+        with (
+            patch("web_core.scraper.strategies.patchright_browser.is_safe_url", return_value=False),
+            pytest.raises(ValueError, match="SSRF blocked"),
+        ):
+            await strategy.fetch("http://169.254.169.254")
+
+    async def test_wait_for_cf_resolution_exhaustion_direct(self):
+        """Explicitly test _wait_for_cf_resolution exhaustion and call count."""
+        _, page = _make_mock_provider(CF_JS_CHALLENGE_HTML)
+        page.context.cookies = AsyncMock(return_value=[])
+        page.content = AsyncMock(return_value=CF_JS_CHALLENGE_HTML)
+
+        strategy = PatchrightStrategy()
+        max_checks = 3
+        with (
+            patch("web_core.scraper.strategies.patchright_browser._CF_POLL_MAX_CHECKS", max_checks),
+            patch("web_core.scraper.strategies.patchright_browser._CF_POLL_INTERVAL", 0.001),
+        ):
+            content = await strategy._wait_for_cf_resolution(page)
+
+        assert content == CF_JS_CHALLENGE_HTML
+        # 3 calls in loop, 1 final call
+        assert page.content.call_count == 4
