@@ -662,3 +662,11 @@ def test_get_domain_selectors_completely_unknown_miss(monkeypatch):
 
     url = "https://unknown.com"
     assert selector_inference.get_domain_selectors(url) is None
+
+
+@pytest.mark.parametrize("invalid_url", ["", None, "   ", "http://", "://"])
+def test_get_domain_selectors_invalid_url(invalid_url):
+    """Verify that get_domain_selectors handles invalid/None URLs gracefully."""
+    from web_core.scraper.selector_inference import get_domain_selectors
+
+    assert get_domain_selectors(invalid_url) is None

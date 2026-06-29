@@ -136,6 +136,8 @@ def get_domain_selectors(url: str) -> dict[str, str] | None:
     Logs domain usage for analytics — enabling the Tiered Scraping
     feedback loop (track unknown domains → hardcode popular ones).
     """
+    if not url or not isinstance(url, str):
+        return None
     # Performance Optimization: Reusing extract_domain which implements the same
     # fast path string partitioning but includes an LRU cache (~3-4x faster for repeated URLs)
     domain = extract_domain(url).lower()
