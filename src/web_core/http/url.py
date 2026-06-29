@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import functools
 import re
-from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
 # ---------------------------------------------------------------------------
 # Tracking parameters to strip
@@ -73,7 +73,9 @@ def normalize_url(url: str) -> str:
     """Normalize a URL for deduplication.
 
     Performance Optimization: The result is cached to avoid expensive repetitive
-    parsing (urlparse/urlunparse, regex) for duplicate URLs.
+    parsing (urlsplit/urlunsplit, regex) for duplicate URLs.
+    Using `urlsplit` instead of `urlparse` is ~2x faster as it avoids parsing
+    the rarely used `params` attribute.
 
     Transformations applied:
     - Lowercase scheme and netloc
@@ -89,7 +91,7 @@ def normalize_url(url: str) -> str:
         return ""
 
     try:
-        parsed = urlparse(url)
+        parsed = urlsplit(url)
     except Exception:
         return url
 
@@ -113,7 +115,7 @@ def normalize_url(url: str) -> str:
         query = ""
 
     # Fragment is always stripped (empty string)
-    return urlunparse((scheme, netloc, path, parsed.params, query, ""))
+    return urlunsplit((scheme, netloc, path, query, ""))
 
 
 def strip_tracking_params(url: str) -> str:
