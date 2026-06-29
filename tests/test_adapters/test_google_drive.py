@@ -409,3 +409,27 @@ async def test_list_folder_via_html_http_error():
         pytest.raises(httpx.HTTPStatusError),
     ):
         await _list_folder_via_html("test_folder_id")
+
+
+async def test_list_folder_via_gdown_namedtuple_real_behavior():
+    """Verify that _list_folder_via_gdown handles gdown's namedtuple correctly."""
+    from collections import namedtuple
+
+    # Real gdown structure
+    GoogleDriveFileToDownload = namedtuple("GoogleDriveFileToDownload", ("id", "path", "local_path"))
+
+    mock_item_1 = GoogleDriveFileToDownload(id="id1", path="folder/test.txt", local_path="/tmp/test.txt")
+    mock_item_2 = GoogleDriveFileToDownload(id="id2", path="folder/other.pdf", local_path="/tmp/other.pdf")
+    mock_item_3 = GoogleDriveFileToDownload(id="id3", path="", local_path="")  # Should be skipped
+
+    mock_gdown = MagicMock()
+    mock_gdown.download_folder.return_value = [mock_item_1, mock_item_2, mock_item_3]
+
+    with patch.dict("sys.modules", {"gdown": mock_gdown}):
+        result = await _list_folder_via_gdown("test_folder_id")
+
+    assert len(result) == 2
+    assert result[0].file_id == "id1"
+    assert result[0].name == "test.txt"
+    assert result[1].file_id == "id2"
+    assert result[1].name == "other.pdf"
