@@ -11,6 +11,7 @@ from web_core.search.client import (
     _MAX_PER_DOMAIN,
     _apply_domain_cap,
     _build_filtered_query,
+    _get_safe_domains,
     search,
 )
 from web_core.search.models import SearchError, SearchResult
@@ -46,6 +47,32 @@ def _raw_result(url: str, title: str = "Title", content: str = "Snippet", engine
 # ---------------------------------------------------------------------------
 # _build_filtered_query
 # ---------------------------------------------------------------------------
+
+
+class TestGetSafeDomains:
+    """Test domain validation and limiting."""
+
+    def test_none_returns_empty(self):
+        assert _get_safe_domains(None, 5) == []
+
+    def test_empty_returns_empty(self):
+        assert _get_safe_domains([], 5) == []
+
+    def test_limit_zero_returns_empty(self):
+        assert _get_safe_domains(["example.com"], 0) == []
+
+    def test_limit_negative_returns_empty(self):
+        assert _get_safe_domains(["example.com"], -1) == []
+
+    def test_deduplicates_domains(self):
+        assert _get_safe_domains(["a.com", "a.com", "b.com"], 5) == ["a.com", "b.com"]
+
+    def test_filters_invalid_domains(self):
+        assert _get_safe_domains(["valid.com", "invalid!", 123, None], 5) == ["valid.com"]
+
+    def test_caps_at_limit(self):
+        domains = [f"d{i}.com" for i in range(10)]
+        assert _get_safe_domains(domains, 3) == ["d0.com", "d1.com", "d2.com"]
 
 
 class TestBuildFilteredQuery:
