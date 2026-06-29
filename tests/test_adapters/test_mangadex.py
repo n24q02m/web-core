@@ -212,7 +212,9 @@ class TestMangaDexClientConfig:
 # MangaDexClient -- mocked HTTP calls
 # ---------------------------------------------------------------------------
 
+# =============================================================================
 # Fixture data mocking the MangaDex API responses
+# =============================================================================
 
 MOCK_MANGA_RESPONSE = {
     "result": "ok",
@@ -224,9 +226,20 @@ MOCK_MANGA_RESPONSE = {
             "title": {"en": "One Piece"},
             "altTitles": [{"ja": "Wan Piisu"}, {"ko": "Won Piseu"}],
             "description": {"en": "A pirate adventure."},
+            "isLocked": False,
+            "links": {"al": "13", "ap": "one-piece", "mal": "13"},
+            "originalLanguage": "ja",
+            "lastVolume": "100",
+            "lastChapter": "1000",
+            "publicationDemographic": "shounen",
             "status": "ongoing",
             "year": 1997,
             "contentRating": "safe",
+            "tags": [],
+            "state": "published",
+            "createdAt": "2018-03-22T11:47:42+00:00",
+            "updatedAt": "2021-05-24T18:08:31+00:00",
+            "version": 1,
         },
         "relationships": [
             {
@@ -252,6 +265,7 @@ MOCK_SEARCH_RESPONSE = {
                 "description": {},
                 "status": "completed",
                 "year": 1999,
+                "contentRating": "safe",
             },
             "relationships": [],
         },
@@ -272,6 +286,7 @@ MOCK_CHAPTER_RESPONSE = {
             "chapter": "1",
             "title": "Chapter 1",
             "translatedLanguage": "en",
+            "publishAt": "2018-03-22T11:48:42+00:00",
             "pages": 20,
             "version": 1,
         },
@@ -296,6 +311,7 @@ MOCK_FEED_RESPONSE = {
                 "translatedLanguage": "en",
                 "pages": 18,
             },
+            "relationships": [{"id": "manga-001", "type": "manga"}],
         },
     ],
     "limit": 100,
@@ -311,6 +327,18 @@ MOCK_AT_HOME_RESPONSE = {
         "data": ["p1-full.png", "p2-full.png", "p3-full.png"],
         "dataSaver": ["p1-saver.jpg", "p2-saver.jpg", "p3-saver.jpg"],
     },
+}
+
+MOCK_ERROR_RESPONSE = {
+    "result": "error",
+    "errors": [
+        {
+            "id": "err-001",
+            "status": 404,
+            "title": "Not Found",
+            "detail": "The requested resource could not be found.",
+        }
+    ],
 }
 
 
