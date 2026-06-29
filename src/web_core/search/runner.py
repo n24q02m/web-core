@@ -179,28 +179,22 @@ def _get_startup_lock() -> asyncio.Lock:
 # ---------------------------------------------------------------------------
 
 
-def _is_pid_alive(pid: int) -> bool:  # pragma: no cover
-    """Check if a process with the given PID is alive (not zombie).
+def _is_pid_alive_win32(pid: int) -> bool:  # pragma: no cover
+    """Windows-specific PID check using ctypes OpenProcess."""
+    import ctypes
 
-    On Windows, uses ctypes ``OpenProcess`` since ``os.kill(pid, 0)`` does
-    not work for non-child processes.  On Linux, additionally checks
-    ``/proc/{pid}/status`` for zombie state.
-    """
-    if pid <= 0:
-        return False
+    PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+    handle = ctypes.windll.kernel32.OpenProcess(  # type: ignore[attr-defined]
+        PROCESS_QUERY_LIMITED_INFORMATION, False, pid
+    )
+    if handle:
+        ctypes.windll.kernel32.CloseHandle(handle)  # type: ignore[attr-defined]
+        return True
+    return False
 
-    if sys.platform == "win32":
-        import ctypes
 
-        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-        handle = ctypes.windll.kernel32.OpenProcess(  # type: ignore[attr-defined]
-            PROCESS_QUERY_LIMITED_INFORMATION, False, pid
-        )
-        if handle:
-            ctypes.windll.kernel32.CloseHandle(handle)  # type: ignore[attr-defined]
-            return True
-        return False
-
+def _is_pid_alive_unix(pid: int) -> bool:  # pragma: no cover
+    """Unix-specific PID check using os.kill and /proc (on Linux)."""
     try:
         os.kill(pid, 0)
     except (ProcessLookupError, PermissionError, OSError):
@@ -222,6 +216,22 @@ def _is_pid_alive(pid: int) -> bool:  # pragma: no cover
         logger.debug("Could not read /proc/%d/status, assuming alive", pid)
 
     return True
+
+
+def _is_pid_alive(pid: int) -> bool:  # pragma: no cover
+    """Check if a process with the given PID is alive (not zombie).
+
+    On Windows, uses ctypes ``OpenProcess`` since ``os.kill(pid, 0)`` does
+    not work for non-child processes.  On Linux, additionally checks
+    ``/proc/{pid}/status`` for zombie state.
+    """
+    if pid <= 0:
+        return False
+
+    if sys.platform == "win32":
+        return _is_pid_alive_win32(pid)
+
+    return _is_pid_alive_unix(pid)
 
 
 def _read_discovery() -> dict | None:
