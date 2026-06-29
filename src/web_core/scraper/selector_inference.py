@@ -62,9 +62,9 @@ def _load_domain_cookies() -> dict[str, dict[str, str]]:
             domain: domain_cookies for domain, domain_cookies in env_cookies.items() if isinstance(domain_cookies, dict)
         }
     except json.JSONDecodeError as e:
-        logger.warning("Failed to parse WEB_CORE_DOMAIN_COOKIES: %s", e)
+        logger.warning("Failed to parse WEB_CORE_DOMAIN_COOKIES", extra={"error": e})
     except Exception as e:
-        logger.warning("Unexpected error loading WEB_CORE_DOMAIN_COOKIES: %s", e)
+        logger.warning("Unexpected error loading WEB_CORE_DOMAIN_COOKIES", extra={"error": e})
 
     return {}
 
