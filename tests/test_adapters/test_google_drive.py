@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 from web_core.adapters.google_drive import (
@@ -382,3 +383,29 @@ async def test_download_text_file_invalid_id():
     for fid in invalid_ids:
         with pytest.raises(ValueError, match="Invalid Google Drive file ID format"):
             await download_text_file(fid)
+
+
+async def test_list_folder_via_html_http_error():
+    """list_folder_via_html raises httpx.HTTPStatusError on non-200 response."""
+    mock_response = MagicMock()
+    # Mock raise_for_status to raise an HTTPStatusError
+    # We need a request object to initialize HTTPStatusError
+    mock_request = MagicMock(spec=httpx.Request)
+    mock_request.url = httpx.URL("https://drive.google.com/drive/folders/test_folder_id")
+    mock_request.method = "GET"
+
+    error = httpx.HTTPStatusError(
+        "404 Not Found", request=mock_request, response=MagicMock(status_code=404, spec=httpx.Response)
+    )
+    mock_response.raise_for_status.side_effect = error
+
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with (
+        patch("web_core.adapters.google_drive.safe_httpx_client", return_value=mock_client),
+        pytest.raises(httpx.HTTPStatusError),
+    ):
+        await _list_folder_via_html("test_folder_id")
