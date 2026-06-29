@@ -129,8 +129,12 @@ class CaptchaStrategy(BaseStrategy):
 
         # Strategy 2: Extract 0x-prefix key from CF Turnstile iframe src
         # e.g. /cdn-cgi/.../0x4AAAAAAADnPIDROrmt1Wwj/light/...
-        iframe_srcs = await page.evaluate("() => Array.from(document.querySelectorAll('iframe')).map(f => f.src || '')")
-        for src in iframe_srcs:
+        # Uses Python-level query instead of JS eval for better reliability in challenge pages.
+        iframes = await page.query_selector_all("iframe")
+        for iframe in iframes:
+            src = await iframe.get_attribute("src")
+            if not src:
+                continue
             if "/0x" in src:
                 m = _RE_CF_IFRAME_0X.search(src)
                 if m:

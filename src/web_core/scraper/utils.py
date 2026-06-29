@@ -34,6 +34,9 @@ _CF_SITEKEY_PATTERNS = [
     re.compile(r'data-sitekey=["\']([0-9a-zA-Z_-]{20,})["\']'),
     re.compile(r"sitekey=([0-9a-zA-Z_-]{20,})"),
     re.compile(r'turnstileSiteKey["\s:]+["\']([0-9a-zA-Z_-]{20,})["\']'),
+    # Cloudflare challenge platform iframe URL patterns
+    re.compile(r"/(0x[0-9a-zA-Z_-]{20,})[/&]"),
+    re.compile(r"/([0-9a-zA-Z_-]{20,})/(?:light|dark|auto)"),
 ]
 
 
@@ -93,7 +96,12 @@ def extract_turnstile_sitekey(html: str) -> str | None:
     # Speeds up processing of normal pages significantly.
     # Performance Optimization: Using exact case checks avoids a full `html.lower()`
     # string allocation which is expensive for large non-challenge pages.
-    if "sitekey" not in html and "siteKey" not in html:
+    if (
+        "sitekey" not in html
+        and "siteKey" not in html
+        and "challenges.cloudflare.com" not in html
+        and "cdn-cgi" not in html
+    ):
         return None
 
     for pattern in _CF_SITEKEY_PATTERNS:
