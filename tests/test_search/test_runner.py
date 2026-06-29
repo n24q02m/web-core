@@ -1380,3 +1380,110 @@ class TestHandleRestartAndStart:
         ):
             url = await _handle_restart_and_start(start_port=8888)
             assert url == "http://sub-url"
+
+
+# Additional tests for shutdown_searxng and _cleanup_process
+# ===========================================================================
+
+
+class TestShutdownSearxngExtra:
+    def test_shutdown_searxng_idempotent(self):
+        """Safe to call multiple times."""
+        shutdown_searxng()
+        shutdown_searxng()
+        # Should not raise
+
+    def test_cleanup_docker_as_owner(self, tmp_discovery):
+        """Owner removes docker container and discovery file."""
+        import web_core.search.runner as mod
+
+        mod._searxng_docker_container = "test-container"
+        mod._is_owner = True
+
+        _write_discovery(18888, 12345)
+        assert tmp_discovery.exists()
+
+        with patch("shutil.which", return_value="/usr/bin/docker"), patch("subprocess.run") as mock_run:
+            shutdown_searxng()
+
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert "docker" in args[0]
+            assert "rm" in args[1]
+            assert "-f" in args[2]
+            assert "test-container" in args[3]
+
+        assert mod._searxng_docker_container is None
+        assert not tmp_discovery.exists()
+
+    def test_cleanup_docker_as_non_owner(self, tmp_discovery):
+        """Non-owner does not remove docker container or discovery file."""
+        import web_core.search.runner as mod
+
+        mod._searxng_docker_container = "test-container"
+        mod._is_owner = False
+
+        _write_discovery(18888, 12345)
+        assert tmp_discovery.exists()
+
+        with patch("shutil.which", return_value="/usr/bin/docker"), patch("subprocess.run") as mock_run:
+            shutdown_searxng()
+
+            mock_run.assert_not_called()
+
+        assert mod._searxng_docker_container is None
+        assert tmp_discovery.exists()
+
+    def test_cleanup_settings_unlink_error(self, tmp_path):
+        """Handles exception during settings file removal."""
+        import web_core.search.runner as mod
+
+        dummy_settings = tmp_path / "searxng_settings_test.yml"
+        dummy_settings.write_text("test")
+        mod._searxng_settings_path = dummy_settings
+
+        with patch.object(Path, "unlink", side_effect=Exception("Unlink failed")):
+            # Should not raise
+            shutdown_searxng()
+
+        assert mod._searxng_settings_path == dummy_settings
+
+    def test_cleanup_subprocess_error(self, tmp_discovery):
+        """Handles exception during subprocess kill."""
+        import web_core.search.runner as mod
+
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = None
+        mock_proc.pid = 12345
+        mock_proc.stderr = None
+
+        mod._searxng_process = mock_proc
+        mod._searxng_port = 18888
+        mod._is_owner = True
+
+        _write_discovery(18888, 12345)
+
+        with patch("web_core.search.runner._force_kill_process_sync", side_effect=Exception("Kill failed")):
+            # Should not raise
+            shutdown_searxng()
+
+        assert mod._searxng_process is None
+        assert not tmp_discovery.exists()
+
+    def test_cleanup_docker_as_owner_no_docker_bin(self, tmp_discovery):
+        """Owner removes discovery file even if docker binary is missing."""
+        import web_core.search.runner as mod
+
+        mod._searxng_docker_container = "test-container"
+        mod._is_owner = True
+
+        _write_discovery(18888, 12345)
+        assert tmp_discovery.exists()
+
+        with patch("shutil.which", return_value=None), patch("subprocess.run") as mock_run:
+            shutdown_searxng()
+
+            mock_run.assert_not_called()
+
+        assert mod._searxng_docker_container is None
+        assert not tmp_discovery.exists()

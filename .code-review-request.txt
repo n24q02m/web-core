@@ -1,0 +1,10 @@
+I have removed the # pragma: no cover from the _cleanup_process function in src/web_core/search/runner.py and added comprehensive tests for shutdown_searxng and _cleanup_process in tests/test_search/test_runner.py.
+
+The new tests cover:
+- Idempotency of shutdown_searxng.
+- Docker container cleanup when owner (including case with missing docker binary).
+- Docker container skip cleanup when not owner.
+- Settings file removal error handling.
+- Subprocess kill error handling.
+
+Tests pass and coverage has improved.
