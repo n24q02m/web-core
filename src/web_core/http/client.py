@@ -86,6 +86,18 @@ def _check_ip_safe(ip_str: str, hostname: str) -> bool:
     return True
 
 
+def _are_resolved_ips_safe(hostname: str, results: list, is_host_allowed: bool) -> bool:
+    """Return True if all resolved IPs for *hostname* are safe."""
+    if is_host_allowed:
+        return True
+
+    for res in results:
+        ip_str = str(res[4][0])
+        if not _check_ip_safe(ip_str, hostname):
+            return False
+    return True
+
+
 # ---------------------------------------------------------------------------
 # URL safety validation
 # ---------------------------------------------------------------------------
@@ -122,23 +134,15 @@ def is_safe_url(url: str, *, allow_private: bool | Iterable[str] = False) -> boo
         if entry is not None:
             results, cached_at = entry
             if (time.monotonic() - cached_at) < _DNS_CACHE_TTL:
-                if not is_host_allowed:
-                    for res in results:
-                        ip_str = str(res[4][0])
-                        if not _check_ip_safe(ip_str, hostname):
-                            return False
-                return True
+                return _are_resolved_ips_safe(hostname, results, is_host_allowed)
 
     try:
         results = _original_getaddrinfo(hostname, None)
     except (socket.gaierror, Exception):
         return False
 
-    if not is_host_allowed:
-        for res in results:
-            ip_str = str(res[4][0])
-            if not _check_ip_safe(ip_str, hostname):
-                return False
+    if not _are_resolved_ips_safe(hostname, results, is_host_allowed):
+        return False
 
     # Pin the DNS result
     with _dns_cache_lock:
