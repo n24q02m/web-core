@@ -152,6 +152,30 @@ class TestNormalizeUrl:
         result = normalize_url("https://example.com///")
         assert result == "https://example.com"
 
+    def test_middle_double_slashes(self):
+        result = normalize_url("https://example.com/a//b")
+        assert result == "https://example.com/a/b"
+
+    def test_path_traversal_dot(self):
+        result = normalize_url("https://example.com/a/./b")
+        assert result == "https://example.com/a/b"
+
+    def test_path_traversal_double_dot(self):
+        result = normalize_url("https://example.com/a/../b")
+        assert result == "https://example.com/b"
+
+    def test_path_traversal_complex(self):
+        result = normalize_url("https://example.com/a/b/c/../../d")
+        assert result == "https://example.com/a/d"
+
+    def test_leading_double_slashes_in_path(self):
+        result = normalize_url("https://example.com//path")
+        assert result == "https://example.com/path"
+
+    def test_multiple_leading_slashes_in_path(self):
+        result = normalize_url("https://example.com///path")
+        assert result == "https://example.com/path"
+
 
 class TestTrackingParams:
     """Verify the tracking params set is comprehensive."""

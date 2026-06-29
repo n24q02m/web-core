@@ -7,6 +7,7 @@ comparison, and for validating domain names to prevent injection attacks.
 from __future__ import annotations
 
 import functools
+import posixpath
 import re
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
@@ -68,16 +69,13 @@ def extract_domain(url: str) -> str:
     return domain_part.partition("/")[0].partition("?")[0].partition("#")[0]
 
 
-@functools.lru_cache(maxsize=4096)
 def normalize_url(url: str) -> str:
     """Normalize a URL for deduplication.
-
-    Performance Optimization: The result is cached to avoid expensive repetitive
-    parsing (urlparse/urlunparse, regex) for duplicate URLs.
 
     Transformations applied:
     - Lowercase scheme and netloc
     - Strip ``www.`` prefix from netloc
+    - Normalize path (resolve ``..``, ``.``, collapse multiple slashes)
     - Strip trailing slashes from path
     - Remove tracking query parameters (UTM, click IDs, etc.)
     - Remove fragment (``#section``)
@@ -99,7 +97,17 @@ def normalize_url(url: str) -> str:
     if netloc.startswith("www."):
         netloc = netloc[4:]
 
-    path = parsed.path.rstrip("/") or ""
+    # Path normalization: resolve segments and collapse slashes
+    path = parsed.path or ""
+    if path:
+        path = posixpath.normpath(path)
+        if path == ".":
+            path = ""
+        # Collapse multiple leading slashes (normpath preserves //)
+        if path.startswith("//"):
+            path = "/" + path.lstrip("/")
+        # Ensure trailing slashes are stripped
+        path = path.rstrip("/")
 
     if parsed.query:
         # Fast path check for tracking params (~17x faster if absent)
