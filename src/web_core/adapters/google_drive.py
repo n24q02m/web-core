@@ -221,7 +221,7 @@ async def fetch_folder_chapters(
         for i, f in enumerate(files):
             tg.create_task(_download_chapter(i, f))
 
-    return [res for res in results if res is not None]
+    return list(filter(None, results))
 
 
 def _natural_sort_key(s: str) -> list[int | str]:
