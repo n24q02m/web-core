@@ -662,3 +662,40 @@ def test_get_domain_selectors_completely_unknown_miss(monkeypatch):
 
     url = "https://unknown.com"
     assert selector_inference.get_domain_selectors(url) is None
+
+
+def test_get_domain_selectors_real_unknown_no_monkeypatch():
+    # Verify that a domain definitely not in DOMAIN_CONFIGS returns None
+    # without any monkeypatching of the configs.
+    url = "https://this-domain-does-not-exist-12345.com/path"
+    assert selector_inference.get_domain_selectors(url) is None
+
+
+def test_get_domain_selectors_case_insensitivity():
+    # Domain matching should be case-insensitive
+    url = "HTTPS://NCODE.SYOSETU.COM/123"
+    result = selector_inference.get_domain_selectors(url)
+    assert result is not None
+    assert result["content"] == "#novel_honbun"
+
+
+def test_get_domain_selectors_empty_url():
+    # Empty URL should result in empty domain and no match
+    assert selector_inference.get_domain_selectors("") is None
+
+
+def test_get_domain_selectors_invalid_url():
+    # URL that yields empty domain
+    assert selector_inference.get_domain_selectors("https://") is None
+    assert selector_inference.get_domain_selectors("://") is None
+
+
+def test_get_domain_selectors_unknown_domain_with_cookies(monkeypatch):
+    # If a domain has cookies but no hardcoded selectors, it should still return None.
+    # Uses a domain that is definitely not in the hardcoded DOMAIN_CONFIGS.
+    monkeypatch.setattr(
+        selector_inference,
+        "DOMAIN_COOKIES",
+        {"cookie-only-unknown.com": {"session": "123"}},
+    )
+    assert selector_inference.get_domain_selectors("https://cookie-only-unknown.com") is None
