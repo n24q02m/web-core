@@ -231,10 +231,7 @@ class MangaDexClient:
                 "includes[]": "cover_art",
             },
         )
-        results: list[MangaInfo] = []
-        for item in data.get("data", []):
-            results.append(self._parse_manga_item(item))
-        return results
+        return [self._parse_manga_item(item) for item in data.get("data", [])]
 
     async def get_chapter_feed(
         self,
