@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 RECAPTCHA_V2_PROXYLESS = "ReCaptchaV2TaskProxyLess"
 TURNSTILE_PROXYLESS = "AntiTurnstileTaskProxyLess"
 
-_RE_CF_IFRAME_0X = re.compile(r"/(0x[A-Za-z0-9]+)[/&]")
-_RE_CF_IFRAME_LONG = re.compile(r"/([A-Za-z0-9]{20,})/(?:light|dark|auto)")
+_RE_CF_IFRAME_0X = re.compile(r"/(0x[0-9a-zA-Z_-]{20,})[/&]")
+_RE_CF_IFRAME_LONG = re.compile(r"/([0-9a-zA-Z_-]{20,})/(?:light|dark|auto)")
 _RE_SCRIPT_SITEKEY = re.compile(r"""sitekey['"\s:=]+['"]([A-Za-z0-9_-]{10,})['"]""", re.IGNORECASE)
 
 # Token extraction keys per captcha type (CapSolver API response format)
@@ -111,29 +111,35 @@ class CaptchaStrategy(BaseStrategy):
         )
 
     async def _extract_turnstile_sitekey(self, page: Any) -> str | None:
-        """Extract Turnstile sitekey from Patchright page.
+        """Extract Turnstile sitekey from Patchright page using BeautifulSoup.
 
-        Uses Python-level query (not JS eval) to find the Turnstile iframe src
-        since CF challenge iframes may not be accessible via document.querySelectorAll.
+        Uses Python-level parsing of page content to find the Turnstile iframe src
+        or data attributes, which is more reliable than JS-level queries in
+        challenge pages.
         """
         import contextlib
 
-        # Wait for the Turnstile iframe to appear
+        from bs4 import BeautifulSoup
+
+        # Wait for the Turnstile iframe to appear (Challenge pages can be slow)
         with contextlib.suppress(Exception):
             await page.wait_for_selector("iframe[src*='challenges.cloudflare.com']", timeout=8000)
 
+        html = await page.content()
+        soup = BeautifulSoup(html, "lxml")
+
         # Strategy 1: data-sitekey attribute (static Turnstile)
-        el = await page.query_selector("[data-sitekey]")
+        el = soup.find(attrs={"data-sitekey": True})
         if el:
-            return await el.get_attribute("data-sitekey")
+            sitekey = el.get("data-sitekey")
+            if isinstance(sitekey, str):
+                return sitekey
 
         # Strategy 2: Extract 0x-prefix key from CF Turnstile iframe src
         # e.g. /cdn-cgi/.../0x4AAAAAAADnPIDROrmt1Wwj/light/...
-        # Uses Python-level query instead of JS eval for better reliability in challenge pages.
-        iframes = await page.query_selector_all("iframe")
-        for iframe in iframes:
-            src = await iframe.get_attribute("src")
-            if not src:
+        for iframe in soup.find_all("iframe"):
+            src = iframe.get("src")
+            if not isinstance(src, str):
                 continue
             if "/0x" in src:
                 m = _RE_CF_IFRAME_0X.search(src)
@@ -144,12 +150,11 @@ class CaptchaStrategy(BaseStrategy):
                 return m2.group(1)
 
         # Strategy 3: Inline script sitekey
-        script_texts = await page.evaluate(
-            "() => Array.from(document.querySelectorAll('script')).map(s => s.textContent || '')"
-        )
-        for text in script_texts:
-            # Performance Optimization: exact case check avoids full string allocation
-            # which can be expensive for large inline scripts.
+        for script in soup.find_all("script"):
+            text = script.string or script.text or ""
+            if not text:
+                continue
+            # Performance Optimization: exact case check avoids full regex execution
             if "sitekey" not in text and "siteKey" not in text:
                 continue
             m = _RE_SCRIPT_SITEKEY.search(text)

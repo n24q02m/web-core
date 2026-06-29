@@ -314,23 +314,19 @@ class TestExtractTurnstileSitekey:
 
         mock_page = AsyncMock()
         mock_page.wait_for_selector = AsyncMock()
-        mock_page.query_selector = AsyncMock(return_value=mock_el)
+        mock_page.content = AsyncMock(return_value="<div data-sitekey='0x4AAAA_data_key'></div>")
 
         strategy = CaptchaStrategy(capsolver_api_key="key")
         result = await strategy._extract_turnstile_sitekey(mock_page)
         assert result == "0x4AAAA_data_key"
 
     async def test_extract_from_iframe_src(self):
-        """Extract sitekey from CF Turnstile iframe src URL."""
+        """Extract sitekey from iframe src attribute."""
         mock_page = AsyncMock()
         mock_page.wait_for_selector = AsyncMock()
-        mock_page.query_selector = AsyncMock(return_value=None)  # no data-sitekey element
-
-        mock_iframe = AsyncMock()
-        mock_iframe.get_attribute = AsyncMock(
-            return_value="https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/0x4AAAAAAADnPIDROrmt1Wwj/light/normal"
+        mock_page.content = AsyncMock(
+            return_value="<iframe src='https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/0x4AAAAAAADnPIDROrmt1Wwj/light/normal'></iframe>"
         )
-        mock_page.query_selector_all = AsyncMock(return_value=[mock_iframe])
 
         strategy = CaptchaStrategy(capsolver_api_key="key")
         result = await strategy._extract_turnstile_sitekey(mock_page)
@@ -340,15 +336,7 @@ class TestExtractTurnstileSitekey:
         """Extract sitekey from inline script."""
         mock_page = AsyncMock()
         mock_page.wait_for_selector = AsyncMock()
-        mock_page.query_selector = AsyncMock(return_value=None)
-
-        # No sitekey in iframes
-        mock_iframe = AsyncMock()
-        mock_iframe.get_attribute = AsyncMock(return_value="https://example.com/no-sitekey")
-        mock_page.query_selector_all = AsyncMock(return_value=[mock_iframe])
-
-        # Sitekey in inline script
-        mock_page.evaluate = AsyncMock(return_value=["turnstile.render({sitekey: '0x4AAAA_script_key'})"])
+        mock_page.content = AsyncMock(return_value="<script>turnstile.render({sitekey: '0x4AAAA_script_key'})</script>")
 
         strategy = CaptchaStrategy(capsolver_api_key="key")
         result = await strategy._extract_turnstile_sitekey(mock_page)
@@ -358,20 +346,7 @@ class TestExtractTurnstileSitekey:
         """Returns None when no sitekey found anywhere."""
         mock_page = AsyncMock()
         mock_page.wait_for_selector = AsyncMock(side_effect=Exception("timeout"))
-        mock_page.query_selector = AsyncMock(return_value=None)
-
-        mock_iframe = AsyncMock()
-        mock_iframe.get_attribute = AsyncMock(return_value="")
-
-        mock_script = AsyncMock()
-        mock_script.text_content = AsyncMock(return_value="var x = 1;")
-
-        mock_page.query_selector_all = AsyncMock(
-            side_effect=[
-                [mock_iframe],  # iframes
-                [mock_script],  # scripts
-            ]
-        )
+        mock_page.content = AsyncMock(return_value="<html>no key here</html>")
 
         strategy = CaptchaStrategy(capsolver_api_key="key")
         result = await strategy._extract_turnstile_sitekey(mock_page)
@@ -381,13 +356,9 @@ class TestExtractTurnstileSitekey:
         """Extract sitekey using fallback pattern from iframe src (light/dark/auto)."""
         mock_page = AsyncMock()
         mock_page.wait_for_selector = AsyncMock()
-        mock_page.query_selector = AsyncMock(return_value=None)
-
-        mock_iframe = AsyncMock()
-        mock_iframe.get_attribute = AsyncMock(
-            return_value="https://challenges.cloudflare.com/LongAlphanumericString12/light/normal"
+        mock_page.content = AsyncMock(
+            return_value="<iframe src='https://challenges.cloudflare.com/LongAlphanumericString12/light/normal'></iframe>"
         )
-        mock_page.query_selector_all = AsyncMock(return_value=[mock_iframe])
 
         strategy = CaptchaStrategy(capsolver_api_key="key")
         result = await strategy._extract_turnstile_sitekey(mock_page)
@@ -506,15 +477,8 @@ class TestCaptchaCoverageEnhancement:
         """_extract_turnstile_sitekey handles iframe src with /0x that doesn't match regex."""
         mock_page = AsyncMock()
         mock_page.wait_for_selector = AsyncMock()
-        mock_page.query_selector = AsyncMock(return_value=None)
-
-        # Strategy 2: /0x is present but it's not followed by hex chars as expected by _RE_CF_IFRAME_0X
-        # _RE_CF_IFRAME_0X = re.compile(r"/(0x[A-Za-z0-9]+)[/&]")
-        mock_page.evaluate = AsyncMock(
-            side_effect=[
-                ["https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/0x/invalid"],  # iframes
-                [],  # scripts
-            ]
+        mock_page.content = AsyncMock(
+            return_value="<iframe src='https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/0x/invalid'></iframe>"
         )
 
         strategy = CaptchaStrategy(capsolver_api_key="key")
@@ -525,14 +489,7 @@ class TestCaptchaCoverageEnhancement:
         """_extract_turnstile_sitekey skips scripts without sitekey keyword."""
         mock_page = AsyncMock()
         mock_page.wait_for_selector = AsyncMock()
-        mock_page.query_selector = AsyncMock(return_value=None)
-
-        mock_page.evaluate = AsyncMock(
-            side_effect=[
-                [],  # iframes
-                ["console.log('hello');", "var x = 1;"],  # scripts
-            ]
-        )
+        mock_page.content = AsyncMock(return_value="<script>console.log('hello');</script>")
 
         strategy = CaptchaStrategy(capsolver_api_key="key")
         result = await strategy._extract_turnstile_sitekey(mock_page)
@@ -542,16 +499,7 @@ class TestCaptchaCoverageEnhancement:
         """_extract_turnstile_sitekey handles script with sitekey keyword but no regex match."""
         mock_page = AsyncMock()
         mock_page.wait_for_selector = AsyncMock()
-        mock_page.query_selector = AsyncMock(return_value=None)
-
-        # "sitekey" is present (triggers the continue check) but doesn't match _RE_SCRIPT_SITEKEY
-        # _RE_SCRIPT_SITEKEY = re.compile(r"sitekey['\"\s:=]+['"]([A-Za-z0-9_-]{10,})['"]", re.IGNORECASE)
-        mock_page.evaluate = AsyncMock(
-            side_effect=[
-                [],  # iframes
-                ["var sitekey = 'too-short';"],  # scripts
-            ]
-        )
+        mock_page.content = AsyncMock(return_value="<script>var sitekey = 'too-short';</script>")
 
         strategy = CaptchaStrategy(capsolver_api_key="key")
         result = await strategy._extract_turnstile_sitekey(mock_page)
