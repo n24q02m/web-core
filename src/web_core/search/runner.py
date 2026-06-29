@@ -32,6 +32,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.parse
 from pathlib import Path
 
 import filelock
@@ -298,7 +299,12 @@ async def _quick_health_check(url: str, retries: int = 3) -> bool:
     down TCP connections on each attempt.  Retries with exponential backoff
     (0.5s, 1s, 2s) and a generous per-probe timeout.
     """
-    async with safe_httpx_client(allow_private=True) as client:
+    try:
+        parsed_url = urllib.parse.urlparse(url)
+        hostname = parsed_url.hostname or "localhost"
+    except Exception:
+        hostname = "localhost"
+    async with safe_httpx_client(allow_private=[hostname]) as client:
         for attempt in range(retries):
             try:
                 response = await client.get(
@@ -402,7 +408,12 @@ async def _wait_for_service(url: str, timeout: float = _STARTUP_HEALTH_TIMEOUT) 
     start_time = time.time()
     logger.debug("Waiting for SearXNG at %s...", url)
 
-    async with safe_httpx_client(allow_private=True) as client:
+    try:
+        parsed_url = urllib.parse.urlparse(url)
+        hostname = parsed_url.hostname or "localhost"
+    except Exception:
+        hostname = "localhost"
+    async with safe_httpx_client(allow_private=[hostname]) as client:
         while time.time() - start_time < timeout:
             try:
                 response = await client.get(
