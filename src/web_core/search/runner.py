@@ -598,33 +598,6 @@ def _is_process_dead(pid: int) -> bool:
         return True
 
 
-def _sigterm_then_kill_sync(pid: int, label: str = "") -> bool:  # pragma: no cover
-    """Send SIGTERM to a PID, wait briefly, then SIGKILL if needed (sync).
-
-    Returns ``True`` if the process was successfully terminated.
-    """
-    tag = f" ({label})" if label else ""
-    try:
-        os.kill(pid, signal.SIGTERM)
-    except (ProcessLookupError, PermissionError):
-        return True
-
-    # Wait up to 3 seconds for graceful exit.
-    for _ in range(30):
-        if _is_process_dead(pid):
-            logger.debug("Process PID=%d%s terminated gracefully", pid, tag)
-            return True
-        time.sleep(0.1)
-
-    # Force kill.
-    try:
-        os.kill(pid, signal.SIGKILL)
-        logger.debug("Process PID=%d%s force-killed", pid, tag)
-        return True
-    except (ProcessLookupError, PermissionError):
-        return True
-
-
 async def _sigterm_then_kill(pid: int, label: str = "") -> bool:  # pragma: no cover
     """Send SIGTERM to a PID, wait briefly, then SIGKILL if needed (async).
 
@@ -683,7 +656,7 @@ def _force_kill_process_sync(proc: subprocess.Popen) -> None:  # pragma: no cove
             except subprocess.TimeoutExpired:
                 logger.warning("SearXNG process (PID=%d) could not be killed", pid)
         else:
-            _sigterm_then_kill_sync(pid, "SearXNG")
+            proc.terminate()
             try:
                 proc.wait(timeout=3)
             except subprocess.TimeoutExpired:
