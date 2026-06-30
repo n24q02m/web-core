@@ -292,7 +292,7 @@ class ScrapingAgent:
                     "selector_inference_attempted": True,
                 }
         except Exception:
-            logger.error("Selector inference failed", exc_info=True)
+            logger.exception("Selector inference failed")
 
         return {**state, "selector_inference_attempted": True}
 
