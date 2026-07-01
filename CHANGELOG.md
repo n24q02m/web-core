@@ -2,6 +2,151 @@
 
 <!-- version list -->
 
+## v2.3.0 (2026-07-01)
+
+### Bug Fixes
+
+- [PERF] Inefficient append in get_manga loop
+  ([`bc20dbf`](https://github.com/n24q02m/web-core/commit/bc20dbf7877a42f3d21bf935db55fb7120b6a24c))
+
+- Add edge case tests for get_domain_selectors
+  ([`a86cbc6`](https://github.com/n24q02m/web-core/commit/a86cbc669e155d2f6e74588142edfea581cbc9c6))
+
+- Bolt: Use urlsplit for ~2x faster URL normalization
+  ([`8cc1cce`](https://github.com/n24q02m/web-core/commit/8cc1cce19ee8c4019906dbc5a5b74d5f5cb11cbc))
+
+- Cover _list_folder_via_html HTTP error
+  ([`b49c0e4`](https://github.com/n24q02m/web-core/commit/b49c0e4fe85c09b9c097e9c982426d0f08091975))
+
+- Cover patchright SSRF-blocked + CF timeout
+  ([`ea620f9`](https://github.com/n24q02m/web-core/commit/ea620f9caa20a32920b90be104a7a609ba3a5aea))
+
+- Deeply nested code in _is_pid_alive
+  ([`fe08ba3`](https://github.com/n24q02m/web-core/commit/fe08ba3eef6223e9a0475b9633f4f775bf124981))
+
+- F-string in logger
+  ([`867c5fd`](https://github.com/n24q02m/web-core/commit/867c5fdb66dec4bfd6d328a56dfcd3637927ca4c))
+
+- Fast-path JS-render check before regex parse
+  ([`7d2bd9a`](https://github.com/n24q02m/web-core/commit/7d2bd9a4d9ff355af9b3e7f4ce17efccc26948d1))
+
+- Fixtures
+  ([`3fe6f74`](https://github.com/n24q02m/web-core/commit/3fe6f740ba719b61b8c2827aed6912b2f0c673b1))
+
+- Guard _get_safe_domains limit<=0 off-by-one
+  ([`c108d54`](https://github.com/n24q02m/web-core/commit/c108d54bfbc156c8a34dff8e00bd8ff1b779a4bf))
+
+- Guard non-dict in _extract_cookies + cover
+  ([`7ae3eab`](https://github.com/n24q02m/web-core/commit/7ae3eab6a2672929a29cef5ee68703c47b57ac68))
+
+- Harden script/style tag stripping against whitespace end tags (CodeQL py/bad-tag-filter)
+  ([#537](https://github.com/n24q02m/web-core/pull/537),
+  [`5793b06`](https://github.com/n24q02m/web-core/commit/5793b06cdb2f20925d9a0440d12d6f63637c94e4))
+
+- Lock file maintenance
+  ([`37d8db3`](https://github.com/n24q02m/web-core/commit/37d8db3a4c699af6424d40d7a4a400ffc57b8585))
+
+- Log swallowed exception in agent selector inference
+  ([`ed9773e`](https://github.com/n24q02m/web-core/commit/ed9773e38d561e20f32b83fc585edad30fca297d))
+
+- Log swallowed exceptions in runner.py
+  ([`0ac688b`](https://github.com/n24q02m/web-core/commit/0ac688bb09f5715a0f89fc836ddaa91fe5f365ef))
+
+- Match script/style end tags with trailing junk in visible_text
+  ([#537](https://github.com/n24q02m/web-core/pull/537),
+  [`5793b06`](https://github.com/n24q02m/web-core/commit/5793b06cdb2f20925d9a0440d12d6f63637c94e4))
+
+- Match script/style end tags with trailing whitespace in visible_text
+  ([#537](https://github.com/n24q02m/web-core/pull/537),
+  [`5793b06`](https://github.com/n24q02m/web-core/commit/5793b06cdb2f20925d9a0440d12d6f63637c94e4))
+
+- Missing edge case tests for Google Drive HTML fallback list parsing
+  ([`a4b5e6a`](https://github.com/n24q02m/web-core/commit/a4b5e6ad5a7c528a84ac22d1c7482c9aebaacf23))
+
+- Postpone source normalization to capped results in search
+  ([`b9e5358`](https://github.com/n24q02m/web-core/commit/b9e53580a7f3eba1e54f8da51f8f41df6d9eaa38))
+
+- Read Turnstile sitekey from iframe src reliably
+  ([`ed04b8c`](https://github.com/n24q02m/web-core/commit/ed04b8c293b0052972eb0e11178d46098ae8829e))
+
+- Remove AI-trace plan.md from public repo and gitignore it
+  ([#536](https://github.com/n24q02m/web-core/pull/536),
+  [`16fcdd3`](https://github.com/n24q02m/web-core/commit/16fcdd30953e529d7b6b1f577966f0da1e2d4336))
+
+- Scope SSRF allowlist to SearXNG host instead of global allow_private
+  ([`783448d`](https://github.com/n24q02m/web-core/commit/783448d667ebcbd3e608441a1fae6502bedb4e39))
+
+- Sync README with current code (architecture, config, capabilities)
+  ([#538](https://github.com/n24q02m/web-core/pull/538),
+  [`3d72d8a`](https://github.com/n24q02m/web-core/commit/3d72d8a8453f686cadd4dda95763cc8dde166697))
+
+- Synchronous blocking sleep inside loop
+  ([`5c1981a`](https://github.com/n24q02m/web-core/commit/5c1981afb3e5b68119d1c86f8086f255a7e56d61))
+
+- Update dawidd6/action-send-mail action to v18
+  ([`8b6b683`](https://github.com/n24q02m/web-core/commit/8b6b683a9ec80be4d036aab67465525d14f772f3))
+
+- Update ghcr.io/astral-sh/uv:latest docker digest
+  ([`8598b61`](https://github.com/n24q02m/web-core/commit/8598b6169b484352d384e2a1c7769c9274300fc7))
+
+- Update non-major dependencies
+  ([`4be00c2`](https://github.com/n24q02m/web-core/commit/4be00c26820c64188b604c15f92bad8ab19e2dbc))
+
+- Use direct namedtuple field access for GoogleDriveFileToDownload
+  ([`1844a44`](https://github.com/n24q02m/web-core/commit/1844a44f234234a2465c5458ab0c620be8a9a236))
+
+- Use lazy %s logging in selector_inference
+  ([`7152509`](https://github.com/n24q02m/web-core/commit/7152509590182e37a10a64b0f2148f91ca427498))
+
+- **deps**: Lock file maintenance ([#605](https://github.com/n24q02m/web-core/pull/605),
+  [`b0ec822`](https://github.com/n24q02m/web-core/commit/b0ec8222c6e166d4286af88a3a023debb1af40c3))
+
+- **deps**: Lock file maintenance ([#541](https://github.com/n24q02m/web-core/pull/541),
+  [`794be4d`](https://github.com/n24q02m/web-core/commit/794be4d8b9b613c892348fa631847923df52486a))
+
+- **deps**: Lock file maintenance ([#540](https://github.com/n24q02m/web-core/pull/540),
+  [`b48ca24`](https://github.com/n24q02m/web-core/commit/b48ca248637b1f19263bd4c8fc332385ce63118e))
+
+- **deps**: Lock file maintenance ([#528](https://github.com/n24q02m/web-core/pull/528),
+  [`d483ac7`](https://github.com/n24q02m/web-core/commit/d483ac7fbe0c6277ea2c4a7298876573be1b7a56))
+
+- **deps**: Update actions/checkout action to v7
+  ([#527](https://github.com/n24q02m/web-core/pull/527),
+  [`ecec5cf`](https://github.com/n24q02m/web-core/commit/ecec5cff964f294db0509d9cbaf2450f90325603))
+
+- **deps**: Update actions/setup-python digest to ece7cb0
+  ([#577](https://github.com/n24q02m/web-core/pull/577),
+  [`748fe55`](https://github.com/n24q02m/web-core/commit/748fe55a25c557f46d6f97231a284ee8d16d49b3))
+
+- **deps**: Update ghcr.io/astral-sh/uv:latest Docker digest to 3d868e5
+  ([#604](https://github.com/n24q02m/web-core/pull/604),
+  [`dd842b5`](https://github.com/n24q02m/web-core/commit/dd842b5c271f316cb18656385d4bcbc59b103734))
+
+- **deps**: Update ghcr.io/astral-sh/uv:latest Docker digest to d0a0a75
+  ([#534](https://github.com/n24q02m/web-core/pull/534),
+  [`dc3d747`](https://github.com/n24q02m/web-core/commit/dc3d747e37a2e7db95686b111c0940da3cd1df76))
+
+- **deps**: Update non-major dependencies ([#573](https://github.com/n24q02m/web-core/pull/573),
+  [`b803ad3`](https://github.com/n24q02m/web-core/commit/b803ad3f5037a1c83076b57166b72c313a217e78))
+
+- **deps**: Update non-major dependencies ([#526](https://github.com/n24q02m/web-core/pull/526),
+  [`f98a46d`](https://github.com/n24q02m/web-core/commit/f98a46d64e9919ad93ea077200704b703055c2cb))
+
+- **deps**: Update non-major dependencies to >=0.9.0
+  ([#539](https://github.com/n24q02m/web-core/pull/539),
+  [`6985390`](https://github.com/n24q02m/web-core/commit/6985390b4498531c359dbc4353f804a0cc588de7))
+
+- **deps**: Update python:3.13-slim-bookworm Docker digest to fcbd8df
+  ([#578](https://github.com/n24q02m/web-core/pull/578),
+  [`d3c0057`](https://github.com/n24q02m/web-core/commit/d3c00575d1aec52ec41301b27cae90196dc7938a))
+
+### Performance Improvements
+
+- Add fast path to cloudflare challenge detection
+  ([#529](https://github.com/n24q02m/web-core/pull/529),
+  [`b4f705e`](https://github.com/n24q02m/web-core/commit/b4f705e7bda69ff71bb89f122568cbe9ad9bf5a0))
+
+
 ## v2.3.0-beta.2 (2026-06-19)
 
 ### Features
