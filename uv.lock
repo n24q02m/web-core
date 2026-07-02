@@ -1073,7 +1073,7 @@ wheels = [
 
 [[package]]
 name = "n24q02m-web-core"
-version = "2.3.0b2"
+version = "2.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "browserforge" },
