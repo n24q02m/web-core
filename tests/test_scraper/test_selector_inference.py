@@ -609,12 +609,11 @@ async def test_infer_gemini_vertex_missing_project_logs_warning(monkeypatch, cap
     found_extra = False
     for record in caplog.records:
         if record.message == "LLM selector inference failed":
-            if getattr(record, "error", None) and "GOOGLE_CLOUD_PROJECT" in str(record.error):
-                found_extra = True
-            elif hasattr(record, "extra") and isinstance(record.extra, dict) and "GOOGLE_CLOUD_PROJECT" in str(record.extra.get("error", "")):
-                found_extra = True
-            # For python logger extra kwargs, they are directly set on the record
-            elif "GOOGLE_CLOUD_PROJECT" in str(getattr(record, "error", "")):
+            has_error_attr = getattr(record, "error", None) and "GOOGLE_CLOUD_PROJECT" in str(record.error)
+            has_extra_dict = hasattr(record, "extra") and isinstance(record.extra, dict)
+            has_extra_dict_content = has_extra_dict and "GOOGLE_CLOUD_PROJECT" in str(record.extra.get("error", ""))
+            has_python_extra = "GOOGLE_CLOUD_PROJECT" in str(getattr(record, "error", ""))
+            if has_error_attr or has_extra_dict_content or has_python_extra:
                 found_extra = True
 
     assert found_extra, "GOOGLE_CLOUD_PROJECT not found in log record extra arguments"
