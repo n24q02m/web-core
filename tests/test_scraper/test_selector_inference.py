@@ -602,8 +602,22 @@ async def test_infer_gemini_vertex_missing_project_logs_warning(monkeypatch, cap
     result = await infer_selectors_with_llm("https://test-example.com", "<html></html>", provider="gemini")
 
     assert result == {}
-    assert "GOOGLE_CLOUD_PROJECT" in caplog.text
     assert "LLM selector inference failed" in caplog.text
+
+    # Check that GOOGLE_CLOUD_PROJECT is in the exception string in the log record's extra dict
+    # since we moved it from lazy formatting to `extra={"error": str(e)}`
+    found_extra = False
+    for record in caplog.records:
+        if record.message == "LLM selector inference failed":
+            if getattr(record, "error", None) and "GOOGLE_CLOUD_PROJECT" in str(record.error):
+                found_extra = True
+            elif hasattr(record, "extra") and isinstance(record.extra, dict) and "GOOGLE_CLOUD_PROJECT" in str(record.extra.get("error", "")):
+                found_extra = True
+            # For python logger extra kwargs, they are directly set on the record
+            elif "GOOGLE_CLOUD_PROJECT" in str(getattr(record, "error", "")):
+                found_extra = True
+
+    assert found_extra, "GOOGLE_CLOUD_PROJECT not found in log record extra arguments"
 
 
 def test_detect_provider_missing_xai_key(monkeypatch):
