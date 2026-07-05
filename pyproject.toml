@@ -29,7 +29,7 @@ dependencies = [
     "capsolver>=1.0.7",
     "pydantic>=2.12.5",
     "gdown>=6.1.0",
-    "pillow>=12.2.0",
+    "pillow>=12.3.0",
 ]
 
 [project.optional-dependencies]
@@ -39,7 +39,7 @@ dev = [
     "pytest-cov>=7.1.0",
     "pytest-timeout>=2.4.0",
     "ruff>=0.15.20",
-    "ty>=0.0.55",
+    "ty>=0.0.56",
 ]
 
 [project.urls]
