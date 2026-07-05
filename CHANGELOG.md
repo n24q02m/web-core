@@ -2,6 +2,35 @@
 
 <!-- version list -->
 
+## v2.3.1-beta.1 (2026-07-05)
+
+### Bug Fixes
+
+- Log exception detail via structured extra in selector inference
+  ([`1db5665`](https://github.com/n24q02m/web-core/commit/1db5665eb35cc20c483447848c449242970f79a9))
+
+- Use urlsplit instead of urlparse for faster URL parsing
+  ([`2d0cfc8`](https://github.com/n24q02m/web-core/commit/2d0cfc8687631c75d702c9f3b8ceb68ea0a4f1e6))
+
+- **deps**: Lock file maintenance ([#609](https://github.com/n24q02m/web-core/pull/609),
+  [`ca46dae`](https://github.com/n24q02m/web-core/commit/ca46daedb27e3ecf8fef50c5dac03df48d91378f))
+
+- **deps**: Update github/codeql-action digest to 54f647b
+  ([#607](https://github.com/n24q02m/web-core/pull/607),
+  [`6db5075`](https://github.com/n24q02m/web-core/commit/6db507516a2168f79f04b4835fc7c4bab0c6d044))
+
+- **deps**: Update non-major dependencies ([#608](https://github.com/n24q02m/web-core/pull/608),
+  [`9c786ed`](https://github.com/n24q02m/web-core/commit/9c786ed79d385bcdaea0874af7ff09283fe14ce6))
+
+- **deps**: Update python-semantic-release/publish-action digest to 4f3c5d7
+  ([#611](https://github.com/n24q02m/web-core/pull/611),
+  [`da5fbc8`](https://github.com/n24q02m/web-core/commit/da5fbc81ceacb8710cc5e34e872110011bbb3638))
+
+- **deps**: Update python-semantic-release/python-semantic-release digest to 37a30a7
+  ([#612](https://github.com/n24q02m/web-core/pull/612),
+  [`273a548`](https://github.com/n24q02m/web-core/commit/273a548bb83d91e543ff9a6e84b8d9654ecfac2a))
+
+
 ## v2.3.0 (2026-07-01)
 
 ### Bug Fixes
