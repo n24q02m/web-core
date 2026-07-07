@@ -13,6 +13,7 @@ Key protections:
 
 from __future__ import annotations
 
+import functools
 import ipaddress
 import logging
 import socket
@@ -66,8 +67,13 @@ socket.getaddrinfo = _pinned_getaddrinfo  # type: ignore[assignment]
 # ---------------------------------------------------------------------------
 
 
+@functools.lru_cache(maxsize=1024)
 def _check_ip_safe(ip_str: str, hostname: str) -> bool:
     """Return True if *ip_str* is a publicly-routable address.
+
+    Performance Optimization: Caching prevents redundant, expensive `ipaddress.ip_address`
+    instantiations and property checks (`is_global`, `is_multicast`) during high-frequency
+    SSRF validation within the DNS pinning cache.
 
     Blocks private (RFC 1918), loopback, link-local (169.254/16),
     reserved, and multicast addresses.
