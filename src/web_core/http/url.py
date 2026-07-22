@@ -114,12 +114,6 @@ def normalize_url(url: str) -> str:
     else:
         query = ""
 
-    # Performance Optimization: String interpolation is ~2x faster than urlunsplit for standard HTTP(S) URLs
-    if scheme and netloc:
-        if query:
-            return f"{scheme}://{netloc}{path}?{query}"
-        return f"{scheme}://{netloc}{path}"
-
     # Fragment is always stripped (empty string)
     return urlunsplit((scheme, netloc, path, query, ""))
 
