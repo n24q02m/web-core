@@ -30,14 +30,16 @@ _CF_MANAGED_STRINGS = [
     "verifies you are not a bot",
 ]
 
-_CF_SITEKEY_PATTERNS = [
-    re.compile(r'data-sitekey=["\']([0-9a-zA-Z_-]{20,})["\']'),
-    re.compile(r"sitekey=([0-9a-zA-Z_-]{20,})"),
-    re.compile(r'turnstileSiteKey["\s:]+["\']([0-9a-zA-Z_-]{20,})["\']'),
+# Performance Optimization: Using a combined regular expression with alternation
+# avoids executing multiple C-level regex searches on the same large document.
+_CF_SITEKEY_COMBINED_RE = re.compile(
+    r'data-sitekey=["\']([0-9a-zA-Z_-]{20,})["\']|'
+    r"sitekey=([0-9a-zA-Z_-]{20,})|"
+    r'turnstileSiteKey["\s:]+["\']([0-9a-zA-Z_-]{20,})["\']|'
     # Cloudflare challenge platform iframe URL patterns
-    re.compile(r"/(0x[0-9a-zA-Z_-]{20,})[/&]"),
-    re.compile(r"/([0-9a-zA-Z_-]{20,})/(?:light|dark|auto)"),
-]
+    r"/(0x[0-9a-zA-Z_-]{20,})[/&]|"
+    r"/([0-9a-zA-Z_-]{20,})/(?:light|dark|auto)"
+)
 
 
 def detect_cloudflare_challenge(html: str) -> str | None:
@@ -104,10 +106,9 @@ def extract_turnstile_sitekey(html: str) -> str | None:
     ):
         return None
 
-    for pattern in _CF_SITEKEY_PATTERNS:
-        match = pattern.search(html)
-        if match:
-            return match.group(1)
+    match = _CF_SITEKEY_COMBINED_RE.search(html)
+    if match:
+        return next((g for g in match.groups() if g), None)
     return None
 
 

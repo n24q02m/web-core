@@ -1,0 +1,3 @@
+## 2024-07-24 - [Combine regex patterns to avoid redundant engine passes]
+**Learning:** Checking a large string (like a full HTML document) against multiple regular expressions using `for pattern in patterns: match = pattern.search(html)` forces the regex engine to parse the long document multiple times, especially when there's no match or the match is far down the string. This scales poorly and wastes execution time.
+**Action:** When extracting data where one of several patterns might match (like different attributes for a site key), combine the patterns using alternation (`|`) in a single `re.compile()` call. The regex engine will only parse the string once. Use `match.groups()` and extract the non-empty group to find the specific matched value.
