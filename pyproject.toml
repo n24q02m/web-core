@@ -8,13 +8,13 @@ version = "2.3.1"
 description = "Shared web infrastructure: search, scraping, HTTP security, browsers"
 readme = "README.md"
 requires-python = "==3.13.*"
-license = "MIT"
+license = "Apache-2.0"
 authors = [{ name = "n24q02m" }]
 keywords = ["web", "scraping", "search", "searxng", "http", "ssrf", "crawl4ai"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3.13",
     "Topic :: Internet :: WWW/HTTP",
     "Topic :: Software Development :: Libraries",
