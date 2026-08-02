@@ -290,7 +290,7 @@ def _write_discovery(port: int, pid: int) -> None:
         with os.fdopen(fd, "w") as f:
             f.write(content)
     except Exception as e:
-        logger.debug("Failed to write discovery file: %s", e)
+        logger.debug("Failed to write discovery file", extra={"error": str(e)})
 
 
 def _remove_discovery() -> None:
@@ -546,7 +546,7 @@ def _install_searxng() -> bool:  # pragma: no cover
         logger.error("SearXNG installation timed out")
         return False
     except Exception as e:
-        logger.error("Failed to install SearXNG: %s", e)
+        logger.error("Failed to install SearXNG", extra={"error": str(e)})
         return False
 
 
@@ -674,7 +674,7 @@ def _force_kill_process_sync(proc: subprocess.Popen) -> None:  # pragma: no cove
             except subprocess.TimeoutExpired:
                 proc.kill()
     except Exception as e:
-        logger.debug("Error killing SearXNG process: %s", e)
+        logger.debug("Error killing SearXNG process", extra={"error": str(e)})
 
 
 async def _force_kill_process(proc: subprocess.Popen) -> None:  # pragma: no cover
@@ -714,7 +714,7 @@ async def _force_kill_process(proc: subprocess.Popen) -> None:  # pragma: no cov
             except subprocess.TimeoutExpired:
                 proc.kill()
     except Exception as e:
-        logger.debug("Error killing SearXNG process: %s", e)
+        logger.debug("Error killing SearXNG process", extra={"error": str(e)})
 
 
 async def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
@@ -748,9 +748,9 @@ async def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
                         if pid > 0:
                             await _sigterm_then_kill(pid, f"stale port {port}")
                     except (ValueError, ProcessLookupError, PermissionError) as e:
-                        logger.debug("Could not kill process %s on port %d: %s", pid_str, port, e)
+                        logger.debug("Could not kill process %s on port %d", pid_str, port, extra={"error": str(e)})
         except Exception as e:
-            logger.debug("Error finding processes on port %d using netstat: %s", port, e)
+            logger.debug("Error finding processes on port %d using netstat", port, extra={"error": str(e)})
     else:
         try:
             result = await asyncio.to_thread(
@@ -769,7 +769,7 @@ async def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
                         if pid > 0 and pid != os.getpid():
                             await _sigterm_then_kill(pid, f"stale port {port}")
                     except (ValueError, ProcessLookupError, PermissionError) as e:
-                        logger.debug("Could not kill process %s on port %d: %s", pid_str, port, e)
+                        logger.debug("Could not kill process %s on port %d", pid_str, port, extra={"error": str(e)})
         except FileNotFoundError:
             # lsof not available, try fuser.
             try:
@@ -782,9 +782,9 @@ async def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
                     timeout=5,
                 )
             except (FileNotFoundError, subprocess.TimeoutExpired) as e:
-                logger.debug("Could not free port %d using fuser: %s", port, e)
+                logger.debug("Could not free port %d using fuser", port, extra={"error": str(e)})
         except Exception as e:
-            logger.debug("Error finding processes on port %d using lsof: %s", port, e)
+            logger.debug("Error finding processes on port %d using lsof", port, extra={"error": str(e)})
 
 
 def _get_process_kwargs() -> dict:  # pragma: no cover
@@ -838,7 +838,7 @@ def _cleanup_process() -> None:  # pragma: no cover
                 _force_kill_process_sync(_searxng_process)
                 logger.debug("SearXNG subprocess stopped")
             except Exception as e:
-                logger.debug("Error stopping SearXNG: %s", e)
+                logger.debug("Error stopping SearXNG", extra={"error": str(e)})
             _remove_discovery()
         else:
             logger.debug("Not owner, leaving SearXNG subprocess running")
@@ -1047,7 +1047,7 @@ async def _start_docker_searxng(start_port: int) -> str | None:
         )
         return None
     except Exception as e:
-        logger.error("Failed to start SearXNG docker: %s", e)
+        logger.error("Failed to start SearXNG docker", extra={"error": str(e)})
         return None
 
 
@@ -1169,7 +1169,7 @@ async def _start_searxng_subprocess(start_port: int) -> str | None:  # pragma: n
         return None
 
     except Exception as e:
-        logger.error("Failed to start SearXNG subprocess: %s", e)
+        logger.error("Failed to start SearXNG subprocess", extra={"error": str(e)})
         if _searxng_process is not None:
             await _force_kill_process(_searxng_process)
             _searxng_process = None

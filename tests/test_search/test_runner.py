@@ -637,7 +637,7 @@ class TestKillStalePortProcess:
         ):
             await _kill_stale_port_process(18888)
             # Should log debug message for fuser failure
-            mock_logger.debug.assert_any_call("Could not free port %d using fuser: %s", 18888, ANY)
+            mock_logger.debug.assert_any_call("Could not free port %d using fuser", 18888, extra={"error": ANY})
 
     @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
     async def test_unix_lsof(self):
