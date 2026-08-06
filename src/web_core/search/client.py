@@ -267,11 +267,11 @@ async def search(
             exc_name = type(exc).__name__
             last_error = f"Request error: {exc_name}"
             logger.warning(
-                "Request error for query '%s' (attempt %d/%d): %s",
+                "Request error for query '%s' (attempt %d/%d)",
                 query,
                 attempt,
                 max_retries,
-                exc_name,
+                extra={"error": exc_name},
             )
         except SearchError:
             raise
@@ -279,11 +279,11 @@ async def search(
             exc_name = type(exc).__name__
             last_error = f"Unexpected error: {exc_name}"
             logger.warning(
-                "Unexpected error for query '%s' (attempt %d/%d): %s",
+                "Unexpected error for query '%s' (attempt %d/%d)",
                 query,
                 attempt,
                 max_retries,
-                exc_name,
+                extra={"error": exc_name},
             )
 
         if attempt < max_retries:
