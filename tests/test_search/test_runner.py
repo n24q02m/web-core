@@ -637,7 +637,7 @@ class TestKillStalePortProcess:
         ):
             await _kill_stale_port_process(18888)
             # Should log debug message for fuser failure
-            mock_logger.debug.assert_any_call("Could not free port %d using fuser: %s", 18888, ANY)
+            mock_logger.debug.assert_any_call("Could not free port %d using fuser: %r", 18888, ANY)
 
     @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
     async def test_unix_lsof(self):
@@ -1240,6 +1240,48 @@ class TestHandleRestartAndStart:
             # Check warning call - first argument to warning
             warning_call = [call for call in mock_logger.warning.call_args_list if "crashed" in call.args[0]]
             assert len(warning_call) > 0
+
+    async def test_crash_detection_stderr_does_not_forge_log_line(self):
+        """stderr cua subprocess la du lieu ngoai -- CRLF khong duoc tao dong log gia."""
+        import logging
+
+        import web_core.search.runner as mod
+
+        crlf = b"\x0d\x0a"
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = -1
+        mock_proc.stderr.read.return_value = b"boom" + crlf + b"2026-01-01 CRITICAL root: forged entry"
+        mod._searxng_process = mock_proc
+
+        records: list[logging.LogRecord] = []
+
+        class _Capture(logging.Handler):
+            def emit(self, record: logging.LogRecord) -> None:
+                records.append(record)
+
+        handler = _Capture()
+        mod.logger.addHandler(handler)
+        old_level = mod.logger.level
+        mod.logger.setLevel(logging.DEBUG)
+        try:
+            with (
+                patch(
+                    "web_core.search.runner._start_docker_searxng",
+                    new_callable=AsyncMock,
+                    return_value="http://ok",
+                ),
+                patch("asyncio.to_thread", side_effect=lambda f, *args: f(*args)),
+            ):
+                await _handle_restart_and_start(start_port=8888)
+        finally:
+            mod.logger.removeHandler(handler)
+            mod.logger.setLevel(old_level)
+
+        crashed = [r.getMessage() for r in records if "crashed" in r.getMessage()]
+        assert crashed, "expected a crash warning"
+        assert all("\r" not in m and "\n" not in m for m in crashed)
+        # Escape chu khong nuot: noi dung stderr van doc duoc.
+        assert any("forged entry" in m for m in crashed)
 
     async def test_crash_detection_stderr_read_failure(self):
         """Verifies crash detection handles stderr read failure gracefully."""

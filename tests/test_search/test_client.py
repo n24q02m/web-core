@@ -714,3 +714,45 @@ class TestSearch:
             await search(SEARXNG_URL, "test")
 
         assert "auth" not in mock_httpx_client.get.call_args.kwargs
+
+
+class TestLogInjection:
+    """Query text is attacker-controlled -- it must not be able to forge log lines."""
+
+    # Nguoi dung dieu khien query; neu noi suy tho vao log message thi CRLF
+    # cho phep chen mot dong log gia mao hoan chinh.
+    CRLF_QUERY = "harmless\r\n2026-01-01 12:00:00 CRITICAL root: forged entry"
+
+    async def test_non_retryable_status_does_not_forge_log_line(self, mock_httpx_client, caplog):
+        """4xx path logs the query without letting CRLF start a new log record."""
+        mock_httpx_client.get = AsyncMock(return_value=_make_searxng_response([], status_code=404))
+
+        with (
+            patch("httpx.AsyncClient", return_value=mock_httpx_client),
+            caplog.at_level("WARNING"),
+            pytest.raises(SearchError),
+        ):
+            await search(SEARXNG_URL, self.CRLF_QUERY)
+
+        rendered = [r.getMessage() for r in caplog.records]
+        assert rendered, "expected the 4xx branch to log a warning"
+        # Khong dong log nao chua CR/LF tho -> khong the gia mao dong moi.
+        assert all("\r" not in m and "\n" not in m for m in rendered)
+        # Escape chu khong nuot: noi dung query van doc duoc trong log.
+        assert any("forged entry" in m for m in rendered)
+
+    async def test_request_error_does_not_forge_log_line(self, mock_httpx_client, caplog):
+        """Retry path logs the query without letting CRLF start a new log record."""
+        mock_httpx_client.get = AsyncMock(side_effect=httpx.ConnectError("boom"))
+
+        with (
+            patch("httpx.AsyncClient", return_value=mock_httpx_client),
+            patch("asyncio.sleep", new_callable=AsyncMock),
+            caplog.at_level("WARNING"),
+            pytest.raises(SearchError),
+        ):
+            await search(SEARXNG_URL, self.CRLF_QUERY)
+
+        rendered = [r.getMessage() for r in caplog.records]
+        assert rendered, "expected the retry branch to log warnings"
+        assert all("\r" not in m and "\n" not in m for m in rendered)
