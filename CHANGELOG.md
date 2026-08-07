@@ -2,6 +2,170 @@
 
 <!-- version list -->
 
+## v2.4.0-beta.1 (2026-08-07)
+
+### Bug Fixes
+
+- Adopt better-semantic-release for built-in release guards
+  ([`b4f65ea`](https://github.com/n24q02m/web-core/commit/b4f65ea92548678a94636ad22afcd7a3824d6315))
+
+- Cache IP safety checks in SSRF validation
+  ([`3214ccd`](https://github.com/n24q02m/web-core/commit/3214ccd4d76e409ab4b71ee85052a552ec4e6e5d))
+
+- Convert SSRF allow_private iterable to frozenset
+  ([`1e1d910`](https://github.com/n24q02m/web-core/commit/1e1d910f9f8a2f4e7733223240fdf8fe511eab78))
+
+- Correct mention gate expression (balanced parens + precedence)
+  ([#634](https://github.com/n24q02m/web-core/pull/634),
+  [`a056719`](https://github.com/n24q02m/web-core/commit/a0567191e7712f202d700a4de973567d128eac19))
+
+- Correct renovate commit message casing and semantic type
+  ([#676](https://github.com/n24q02m/web-core/pull/676),
+  [`43ca5d9`](https://github.com/n24q02m/web-core/commit/43ca5d99a723191d5640549a175fe510a09f379c))
+
+- Drop rangeStrategy from update-type package rules
+  ([#646](https://github.com/n24q02m/web-core/pull/646),
+  [`a943e83`](https://github.com/n24q02m/web-core/commit/a943e83e05e076469f4524809523ad035555fc26))
+
+- Escape CR/LF in log values from queries and subprocess output
+  ([#670](https://github.com/n24q02m/web-core/pull/670),
+  [`b1233f1`](https://github.com/n24q02m/web-core/commit/b1233f19a4807cdd4adf52a95b180716a4243e6b))
+
+- Fail the release when the computed version already exists on the registry
+  ([#624](https://github.com/n24q02m/web-core/pull/624),
+  [`e061b02`](https://github.com/n24q02m/web-core/commit/e061b028b6c060a49618f4ac358d063b0800770a))
+
+- Gate oc mention job on comment author write access
+  ([#634](https://github.com/n24q02m/web-core/pull/634),
+  [`a056719`](https://github.com/n24q02m/web-core/commit/a0567191e7712f202d700a4de973567d128eac19))
+
+- Make renovate automerge effective (isolated groups, digest+lockfile automerge, 7-day cooldown)
+  ([`449f6b0`](https://github.com/n24q02m/web-core/commit/449f6b01464e8cfd0846f0292ea98346d073c3e7))
+
+- Move this repo to Apache-2.0 ([#659](https://github.com/n24q02m/web-core/pull/659),
+  [`b712434`](https://github.com/n24q02m/web-core/commit/b7124348f6a61bd9e9f02c3e1eb66d12e2741f9d))
+
+- Pin GitHub Action references to commit SHAs ([#644](https://github.com/n24q02m/web-core/pull/644),
+  [`28df56e`](https://github.com/n24q02m/web-core/commit/28df56e29b1636fa0a83526c424e44ad03ffc26e))
+
+- Pin rangeStrategy on delayed packageRules to fix renovate artifacts failure
+  ([#641](https://github.com/n24q02m/web-core/pull/641),
+  [`1b47d4f`](https://github.com/n24q02m/web-core/commit/1b47d4fb42432b68a58e356e4a1a18e1d28cdf88))
+
+- Re-trigger pr-title check now that PR title is conventional again
+  ([#643](https://github.com/n24q02m/web-core/pull/643),
+  [`ca55f24`](https://github.com/n24q02m/web-core/commit/ca55f24f72706f82532492782fb96d4d2fe72c42))
+
+- Run opencode bot on hosted runners ([#633](https://github.com/n24q02m/web-core/pull/633),
+  [`87b9ae9`](https://github.com/n24q02m/web-core/commit/87b9ae97af983a7ee2af6c39638926c0e3c270ab))
+
+- Trigger synchronize to verify pr-title reject path
+  ([#643](https://github.com/n24q02m/web-core/pull/643),
+  [`ca55f24`](https://github.com/n24q02m/web-core/commit/ca55f24f72706f82532492782fb96d4d2fe72c42))
+
+- **deps**: Bump aiohttp from 3.14.1 to 3.14.3 in the uv group
+  ([`f13abee`](https://github.com/n24q02m/web-core/commit/f13abeeca7a69dbfe630200e23fff930fbb67824))
+
+- **deps**: Bump the uv group across 1 directory with 2 updates
+  ([#669](https://github.com/n24q02m/web-core/pull/669),
+  [`625ae31`](https://github.com/n24q02m/web-core/commit/625ae31038d2b2f422cb22344f99fef368469ff8))
+
+- **deps**: Lock file maintenance ([#678](https://github.com/n24q02m/web-core/pull/678),
+  [`628cbdd`](https://github.com/n24q02m/web-core/commit/628cbddbc07fdc398ff7af9254747b1173ceab67))
+
+- **deps**: Lock file maintenance ([#677](https://github.com/n24q02m/web-core/pull/677),
+  [`92e2050`](https://github.com/n24q02m/web-core/commit/92e205007896319f49f7b81435c48f769673b67a))
+
+- **deps**: Lock file maintenance ([#675](https://github.com/n24q02m/web-core/pull/675),
+  [`9c6b9e1`](https://github.com/n24q02m/web-core/commit/9c6b9e16da4599ed41088e9ac799618553618879))
+
+- **deps**: Lock file maintenance ([#674](https://github.com/n24q02m/web-core/pull/674),
+  [`941e631`](https://github.com/n24q02m/web-core/commit/941e6316f05aa352b7c74a70e843f4b5814d3f46))
+
+- **deps**: Lock file maintenance ([#640](https://github.com/n24q02m/web-core/pull/640),
+  [`e65c48c`](https://github.com/n24q02m/web-core/commit/e65c48c17384efabb4a7f15962c65692371da1ec))
+
+- **deps**: Lock file maintenance ([#639](https://github.com/n24q02m/web-core/pull/639),
+  [`b544eec`](https://github.com/n24q02m/web-core/commit/b544eec774b66c51d9caf56a8c9c7c5ea73a738e))
+
+- **deps**: Lock file maintenance ([#637](https://github.com/n24q02m/web-core/pull/637),
+  [`6571c03`](https://github.com/n24q02m/web-core/commit/6571c03cc6c02b1f4ed29e5bdcc69ebb17ed1936))
+
+- **deps**: Lock file maintenance ([#632](https://github.com/n24q02m/web-core/pull/632),
+  [`6ac9584`](https://github.com/n24q02m/web-core/commit/6ac9584aebc574d2b4fe2ea0783c99e4f6055743))
+
+- **deps**: Lock file maintenance ([#630](https://github.com/n24q02m/web-core/pull/630),
+  [`433018b`](https://github.com/n24q02m/web-core/commit/433018b2fd48f8fb0972623ff517d2cff55bc7ab))
+
+- **deps**: Lock file maintenance ([#615](https://github.com/n24q02m/web-core/pull/615),
+  [`1ab227d`](https://github.com/n24q02m/web-core/commit/1ab227d066af09e105568c07d041dd6330586088))
+
+- **deps**: Update actions/checkout action to v7
+  ([#628](https://github.com/n24q02m/web-core/pull/628),
+  [`822af15`](https://github.com/n24q02m/web-core/commit/822af157ad7d8351bb290a1a9fb868d58f0a7810))
+
+- **deps**: Update actions/setup-python action to v7
+  ([#648](https://github.com/n24q02m/web-core/pull/648),
+  [`b415b5e`](https://github.com/n24q02m/web-core/commit/b415b5e3f283cb2e69d48699c095d0d8060e5df8))
+
+- **deps**: Update astral-sh/setup-uv action to v8.3.2
+  ([#627](https://github.com/n24q02m/web-core/pull/627),
+  [`e8f97d9`](https://github.com/n24q02m/web-core/commit/e8f97d98ea9495a2cb716ffb655397de76bcb0e6))
+
+- **deps**: Update astral-sh/setup-uv action to v9
+  ([#673](https://github.com/n24q02m/web-core/pull/673),
+  [`de32930`](https://github.com/n24q02m/web-core/commit/de32930991285fb5b12e3b1f20bee7605c63bb67))
+
+- **deps**: Update ghcr.io/astral-sh/uv:latest Docker digest to 069a513
+  ([#638](https://github.com/n24q02m/web-core/pull/638),
+  [`4e4774d`](https://github.com/n24q02m/web-core/commit/4e4774d89ff7d4d45280ad8432539863e33aea9f))
+
+- **deps**: Update ghcr.io/astral-sh/uv:latest Docker digest to 0f36cb9
+  ([#619](https://github.com/n24q02m/web-core/pull/619),
+  [`07df8d1`](https://github.com/n24q02m/web-core/commit/07df8d188bb32e1b2eac0932eedce1dca9d98014))
+
+- **deps**: Update ghcr.io/astral-sh/uv:latest Docker digest to 2d89062
+  ([#672](https://github.com/n24q02m/web-core/pull/672),
+  [`39de394`](https://github.com/n24q02m/web-core/commit/39de3940731882802cb90697ffaeecff9a7de5ff))
+
+- **deps**: Update minor dependencies ([#647](https://github.com/n24q02m/web-core/pull/647),
+  [`8c92aec`](https://github.com/n24q02m/web-core/commit/8c92aec40deb2fd00e76877de32ce9b9ae3909b8))
+
+- **deps**: Update patch dependencies ([#636](https://github.com/n24q02m/web-core/pull/636),
+  [`e9291b7`](https://github.com/n24q02m/web-core/commit/e9291b77c56260545de01930dacbf4aa3d7682a0))
+
+- **deps**: Update patchright to >=1.61.2 ([#631](https://github.com/n24q02m/web-core/pull/631),
+  [`117c3db`](https://github.com/n24q02m/web-core/commit/117c3db9e70ac4a4116b156a55677c3ebaa6672a))
+
+- **deps**: Update python:3.13-slim-bookworm Docker digest to 67a1e1f
+  ([#635](https://github.com/n24q02m/web-core/pull/635),
+  [`ac89482`](https://github.com/n24q02m/web-core/commit/ac89482de9cde0b2d4970bd77356d9db01a41bf4))
+
+### Features
+
+- Add bot PR governance to this repo ([#671](https://github.com/n24q02m/web-core/pull/671),
+  [`0902ac8`](https://github.com/n24q02m/web-core/commit/0902ac8229f917b4f3af7d2869a3a5fbcc1066e3))
+
+- Add opencode github agent (responds to /oc)
+  ([`1a64b4f`](https://github.com/n24q02m/web-core/commit/1a64b4fb77b6992bbd0274c352f035288132be8e))
+
+- Add PR-title conventional-commit gate + no-bump release warning
+  ([#643](https://github.com/n24q02m/web-core/pull/643),
+  [`ca55f24`](https://github.com/n24q02m/web-core/commit/ca55f24f72706f82532492782fb96d4d2fe72c42))
+
+- Add review-learnings store the automated reviewer must obey
+  ([`4a084dd`](https://github.com/n24q02m/web-core/commit/4a084dda05245773800814db40b69a9b08c0f9b8))
+
+- Auto-respond only to issues and PRs opened by outside people
+  ([`29f4f40`](https://github.com/n24q02m/web-core/commit/29f4f40327348e0cd01c99b8b98ed50375bbf720))
+
+- Reviewer must obey .github/review-learnings.md
+  ([`ebc3632`](https://github.com/n24q02m/web-core/commit/ebc36322f5768e08deca365ad26807b07fd977c6))
+
+- Sync cross-promo section ([#652](https://github.com/n24q02m/web-core/pull/652),
+  [`c0a1862`](https://github.com/n24q02m/web-core/commit/c0a1862a7337a49915fc24ace81e3d6aa60c88f1))
+
+
 ## v2.3.1 (2026-07-05)
 
 
