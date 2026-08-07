@@ -21,7 +21,12 @@ class APIDirectStrategy(BaseStrategy):
         r"fetch\(['\"]([^'\"]+)['\"]\)",
         r"axios\.\w+\(['\"]([^'\"]+)['\"]\)",
     ]
-    _API_PATTERNS_COMPILED: ClassVar[list[re.Pattern[str]]] = [re.compile(p) for p in API_PATTERNS]
+
+    # Performance Optimization: Combining regex patterns using alternation (|)
+    # instead of looping through a list of compiled patterns.
+    # This prevents running the regex engine multiple times over large HTML documents
+    # and significantly speeds up API discovery execution.
+    _API_PATTERNS_COMPILED: ClassVar[re.Pattern[str]] = re.compile("|".join(API_PATTERNS))
 
     def __init__(self, timeout: float = 30.0, http_client: Any = None):
         self.timeout = timeout
@@ -30,8 +35,12 @@ class APIDirectStrategy(BaseStrategy):
     def discover_apis(self, html: str) -> list[str]:
         """Extract unique API endpoint URLs from *html* source."""
         apis: list[str] = []
-        for pattern in self._API_PATTERNS_COMPILED:
-            apis.extend(pattern.findall(html))
+        # Use finditer to safely extract matches from any of the capturing groups
+        for match in self._API_PATTERNS_COMPILED.finditer(html):
+            # Extract the first non-None group (since our regex uses alternations and captures)
+            found = next((g for g in match.groups() if g is not None), None)
+            if found:
+                apis.append(found)
         return list(dict.fromkeys(apis))
 
     async def fetch(self, url: str, selectors: dict[str, str] | None = None) -> ScrapingResult:
