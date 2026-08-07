@@ -62,9 +62,9 @@ def _load_domain_cookies() -> dict[str, dict[str, str]]:
             domain: domain_cookies for domain, domain_cookies in env_cookies.items() if isinstance(domain_cookies, dict)
         }
     except json.JSONDecodeError as e:
-        logger.warning("Failed to parse WEB_CORE_DOMAIN_COOKIES: %s", e)
+        logger.warning("Failed to parse WEB_CORE_DOMAIN_COOKIES", extra={"error": str(e)})
     except Exception as e:
-        logger.warning("Unexpected error loading WEB_CORE_DOMAIN_COOKIES: %s", e)
+        logger.warning("Unexpected error loading WEB_CORE_DOMAIN_COOKIES", extra={"error": str(e)})
 
     return {}
 
@@ -396,10 +396,10 @@ async def infer_selectors_with_llm(
     try:
         raw = await llm_caller(prompt, html_content)
     except ImportError as e:
-        logger.debug("selector_inference: provider SDK not installed (%s), skipping", e)
+        logger.debug("selector_inference: provider SDK not installed, skipping", extra={"error": str(e)})
         return {}
     except Exception as e:
-        logger.warning("LLM selector inference failed: %s", e)
+        logger.warning("LLM selector inference failed", extra={"error": str(e)})
         return {}
 
     # llm_caller may return a dict directly (already parsed) or raw JSON text.
@@ -407,12 +407,12 @@ async def infer_selectors_with_llm(
         try:
             selectors = _parse_selector_json(raw)
         except json.JSONDecodeError as e:
-            logger.warning("LLM selector inference returned invalid JSON: %s", e)
+            logger.warning("LLM selector inference returned invalid JSON", extra={"error": str(e)})
             return {}
     elif isinstance(raw, dict):
         selectors = {k: v for k, v in raw.items() if k in {"content", "title", "next_chapter"} and isinstance(v, str)}
     else:
-        logger.warning("LLM selector inference returned unexpected type: %s", type(raw))
+        logger.warning("LLM selector inference returned unexpected type", extra={"type": str(type(raw))})
         return {}
 
     # Performance Optimization: Reusing extract_domain which implements the same
