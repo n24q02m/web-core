@@ -253,10 +253,10 @@ async def search(
             last_error = f"HTTP {status}"
             if status < 500:
                 # 4xx errors are non-retryable
-                logger.warning("Non-retryable HTTP %d for query '%s'", status, query)
+                logger.warning("Non-retryable HTTP %d for query %r", status, query)
                 raise SearchError(query, last_error) from e
             logger.warning(
-                "Retryable HTTP %d for query '%s' (attempt %d/%d)",
+                "Retryable HTTP %d for query %r (attempt %d/%d)",
                 status,
                 query,
                 attempt,
@@ -266,7 +266,7 @@ async def search(
             exc_name = type(exc).__name__
             last_error = f"Request error: {exc_name}"
             logger.warning(
-                "Request error for query '%s' (attempt %d/%d): %s",
+                "Request error for query %r (attempt %d/%d): %s",
                 query,
                 attempt,
                 max_retries,
@@ -278,7 +278,7 @@ async def search(
             exc_name = type(exc).__name__
             last_error = f"Unexpected error: {exc_name}"
             logger.warning(
-                "Unexpected error for query '%s' (attempt %d/%d): %s",
+                "Unexpected error for query %r (attempt %d/%d): %s",
                 query,
                 attempt,
                 max_retries,

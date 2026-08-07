@@ -290,7 +290,7 @@ def _write_discovery(port: int, pid: int) -> None:
         with os.fdopen(fd, "w") as f:
             f.write(content)
     except Exception as e:
-        logger.debug("Failed to write discovery file: %s", e)
+        logger.debug("Failed to write discovery file: %r", e)
 
 
 def _remove_discovery() -> None:
@@ -512,7 +512,7 @@ def _install_searxng() -> bool:  # pragma: no cover
             timeout=120,
         )
         if deps_result.returncode != 0:
-            logger.error("Build deps installation failed: %s", deps_result.stderr[:500])
+            logger.error("Build deps installation failed: %r", deps_result.stderr[:500])
             return False
 
         # Security: Validate the installation URL before execution.
@@ -537,14 +537,14 @@ def _install_searxng() -> bool:  # pragma: no cover
             logger.info("SearXNG installed successfully")
             return True
 
-        logger.error("SearXNG installation failed: %s", result.stderr[:500])
+        logger.error("SearXNG installation failed: %r", result.stderr[:500])
         return False
 
     except subprocess.TimeoutExpired:
         logger.error("SearXNG installation timed out")
         return False
     except Exception as e:
-        logger.error("Failed to install SearXNG: %s", e)
+        logger.error("Failed to install SearXNG: %r", e)
         return False
 
 
@@ -672,7 +672,7 @@ def _force_kill_process_sync(proc: subprocess.Popen) -> None:  # pragma: no cove
             except subprocess.TimeoutExpired:
                 proc.kill()
     except Exception as e:
-        logger.debug("Error killing SearXNG process: %s", e)
+        logger.debug("Error killing SearXNG process: %r", e)
 
 
 async def _force_kill_process(proc: subprocess.Popen) -> None:  # pragma: no cover
@@ -712,7 +712,7 @@ async def _force_kill_process(proc: subprocess.Popen) -> None:  # pragma: no cov
             except subprocess.TimeoutExpired:
                 proc.kill()
     except Exception as e:
-        logger.debug("Error killing SearXNG process: %s", e)
+        logger.debug("Error killing SearXNG process: %r", e)
 
 
 async def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
@@ -746,9 +746,9 @@ async def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
                         if pid > 0:
                             await _sigterm_then_kill(pid, f"stale port {port}")
                     except (ValueError, ProcessLookupError, PermissionError) as e:
-                        logger.debug("Could not kill process %s on port %d: %s", pid_str, port, e)
+                        logger.debug("Could not kill process %r on port %d: %r", pid_str, port, e)
         except Exception as e:
-            logger.debug("Error finding processes on port %d using netstat: %s", port, e)
+            logger.debug("Error finding processes on port %d using netstat: %r", port, e)
     else:
         try:
             result = await asyncio.to_thread(
@@ -767,7 +767,7 @@ async def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
                         if pid > 0 and pid != os.getpid():
                             await _sigterm_then_kill(pid, f"stale port {port}")
                     except (ValueError, ProcessLookupError, PermissionError) as e:
-                        logger.debug("Could not kill process %s on port %d: %s", pid_str, port, e)
+                        logger.debug("Could not kill process %r on port %d: %r", pid_str, port, e)
         except FileNotFoundError:
             # lsof not available, try fuser.
             try:
@@ -780,9 +780,9 @@ async def _kill_stale_port_process(port: int) -> None:  # pragma: no cover
                     timeout=5,
                 )
             except (FileNotFoundError, subprocess.TimeoutExpired) as e:
-                logger.debug("Could not free port %d using fuser: %s", port, e)
+                logger.debug("Could not free port %d using fuser: %r", port, e)
         except Exception as e:
-            logger.debug("Error finding processes on port %d using lsof: %s", port, e)
+            logger.debug("Error finding processes on port %d using lsof: %r", port, e)
 
 
 def _get_process_kwargs() -> dict:  # pragma: no cover
@@ -836,7 +836,7 @@ def _cleanup_process() -> None:  # pragma: no cover
                 _force_kill_process_sync(_searxng_process)
                 logger.debug("SearXNG subprocess stopped")
             except Exception as e:
-                logger.debug("Error stopping SearXNG: %s", e)
+                logger.debug("Error stopping SearXNG: %r", e)
             _remove_discovery()
         else:
             logger.debug("Not owner, leaving SearXNG subprocess running")
@@ -1045,7 +1045,7 @@ async def _start_docker_searxng(start_port: int) -> str | None:
         )
         return None
     except Exception as e:
-        logger.error("Failed to start SearXNG docker: %s", e)
+        logger.error("Failed to start SearXNG docker: %r", e)
         return None
 
 
@@ -1155,7 +1155,7 @@ async def _start_searxng_subprocess(start_port: int) -> str | None:  # pragma: n
                 stderr = stderr_raw.decode()
             else:
                 stderr = ""
-            logger.error("SearXNG process exited during startup: %s", stderr[:500])
+            logger.error("SearXNG process exited during startup: %r", stderr[:500])
         else:
             logger.warning(
                 "SearXNG process (PID=%d) alive but not serving, killing stuck process",
@@ -1167,7 +1167,7 @@ async def _start_searxng_subprocess(start_port: int) -> str | None:  # pragma: n
         return None
 
     except Exception as e:
-        logger.error("Failed to start SearXNG subprocess: %s", e)
+        logger.error("Failed to start SearXNG subprocess: %r", e)
         if _searxng_process is not None:
             await _force_kill_process(_searxng_process)
             _searxng_process = None
@@ -1283,7 +1283,7 @@ async def _handle_restart_and_start(*, start_port: int) -> str:
                 stderr_output = stderr_raw.decode(errors="replace")[:500]
             except Exception:
                 logger.debug("Failed to read stderr from crashed process")
-        logger.warning("SearXNG process crashed (exit_code=%s). stderr: %s", exit_code, stderr_output)
+        logger.warning("SearXNG process crashed (exit_code=%s). stderr: %r", exit_code, stderr_output)
         _searxng_process = None
 
     # Reset restart counter if enough time has passed since last restart.
