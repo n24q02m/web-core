@@ -2,7 +2,8 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended",
-    ":semanticCommits"
+    ":semanticCommits",
+    ":semanticCommitTypeAll(fix)"
   ],
   "schedule": [
     "before 5am"
@@ -128,7 +129,6 @@
     }
   ],
   "semanticCommits": "enabled",
-  "commitMessagePrefix": "fix(deps):",
   "commitMessageAction": "update",
   "commitMessageTopic": "{{depName}}",
   "semanticCommitType": "fix",
