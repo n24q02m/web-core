@@ -30,14 +30,16 @@ _CF_MANAGED_STRINGS = [
     "verifies you are not a bot",
 ]
 
-_CF_SITEKEY_PATTERNS = [
-    re.compile(r'data-sitekey=["\']([0-9a-zA-Z_-]{20,})["\']'),
-    re.compile(r"sitekey=([0-9a-zA-Z_-]{20,})"),
-    re.compile(r'turnstileSiteKey["\s:]+["\']([0-9a-zA-Z_-]{20,})["\']'),
-    # Cloudflare challenge platform iframe URL patterns
-    re.compile(r"/(0x[0-9a-zA-Z_-]{20,})[/&]"),
-    re.compile(r"/([0-9a-zA-Z_-]{20,})/(?:light|dark|auto)"),
-]
+# Performance Optimization: Combine independent sitekey regexes into a single pattern.
+# This prevents running the regex engine 5 times for non-matching pages that pass
+# the initial substring fast path.
+_COMBINED_SITEKEY_PATTERN = re.compile(
+    r'data-sitekey=["\']([0-9a-zA-Z_-]{20,})["\']'
+    r"|sitekey=([0-9a-zA-Z_-]{20,})"
+    r'|turnstileSiteKey["\s:]+["\']([0-9a-zA-Z_-]{20,})["\']'
+    r"|/(0x[0-9a-zA-Z_-]{20,})[/&]"
+    r"|/([0-9a-zA-Z_-]{20,})/(?:light|dark|auto)"
+)
 
 
 def detect_cloudflare_challenge(html: str) -> str | None:
@@ -104,10 +106,12 @@ def extract_turnstile_sitekey(html: str) -> str | None:
     ):
         return None
 
-    for pattern in _CF_SITEKEY_PATTERNS:
-        match = pattern.search(html)
-        if match:
-            return match.group(1)
+    # Performance Optimization: Extract from combined regex using match.groups()
+    # to avoid the overhead of list comprehensions with findall when the number
+    # of capturing groups is > 1.
+    match = _COMBINED_SITEKEY_PATTERN.search(html)
+    if match:
+        return next((g for g in match.groups() if g is not None), None)
     return None
 
 
@@ -126,9 +130,13 @@ _SPA_ROOT_RE = re.compile(
     re.IGNORECASE,
 )
 _SCRIPT_TAG_RE = re.compile(r"<script\b", re.IGNORECASE)
-_SCRIPT_BLOCK_RE = re.compile(r"<script\b[^>]*>.*?</script[^>]*>", re.IGNORECASE | re.DOTALL)
-_STYLE_BLOCK_RE = re.compile(r"<style\b[^>]*>.*?</style[^>]*>", re.IGNORECASE | re.DOTALL)
-_TAG_RE = re.compile(r"<[^>]+>")
+
+# Performance Optimization: Combine tag stripping into a single regex pass.
+# This prevents creating intermediate strings and running the regex engine three times.
+_STRIP_TAGS_RE = re.compile(
+    r"<(script|style)\b[^>]*>.*?</\1[^>]*>|<[^>]+>",
+    re.IGNORECASE | re.DOTALL
+)
 _WS_RE = re.compile(r"\s+")
 
 
@@ -142,9 +150,7 @@ def visible_text(html: str) -> str:
     """
     if not html:
         return ""
-    stripped = _SCRIPT_BLOCK_RE.sub(" ", html)
-    stripped = _STYLE_BLOCK_RE.sub(" ", stripped)
-    stripped = _TAG_RE.sub(" ", stripped)
+    stripped = _STRIP_TAGS_RE.sub(" ", html)
     return _WS_RE.sub(" ", unescape(stripped)).strip()
 
 
