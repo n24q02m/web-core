@@ -133,10 +133,7 @@ _SCRIPT_TAG_RE = re.compile(r"<script\b", re.IGNORECASE)
 
 # Performance Optimization: Combine tag stripping into a single regex pass.
 # This prevents creating intermediate strings and running the regex engine three times.
-_STRIP_TAGS_RE = re.compile(
-    r"<(script|style)\b[^>]*>.*?</\1[^>]*>|<[^>]+>",
-    re.IGNORECASE | re.DOTALL
-)
+_STRIP_TAGS_RE = re.compile(r"<(script|style)\b[^>]*>.*?</\1[^>]*>|<[^>]+>", re.IGNORECASE | re.DOTALL)
 _WS_RE = re.compile(r"\s+")
 
 

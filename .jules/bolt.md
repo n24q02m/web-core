@@ -1,0 +1,4 @@
+## 2024-08-08 - Regex Optimization for Large Payloads
+
+**Learning:** When checking a large string (like HTML payloads) against multiple regular expressions, it is much more efficient to combine the independent patterns into a single regex using alternations (`|`) instead of iterating over a list of `re.compile()` objects. In addition, when extracting from a combined regex containing multiple capturing groups, extracting the non-None group using `next((g for g in match.groups() if g is not None), None)` safely handles the match. Sequential `re.sub` calls also benefit from being combined.
+**Action:** Always combine mutually exclusive string extraction/stripping regexes with alternation when operating on large payloads like HTML documents to reduce intermediate allocations and regex engine evaluations.
