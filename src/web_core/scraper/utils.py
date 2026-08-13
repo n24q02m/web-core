@@ -126,9 +126,7 @@ _SPA_ROOT_RE = re.compile(
     re.IGNORECASE,
 )
 _SCRIPT_TAG_RE = re.compile(r"<script\b", re.IGNORECASE)
-_SCRIPT_BLOCK_RE = re.compile(r"<script\b[^>]*>.*?</script[^>]*>", re.IGNORECASE | re.DOTALL)
-_STYLE_BLOCK_RE = re.compile(r"<style\b[^>]*>.*?</style[^>]*>", re.IGNORECASE | re.DOTALL)
-_TAG_RE = re.compile(r"<[^>]+>")
+_COMBINED_TAG_RE = re.compile(r"<(script|style)\b[^>]*>.*?</\1[^>]*>|<[^>]+>", re.IGNORECASE | re.DOTALL)
 _WS_RE = re.compile(r"\s+")
 
 
@@ -142,9 +140,7 @@ def visible_text(html: str) -> str:
     """
     if not html:
         return ""
-    stripped = _SCRIPT_BLOCK_RE.sub(" ", html)
-    stripped = _STYLE_BLOCK_RE.sub(" ", stripped)
-    stripped = _TAG_RE.sub(" ", stripped)
+    stripped = _COMBINED_TAG_RE.sub(" ", html)
     return _WS_RE.sub(" ", unescape(stripped)).strip()
 
 
