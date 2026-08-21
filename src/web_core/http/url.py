@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import functools
 import re
-from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 # ---------------------------------------------------------------------------
 # Tracking parameters to strip
@@ -108,9 +108,11 @@ def normalize_url(url: str) -> str:
         if not _TRACKING_RE.search(parsed.query):
             query = parsed.query
         else:
-            params = parse_qs(parsed.query, keep_blank_values=True)
-            cleaned = {k: v for k, v in params.items() if k not in _TRACKING_PARAMS}
-            query = urlencode(cleaned, doseq=True)
+            # Performance Optimization: parse_qsl returns a flat list of tuples, which is faster
+            # and avoids the overhead of dicts of lists created by parse_qs.
+            params = parse_qsl(parsed.query, keep_blank_values=True)
+            cleaned = [(k, v) for k, v in params if k not in _TRACKING_PARAMS]
+            query = urlencode(cleaned)
     else:
         query = ""
 
