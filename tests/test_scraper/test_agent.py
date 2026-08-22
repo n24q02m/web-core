@@ -243,6 +243,17 @@ class TestScrapingAgent:
         # tls_spoof should have been tried (and succeeded)
         assert tls.call_count == 1
 
+    async def test_validate_none_status_code(self):
+        """None status_code should be handled safely as invalid without raising TypeError."""
+        strategy_none = MockStrategy(name="none_status", status_code=None)
+        strategy_ok = MockStrategy(name="ok_status", status_code=200)
+        agent = ScrapingAgent(strategies={"none_status": strategy_none, "ok_status": strategy_ok})
+
+        content = await agent.scrape("https://example.com")
+        assert "mock content" in content
+        assert strategy_none.call_count == 1
+        assert strategy_ok.call_count == 1
+
     # ------------------------------------------------------------------
     # Validate content
     # ------------------------------------------------------------------
