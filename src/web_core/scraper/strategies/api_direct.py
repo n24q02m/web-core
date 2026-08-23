@@ -21,7 +21,7 @@ class APIDirectStrategy(BaseStrategy):
         r"fetch\(['\"]([^'\"]+)['\"]\)",
         r"axios\.\w+\(['\"]([^'\"]+)['\"]\)",
     ]
-    _API_PATTERNS_COMPILED: ClassVar[list[re.Pattern[str]]] = [re.compile(p) for p in API_PATTERNS]
+    _API_PATTERNS_COMPILED: ClassVar[re.Pattern[str]] = re.compile("|".join(API_PATTERNS))
 
     def __init__(self, timeout: float = 30.0, http_client: Any = None):
         self.timeout = timeout
@@ -29,10 +29,13 @@ class APIDirectStrategy(BaseStrategy):
 
     def discover_apis(self, html: str) -> list[str]:
         """Extract unique API endpoint URLs from *html* source."""
-        apis: list[str] = []
-        for pattern in self._API_PATTERNS_COMPILED:
-            apis.extend(pattern.findall(html))
-        return list(dict.fromkeys(apis))
+        matches_by_pattern: list[list[str]] = [[] for _ in self.API_PATTERNS]
+        for match in self._API_PATTERNS_COMPILED.finditer(html):
+            for index, found in enumerate(match.groups()):
+                if found is not None:
+                    matches_by_pattern[index].append(found)
+                    break
+        return list(dict.fromkeys(found for matches in matches_by_pattern for found in matches))
 
     async def fetch(self, url: str, selectors: dict[str, str] | None = None) -> ScrapingResult:
         """Discover and fetch from an API endpoint, or fall back to page source."""
