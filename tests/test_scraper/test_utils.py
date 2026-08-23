@@ -1,5 +1,7 @@
 """Tests for scraper utility functions: CF challenge detection."""
 
+import pytest
+
 from web_core.scraper.utils import (
     detect_cloudflare_challenge,
     extract_turnstile_sitekey,
@@ -141,6 +143,23 @@ def test_extract_sitekey_variations():
     # sitekey in URL without query param syntax (unlikely but test regex)
     html = "sitekey=0x4FFFFFFtest_sitekey_2222222"
     assert extract_turnstile_sitekey(html) == "0x4FFFFFFtest_sitekey_2222222"
+
+
+@pytest.mark.parametrize(
+    ("html", "expected"),
+    [
+        (
+            '<iframe src="/cdn-cgi/challenge-platform/0x4AAAAAAAB1234567890abcdef/light">',
+            "0x4AAAAAAAB1234567890abcdef",
+        ),
+        (
+            '<iframe src="/cdn-cgi/challenge-platform/4BBBBBtest_sitekey_1234567/dark">',
+            "4BBBBBtest_sitekey_1234567",
+        ),
+    ],
+)
+def test_extract_sitekey_from_iframe_path(html, expected):
+    assert extract_turnstile_sitekey(html) == expected
 
 
 def test_extract_sitekey_fast_path_miss():
