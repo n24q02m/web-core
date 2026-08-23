@@ -1,0 +1,3 @@
+## 2025-05-15 - [Optimization: urllib.parse.parse_qsl vs parse_qs]
+**Learning:** `urllib.parse.parse_qsl` is faster than `parse_qs` for processing query parameters because it returns a flat list of key-value tuples instead of a dictionary mapping keys to lists of values. This avoids the overhead of nested dictionary comprehensions when filtering parameters.
+**Action:** Use `parse_qsl` combined with `urlencode` (without `doseq=True`) for optimal query string filtering and reconstruction.
