@@ -101,6 +101,14 @@ class TestAPIDirectStrategy:
         apis = strategy.discover_apis(html)
         assert apis.index("/api/first") < apis.index("/api/second")
 
+    def test_discover_apis_preserves_pattern_priority(self):
+        html = 'var absolute = "https://api.example.com/first"; fetch("/api/second")'
+        strategy = APIDirectStrategy()
+        assert strategy.discover_apis(html)[:2] == [
+            "https://api.example.com/first",
+            "/api/second",
+        ]
+
     def test_discover_apis_empty_html(self):
         strategy = APIDirectStrategy()
         assert strategy.discover_apis("") == []
