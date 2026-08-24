@@ -2,6 +2,68 @@
 
 <!-- version list -->
 
+## v2.4.1-beta.1 (2026-08-24)
+
+### Bug Fixes
+
+- Consolidate API discovery regex scanning ([#719](https://github.com/n24q02m/web-core/pull/719),
+  [`22d1eba`](https://github.com/n24q02m/web-core/commit/22d1eba64d8ffbcf57bfa96695f66da5cbcf5031))
+
+- Consolidate scraper regex scans ([#718](https://github.com/n24q02m/web-core/pull/718),
+  [`93f909a`](https://github.com/n24q02m/web-core/commit/93f909a2217ae8ab9aa08436b60c004d53efa0a0))
+
+- Consolidate Turnstile sitekey matching ([#718](https://github.com/n24q02m/web-core/pull/718),
+  [`93f909a`](https://github.com/n24q02m/web-core/commit/93f909a2217ae8ab9aa08436b60c004d53efa0a0))
+
+- Consolidate visible text tag stripping ([#718](https://github.com/n24q02m/web-core/pull/718),
+  [`93f909a`](https://github.com/n24q02m/web-core/commit/93f909a2217ae8ab9aa08436b60c004d53efa0a0))
+
+- Handle missing scraper status codes ([#716](https://github.com/n24q02m/web-core/pull/716),
+  [`e25ba17`](https://github.com/n24q02m/web-core/commit/e25ba17acb72071cbbfad33969a5b36c448e7647))
+
+- Preserve duplicate query parameter order ([#717](https://github.com/n24q02m/web-core/pull/717),
+  [`cd667f3`](https://github.com/n24q02m/web-core/commit/cd667f3818d30c8668ad00020a6fa38ebaf9bd02))
+
+- Refresh web-core Docker digests ([#721](https://github.com/n24q02m/web-core/pull/721),
+  [`cb827f3`](https://github.com/n24q02m/web-core/commit/cb827f320b8c0dd705136bea605eadf43d7ae3e2))
+
+- Refresh web-core workflow pins ([#720](https://github.com/n24q02m/web-core/pull/720),
+  [`cb4424a`](https://github.com/n24q02m/web-core/commit/cb4424a7737c7d9749b23bf488df3d6d106ca665))
+
+- **deps**: Lock file maintenance ([#714](https://github.com/n24q02m/web-core/pull/714),
+  [`bbbd2bc`](https://github.com/n24q02m/web-core/commit/bbbd2bca3940c3a34617db23bbd3fb3f17762b8a))
+
+- **deps**: Lock file maintenance ([#712](https://github.com/n24q02m/web-core/pull/712),
+  [`b0a4a65`](https://github.com/n24q02m/web-core/commit/b0a4a65279e901a4d5ba9a456bc50f61e501fded))
+
+- **deps**: Lock file maintenance ([#687](https://github.com/n24q02m/web-core/pull/687),
+  [`52c4077`](https://github.com/n24q02m/web-core/commit/52c407770d789624bf853bd84cd189f25174485a))
+
+- **deps**: Lock file maintenance ([#686](https://github.com/n24q02m/web-core/pull/686),
+  [`a41ce8a`](https://github.com/n24q02m/web-core/commit/a41ce8a45db921547cf6f03c9edb76d25959032d))
+
+- **deps**: Lock file maintenance ([#684](https://github.com/n24q02m/web-core/pull/684),
+  [`3176d1a`](https://github.com/n24q02m/web-core/commit/3176d1a53e05d7cf51057b4ae2974b79b6e3bb9e))
+
+- **deps**: Lock file maintenance ([#683](https://github.com/n24q02m/web-core/pull/683),
+  [`4696b35`](https://github.com/n24q02m/web-core/commit/4696b35d984c962ee485ec4b33839462522461aa))
+
+- **deps**: Update patch dependencies ([#702](https://github.com/n24q02m/web-core/pull/702),
+  [`6f69ea6`](https://github.com/n24q02m/web-core/commit/6f69ea6f8a634d54ae671b18d8f824effddf5d58))
+
+- **deps**: Update patch dependencies ([#700](https://github.com/n24q02m/web-core/pull/700),
+  [`d24542a`](https://github.com/n24q02m/web-core/commit/d24542a36ea4ced196e7ad04eb52f1d074d3af35))
+
+- **deps**: Update patch dependencies ([#695](https://github.com/n24q02m/web-core/pull/695),
+  [`97daecd`](https://github.com/n24q02m/web-core/commit/97daecdc93aabd59d3b17593b43048eaf7b28c62))
+
+- **deps**: Update patchright to >=1.62.1 ([#713](https://github.com/n24q02m/web-core/pull/713),
+  [`3dcbdaa`](https://github.com/n24q02m/web-core/commit/3dcbdaa3c963c0ac3d135e77503b862bddd70d0d))
+
+- **deps**: Update ty to >=0.0.72 ([#704](https://github.com/n24q02m/web-core/pull/704),
+  [`8951d90`](https://github.com/n24q02m/web-core/commit/8951d9002f03378517024e9e1459ac87da91b21d))
+
+
 ## v2.4.0 (2026-08-07)
 
 
