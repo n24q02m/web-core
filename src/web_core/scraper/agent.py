@@ -219,10 +219,10 @@ class ScrapingAgent:
           instead of extracting the empty shell.
         """
         content = state.get("content", "")
-        status_code = state.get("status_code", 0)
+        status_code = state.get("status_code")
         errors = list(state.get("errors", []))
 
-        status_ok = 200 <= status_code < 400
+        status_ok = isinstance(status_code, int) and 200 <= status_code < 400
         length_ok = len(content) >= self.min_content_length
         cf_challenge = is_cloudflare_challenge(content) if content else False
         under_rendered = looks_under_rendered(content) if content else False
