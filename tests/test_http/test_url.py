@@ -109,6 +109,14 @@ class TestNormalizeUrl:
         result = normalize_url("https://example.com/?utm_source=a&utm_source=b")
         assert "?" not in result
 
+    def test_preserves_order_of_duplicate_non_tracking_params(self):
+        url = "https://example.com/?tag=first&other=value&tag=second&utm_source=ignored"
+        assert normalize_url(url) == "https://example.com?tag=first&other=value&tag=second"
+
+    def test_preserves_blank_non_tracking_values(self):
+        url = "https://example.com/?keep=&utm_source=ignored"
+        assert normalize_url(url) == "https://example.com?keep="
+
     def test_empty_tracking_param_value(self):
         result = normalize_url("https://example.com/?utm_source=")
         assert "?" not in result
