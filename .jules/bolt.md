@@ -1,0 +1,3 @@
+## 2025-02-20 - [Performance Optimization: Independent Regexes over Alternation]
+**Learning:** Combining multiple regular expressions into a single alternation pattern (e.g., `re.compile("|".join(patterns))`) forces the regex engine into parallel search mode if the individual patterns lack a common prefix. This disables fast-path literal string searching (like Boyer-Moore) for constant prefixes, which makes it significantly slower on large texts (like HTML documents) compared to iterating sequentially over independent, compiled regexes.
+**Action:** When fast-pathing performance on full HTML documents, iterate sequentially over independent, compiled regexes instead of combining them into a single alternation pattern without a common prefix.
