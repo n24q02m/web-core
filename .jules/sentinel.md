@@ -1,0 +1,4 @@
+## 2024-03-24 - SSRF in API Direct Strategy
+**Vulnerability:** Server-Side Request Forgery (SSRF) vulnerability in `APIDirectStrategy.fetch()`. The method accepted both user-provided URLs and dynamically discovered API endpoints without validating them, allowing potential requests to internal networks or file systems (e.g., `file:///etc/passwd`).
+**Learning:** Even when a strategy uses a safe default client (`safe_httpx_client`), explicitly passed mock or custom clients (like `self._http_client`) can bypass network-level SSRF protections. Validation must occur at the strategy layer *before* any client handles the request.
+**Prevention:** Always explicitly validate all input and discovered URLs using `web_core.http.client.is_safe_url` at the earliest point of contact in scraper strategies, and include explicit unit tests asserting that unsafe URLs trigger a `ValueError`.

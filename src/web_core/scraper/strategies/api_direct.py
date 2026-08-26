@@ -6,7 +6,7 @@ import re
 from typing import Any, ClassVar
 from urllib.parse import urljoin
 
-from web_core.http.client import safe_httpx_client
+from web_core.http.client import is_safe_url, safe_httpx_client
 from web_core.scraper.base import BaseStrategy, ScrapingResult
 
 
@@ -39,7 +39,13 @@ class APIDirectStrategy(BaseStrategy):
 
     async def fetch(self, url: str, selectors: dict[str, str] | None = None) -> ScrapingResult:
         """Discover and fetch from an API endpoint, or fall back to page source."""
+        if not is_safe_url(url):
+            raise ValueError(f"SSRF blocked: {url}")
+
         api_url = selectors.get("api_url") if selectors else None
+        if api_url is not None and not is_safe_url(api_url):
+            raise ValueError(f"SSRF blocked: {api_url}")
+
         client = self._http_client if self._http_client is not None else safe_httpx_client(timeout=self.timeout)
         should_close = self._http_client is None
 
@@ -58,6 +64,9 @@ class APIDirectStrategy(BaseStrategy):
                 api_url = discovered[0]
                 if api_url.startswith("/"):
                     api_url = urljoin(url, api_url)
+
+                if not is_safe_url(api_url):
+                    raise ValueError(f"SSRF blocked: {api_url}")
 
             api_response = await client.get(api_url, headers={"Accept": "application/json"}, follow_redirects=True)
             return ScrapingResult(
