@@ -1168,7 +1168,7 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=7.1.0" },
     { name = "pytest-timeout", marker = "extra == 'dev'", specifier = ">=2.4.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.16.3" },
-    { name = "ty", marker = "extra == 'dev'", specifier = ">=0.0.72" },
+    { name = "ty", marker = "extra == 'dev'", specifier = ">=0.0.73" },
 ]
 provides-extras = ["dev"]
 
