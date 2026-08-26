@@ -1,0 +1,3 @@
+## 2024-05-30 - Faster Regex Searching in HTML Documents
+**Learning:** Combining multiple regular expressions without a common prefix into a single alternation pattern disables Boyer-Moore literal searching, causing major performance regressions on large texts like HTML.
+**Action:** Iterate sequentially over independently compiled regex patterns so the C-level regex engine can utilize fast literal searching.
