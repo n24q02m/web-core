@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -131,8 +131,36 @@ class TestAPIDirectStrategy:
 
     # -- fetch ---------------------------------------------------------------
 
-    async def test_fetch_with_api_discovery(self):
+    @patch("web_core.scraper.strategies.api_direct.is_safe_url")
+    async def test_fetch_blocks_unsafe_url(self, mock_is_safe_url):
+        """fetch should raise ValueError when URL is unsafe."""
+        mock_is_safe_url.return_value = False
+        client = AsyncMock()
+        strategy = APIDirectStrategy(http_client=client)
+        with pytest.raises(ValueError, match="SSRF blocked: http://localhost"):
+            await strategy.fetch("http://localhost")
+
+        client.get.assert_not_called()
+
+    @patch("web_core.scraper.strategies.api_direct.is_safe_url")
+    async def test_fetch_blocks_unsafe_api_url(self, mock_is_safe_url):
+        """fetch should raise ValueError when discovered API URL is unsafe."""
+        # Allow the page URL but block the API URL
+        mock_is_safe_url.side_effect = [True, False]
+        page_html = '<script>fetch("http://localhost/admin")</script>'
+        page_resp = _make_response(200, page_html, url="https://example.com")
+        client = _make_client(page_resp)
+
+        strategy = APIDirectStrategy(http_client=client)
+        with pytest.raises(ValueError, match="SSRF blocked: http://localhost/admin"):
+            await strategy.fetch("https://example.com")
+
+        assert client.get.call_count == 1  # Only page was fetched
+
+    @patch("web_core.scraper.strategies.api_direct.is_safe_url")
+    async def test_fetch_with_api_discovery(self, mock_is_safe_url):
         """When page source contains API URLs, fetch the first discovered API."""
+        mock_is_safe_url.return_value = True
         page_html = '<script>fetch("https://api.example.com/data")</script>'
         page_resp = _make_response(200, page_html, url="https://example.com")
         api_resp = _make_response(
@@ -151,8 +179,10 @@ class TestAPIDirectStrategy:
         assert result.status_code == 200
         assert result.metadata["api_url"] == "https://api.example.com/data"
 
-    async def test_fetch_no_apis_found_falls_back(self):
+    @patch("web_core.scraper.strategies.api_direct.is_safe_url")
+    async def test_fetch_no_apis_found_falls_back(self, mock_is_safe_url):
         """When no API endpoints are discovered, return the page source as fallback."""
+        mock_is_safe_url.return_value = True
         page_html = "<html><body>No APIs here</body></html>"
         page_resp = _make_response(200, page_html, url="https://example.com")
         client = _make_client(page_resp)
@@ -164,8 +194,10 @@ class TestAPIDirectStrategy:
         assert result.metadata["apis_found"] == 0
         assert result.metadata["fallback"] == "page_source"
 
-    async def test_fetch_with_explicit_api_url(self):
+    @patch("web_core.scraper.strategies.api_direct.is_safe_url")
+    async def test_fetch_with_explicit_api_url(self, mock_is_safe_url):
         """When selectors include api_url, skip discovery and fetch directly."""
+        mock_is_safe_url.return_value = True
         api_resp = _make_response(
             200,
             '{"result": true}',
@@ -185,8 +217,10 @@ class TestAPIDirectStrategy:
         # Only one call — no page fetch
         assert client.get.call_count == 1
 
-    async def test_fetch_relative_api_url_resolved(self):
+    @patch("web_core.scraper.strategies.api_direct.is_safe_url")
+    async def test_fetch_relative_api_url_resolved(self, mock_is_safe_url):
         """Relative API paths should be resolved against the page URL."""
+        mock_is_safe_url.return_value = True
         page_html = '<script>fetch("/api/v1/data")</script>'
         page_resp = _make_response(200, page_html, url="https://example.com/page")
         api_resp = _make_response(
@@ -204,8 +238,10 @@ class TestAPIDirectStrategy:
         second_call = client.get.call_args_list[1]
         assert second_call.args[0] == "https://example.com/api/v1/data"
 
-    async def test_fetch_failure_propagates(self):
+    @patch("web_core.scraper.strategies.api_direct.is_safe_url")
+    async def test_fetch_failure_propagates(self, mock_is_safe_url):
         """HTTP errors should propagate."""
+        mock_is_safe_url.return_value = True
         client = AsyncMock()
         client.get = AsyncMock(side_effect=ConnectionError("connection refused"))
         client.aclose = AsyncMock()
@@ -214,8 +250,10 @@ class TestAPIDirectStrategy:
         with pytest.raises(ConnectionError, match="connection refused"):
             await strategy.fetch("https://example.com")
 
-    async def test_fetch_closes_client_when_no_injected_client(self, mock_httpx_response):
+    @patch("web_core.scraper.strategies.api_direct.is_safe_url")
+    async def test_fetch_closes_client_when_no_injected_client(self, mock_is_safe_url, mock_httpx_response):
         """When using safe_httpx_client (no injected client), aclose should be called."""
+        mock_is_safe_url.return_value = True
         from unittest.mock import patch
 
         page_resp = mock_httpx_response(200, "<html>no api</html>")
@@ -231,8 +269,10 @@ class TestAPIDirectStrategy:
 
             mock_client.aclose.assert_called_once()
 
-    async def test_fetch_does_not_close_injected_client(self):
+    @patch("web_core.scraper.strategies.api_direct.is_safe_url")
+    async def test_fetch_does_not_close_injected_client(self, mock_is_safe_url):
         """An injected http_client should NOT be closed by fetch."""
+        mock_is_safe_url.return_value = True
         page_resp = _make_response(200, "<html>no api</html>", url="https://example.com")
         client = _make_client(page_resp)
 

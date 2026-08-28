@@ -38,8 +38,10 @@ class TestBasicHTTPStrategy:
         strategy = BasicHTTPStrategy(headers=custom)
         assert strategy.headers == custom
 
-    async def test_fetch_success_with_injected_client(self, mock_httpx_client, mock_httpx_response):
+    @patch("web_core.scraper.strategies.basic_http.is_safe_url")
+    async def test_fetch_success_with_injected_client(self, mock_is_safe_url, mock_httpx_client, mock_httpx_response):
         """fetch should return ScrapingResult with correct fields."""
+        mock_is_safe_url.return_value = True
         resp = mock_httpx_response(200, "<html>test content</html>", {"content-type": "text/html; charset=utf-8"})
         resp.url = "https://example.com"
         mock_httpx_client.get = AsyncMock(return_value=resp)
@@ -52,8 +54,10 @@ class TestBasicHTTPStrategy:
         assert result.strategy == "basic_http"
         assert result.status_code == 200
 
-    async def test_fetch_metadata(self, mock_httpx_client, mock_httpx_response):
+    @patch("web_core.scraper.strategies.basic_http.is_safe_url")
+    async def test_fetch_metadata(self, mock_is_safe_url, mock_httpx_client, mock_httpx_response):
         """Result metadata should include content_type and content_length."""
+        mock_is_safe_url.return_value = True
         resp = mock_httpx_response(200, "hello world", {"content-type": "text/plain"})
         resp.url = "https://example.com"
         mock_httpx_client.get = AsyncMock(return_value=resp)
@@ -64,8 +68,10 @@ class TestBasicHTTPStrategy:
         assert result.metadata["content_type"] == "text/plain"
         assert result.metadata["content_length"] == len("hello world")
 
-    async def test_fetch_uses_safe_httpx_client_when_no_client(self, mock_httpx_response):
+    @patch("web_core.scraper.strategies.basic_http.is_safe_url")
+    async def test_fetch_uses_safe_httpx_client_when_no_client(self, mock_is_safe_url, mock_httpx_response):
         """When no http_client is injected, fetch should use safe_httpx_client."""
+        mock_is_safe_url.return_value = True
         resp = mock_httpx_response(200, "<html>safe</html>")
         resp.url = "https://example.com"
 
@@ -82,8 +88,10 @@ class TestBasicHTTPStrategy:
             mock_factory.assert_called_once_with(timeout=30.0)
             assert result.content == "<html>safe</html>"
 
-    async def test_fetch_passes_headers_and_timeout(self, mock_httpx_client, mock_httpx_response):
+    @patch("web_core.scraper.strategies.basic_http.is_safe_url")
+    async def test_fetch_passes_headers_and_timeout(self, mock_is_safe_url, mock_httpx_client, mock_httpx_response):
         """fetch should pass configured headers and timeout to the HTTP client."""
+        mock_is_safe_url.return_value = True
         resp = mock_httpx_response(200, "ok")
         resp.url = "https://example.com"
         mock_httpx_client.get = AsyncMock(return_value=resp)
@@ -100,16 +108,30 @@ class TestBasicHTTPStrategy:
             cookies={},
         )
 
-    async def test_fetch_failure_propagates(self, mock_httpx_client):
+    @patch("web_core.scraper.strategies.basic_http.is_safe_url")
+    async def test_fetch_blocks_unsafe_url(self, mock_is_safe_url, mock_httpx_client):
+        """fetch should raise ValueError when URL is unsafe."""
+        mock_is_safe_url.return_value = False
+        strategy = BasicHTTPStrategy(http_client=mock_httpx_client)
+        with pytest.raises(ValueError, match="SSRF blocked: http://localhost"):
+            await strategy.fetch("http://localhost")
+
+        mock_httpx_client.get.assert_not_called()
+
+    @patch("web_core.scraper.strategies.basic_http.is_safe_url")
+    async def test_fetch_failure_propagates(self, mock_is_safe_url, mock_httpx_client):
         """HTTP errors should propagate to the caller."""
+        mock_is_safe_url.return_value = True
         mock_httpx_client.get = AsyncMock(side_effect=ConnectionError("refused"))
 
         strategy = BasicHTTPStrategy(http_client=mock_httpx_client)
         with pytest.raises(ConnectionError, match="refused"):
             await strategy.fetch("https://example.com")
 
-    async def test_fetch_non_200_status(self, mock_httpx_client, mock_httpx_response):
+    @patch("web_core.scraper.strategies.basic_http.is_safe_url")
+    async def test_fetch_non_200_status(self, mock_is_safe_url, mock_httpx_client, mock_httpx_response):
         """Non-200 responses should still return a ScrapingResult."""
+        mock_is_safe_url.return_value = True
         resp = mock_httpx_response(403, "Forbidden")
         resp.url = "https://example.com"
         mock_httpx_client.get = AsyncMock(return_value=resp)
@@ -120,8 +142,10 @@ class TestBasicHTTPStrategy:
         assert result.status_code == 403
         assert result.content == "Forbidden"
 
-    async def test_fetch_passes_cookies(self, mock_httpx_client, mock_httpx_response):
+    @patch("web_core.scraper.strategies.basic_http.is_safe_url")
+    async def test_fetch_passes_cookies(self, mock_is_safe_url, mock_httpx_client, mock_httpx_response):
         """fetch should pass cookies from selectors to the HTTP client."""
+        mock_is_safe_url.return_value = True
         resp = mock_httpx_response(200, "ok")
         resp.url = "https://example.com"
         mock_httpx_client.get = AsyncMock(return_value=resp)
@@ -138,8 +162,12 @@ class TestBasicHTTPStrategy:
             cookies=cookies,
         )
 
-    async def test_fetch_with_invalid_cookies_in_selectors(self, mock_httpx_client, mock_httpx_response):
+    @patch("web_core.scraper.strategies.basic_http.is_safe_url")
+    async def test_fetch_with_invalid_cookies_in_selectors(
+        self, mock_is_safe_url, mock_httpx_client, mock_httpx_response
+    ):
         """fetch should ignore non-dict cookies in selectors."""
+        mock_is_safe_url.return_value = True
         resp = mock_httpx_response(200, "ok")
         resp.url = "https://example.com"
         mock_httpx_client.get = AsyncMock(return_value=resp)
