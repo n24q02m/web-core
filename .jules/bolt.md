@@ -1,0 +1,3 @@
+## 2024-05-15 - Regex Alternation Anti-pattern in Large Documents
+**Learning:** Combining multiple regular expressions into a single alternation pattern forces the regex engine into parallel search mode if the individual patterns lack a common prefix. This prevents the use of fast-path literal string searching (like Boyer-Moore), causing significant performance regressions on large payloads like HTML documents.
+**Action:** Instead of large alternations (`|`), iterate sequentially over independent, compiled regexes. This allows `pattern.search()` to utilize fast literal string searching for constant prefixes, dramatically speeding up evaluation when there are no matches.

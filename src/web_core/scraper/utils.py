@@ -30,13 +30,18 @@ _CF_MANAGED_STRINGS = [
     "verifies you are not a bot",
 ]
 
-_CF_SITEKEY_RE = re.compile(
-    r'data-sitekey=["\']([0-9a-zA-Z_-]{20,})["\']'
-    r"|sitekey=([0-9a-zA-Z_-]{20,})"
-    r'|turnstileSiteKey["\s:]+["\']([0-9a-zA-Z_-]{20,})["\']'
-    r"|/(0x[0-9a-zA-Z_-]{20,})[/&]"
-    r"|/([0-9a-zA-Z_-]{20,})/(?:light|dark|auto)"
-)
+# Sequential compiled regexes are used instead of a single large alternation `|`
+# Performance Optimization: Avoids forcing the regex engine into parallel search mode.
+# Sequential execution allows `pattern.search()` to utilize fast-path literal string
+# searching (like Boyer-Moore) for constant prefixes, dramatically speeding up
+# evaluation on large texts like HTML documents when there are no matches.
+_CF_SITEKEY_RES = [
+    re.compile(r'data-sitekey=["\']([0-9a-zA-Z_-]{20,})["\']'),
+    re.compile(r"sitekey=([0-9a-zA-Z_-]{20,})"),
+    re.compile(r'turnstileSiteKey["\s:]+["\']([0-9a-zA-Z_-]{20,})["\']'),
+    re.compile(r"/(0x[0-9a-zA-Z_-]{20,})[/&]"),
+    re.compile(r"/([0-9a-zA-Z_-]{20,})/(?:light|dark|auto)"),
+]
 
 
 def detect_cloudflare_challenge(html: str) -> str | None:
@@ -103,9 +108,10 @@ def extract_turnstile_sitekey(html: str) -> str | None:
     ):
         return None
 
-    match = _CF_SITEKEY_RE.search(html)
-    if match:
-        return next((group for group in match.groups() if group is not None), None)
+    for pattern in _CF_SITEKEY_RES:
+        match = pattern.search(html)
+        if match:
+            return match.group(1) if pattern.groups > 0 else match.group(0)
     return None
 
 
