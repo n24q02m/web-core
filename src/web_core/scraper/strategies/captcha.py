@@ -73,6 +73,9 @@ class CaptchaStrategy(BaseStrategy):
             },
         }
 
+        if not is_safe_url(self.CAPSOLVER_URL):
+            raise ValueError(f"SSRF blocked: {self.CAPSOLVER_URL}")
+
         if self._http_client is not None:
             response = await self._http_client.post(self.CAPSOLVER_URL, json=payload)
         else:

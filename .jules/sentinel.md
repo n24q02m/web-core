@@ -8,3 +8,8 @@ Security controls embedded in factory methods (such as `safe_httpx_client`) only
 
 **Prevention:**
 Always re-validate inputs (e.g., using `is_safe_url(url)`) directly within the component's execution flow (like at the top of the `fetch` method) rather than assuming injected dependencies enforce the same security constraints.
+
+## 2025-01-31 - Fix SSRF bypass via custom HTTP client injection in CaptchaStrategy
+**Vulnerability:** The `CaptchaStrategy` in `src/web_core/scraper/strategies/captcha.py` was vulnerable to Server-Side Request Forgery (SSRF). The `solve_captcha` method makes an HTTP POST request to `self.CAPSOLVER_URL`. While a `safe_httpx_client` is used by default, it could be bypassed if a custom `http_client` was injected, as `CAPSOLVER_URL` was not validated with `is_safe_url` before the request was made. A malicious user could override `CAPSOLVER_URL` and inject an unsafe client to trigger requests to internal IPs.
+**Learning:** Security controls built into default components (like `safe_httpx_client`) only protect the default execution path. When dependency injection is used (e.g., injecting an `http_client`), input parameters like URLs must be explicitly validated at the component level to maintain the security boundary.
+**Prevention:** Always validate URLs using `is_safe_url` prior to making HTTP requests, especially when using an injected, potentially untrusted HTTP client. Do not rely solely on default client configurations for security enforcement.
