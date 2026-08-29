@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
-from web_core.http.client import safe_httpx_client
+from web_core.http.client import is_safe_url, safe_httpx_client
 from web_core.scraper.base import BaseStrategy, ScrapingResult
 
 
@@ -39,6 +39,9 @@ class BasicHTTPStrategy(BaseStrategy):
 
         Supports optional cookies via selectors["cookies"] (dict[str, str]).
         """
+        if not is_safe_url(url):
+            raise ValueError(f"SSRF blocked: {url}")
+
         cookies: dict[str, str] = {}
         if selectors and isinstance(selectors.get("cookies"), dict):
             cookies = selectors["cookies"]
