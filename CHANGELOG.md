@@ -2,6 +2,53 @@
 
 <!-- version list -->
 
+## v2.5.0 (2026-08-29)
+
+### Bug Fixes
+
+- 🛡️ sentinel: [high] fix ssrf via injected http client in scraper strategies
+  ([#737](https://github.com/n24q02m/web-core/pull/737),
+  [`2ed8394`](https://github.com/n24q02m/web-core/commit/2ed8394b3a8a442fac75c0ab2eb843e00b72d127))
+
+- **deps**: Lock file maintenance ([#735](https://github.com/n24q02m/web-core/pull/735),
+  [`6eef336`](https://github.com/n24q02m/web-core/commit/6eef33664e395d570c03b9dc3cb9fee935f92324))
+
+- **deps**: Lock file maintenance ([#732](https://github.com/n24q02m/web-core/pull/732),
+  [`11987e1`](https://github.com/n24q02m/web-core/commit/11987e10faf56698c225a974c30941b1a1af3230))
+
+- **deps**: Lock file maintenance ([#728](https://github.com/n24q02m/web-core/pull/728),
+  [`13fe312`](https://github.com/n24q02m/web-core/commit/13fe312062895f74a92225a482f130062ec1355d))
+
+- **deps**: Lock file maintenance ([#725](https://github.com/n24q02m/web-core/pull/725),
+  [`ebc2b22`](https://github.com/n24q02m/web-core/commit/ebc2b22f6fc09dae8125910ca4b2715e27780691))
+
+- **deps**: Update ghcr.io/astral-sh/uv:latest docker digest to 95f2aa1
+  ([`7d531fe`](https://github.com/n24q02m/web-core/commit/7d531fe1de9d87420ec58ea8716a1d59cd6ffa04))
+
+- **deps**: Update patch dependencies ([#734](https://github.com/n24q02m/web-core/pull/734),
+  [`ad3a1a4`](https://github.com/n24q02m/web-core/commit/ad3a1a471a6c29c9c435106f1661fff859b869a4))
+
+- **deps**: Update python:3.13-slim-bookworm docker digest to c45a22e
+  ([`4fcb9e2`](https://github.com/n24q02m/web-core/commit/4fcb9e2e3e64f811073e060daf098ad164a9419c))
+
+- **deps**: Update ruff to >=0.16.4 ([#731](https://github.com/n24q02m/web-core/pull/731),
+  [`166776a`](https://github.com/n24q02m/web-core/commit/166776adfe655b0fdc756823ad3f96840c0b6d1a))
+
+- **deps**: Update ty to >=0.0.73 ([#727](https://github.com/n24q02m/web-core/pull/727),
+  [`fed6767`](https://github.com/n24q02m/web-core/commit/fed67676cdf553edb8bbc1d38d2508fef4adff09))
+
+### Chores
+
+- Bump better-semantic-release to v1.4.0 ([#723](https://github.com/n24q02m/web-core/pull/723),
+  [`d0446f8`](https://github.com/n24q02m/web-core/commit/d0446f83df4887534e9f40d0f9180c3d5e881b70))
+
+### Features
+
+- ⚡ Bolt: Sequential Regex Fast Path for Cloudflare Challenge Detection
+  ([#736](https://github.com/n24q02m/web-core/pull/736),
+  [`f741114`](https://github.com/n24q02m/web-core/commit/f7411141526671f360ae83c6de8697d71bf003c4))
+
+
 ## v2.4.1-beta.1 (2026-08-24)
 
 ### Bug Fixes
