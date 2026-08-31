@@ -2,6 +2,29 @@
 
 <!-- version list -->
 
+## v2.5.1-beta.1 (2026-08-31)
+
+### Bug Fixes
+
+- Prevent SSRF bypass via custom HTTP client
+  ([`a0dda40`](https://github.com/n24q02m/web-core/commit/a0dda40b47dcf3a9bd9cddcda1f5e6a939b83783))
+
+- **deps**: Lock file maintenance ([#742](https://github.com/n24q02m/web-core/pull/742),
+  [`e281b52`](https://github.com/n24q02m/web-core/commit/e281b522e68bef424f657627d577f01dbe3a4a3d))
+
+- **deps**: Update n24q02m/better-semantic-release action to v1.5.0
+  ([#682](https://github.com/n24q02m/web-core/pull/682),
+  [`cfff2db`](https://github.com/n24q02m/web-core/commit/cfff2db3ad1f8b835cc823af4feb3218247355ae))
+
+- **deps**: Update ty to >=0.0.74 ([#741](https://github.com/n24q02m/web-core/pull/741),
+  [`20e189c`](https://github.com/n24q02m/web-core/commit/20e189c96e30c607f3758d622f80cb35cd874b9f))
+
+### Performance Improvements
+
+- Precompile API discovery regexes
+  ([`684bfeb`](https://github.com/n24q02m/web-core/commit/684bfeb8ed628ea0bf9800cc3735a2c13772766e))
+
+
 ## v2.5.0 (2026-08-29)
 
 ### Bug Fixes
