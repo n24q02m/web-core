@@ -1,3 +1,8 @@
+## 2025-03-01 - SSRF via Injected HTTP Clients in Remote Rendering Clients
+**Vulnerability:** The remote rendering clients (`BrowserlessClient` and `CFBrowserRenderingClient`) allowed Server-Side Request Forgery (SSRF) bypass when an external `http_client` was injected. Even though the default HTTP client had SSRF protection, the URLs were not validated locally, bypassing security constraints with a custom client.
+**Learning:** Security controls embedded in HTTP client initialization (e.g., `safe_httpx_client()`) only protect the default execution path. When a component accepts an injected HTTP client, input parameters like URLs must be explicitly validated again at the component level to maintain the security boundary.
+**Prevention:** Always re-validate URLs (using `is_safe_url`) directly within the component's method (e.g., at the top of the `render` method) rather than assuming injected HTTP client dependencies enforce the same security constraints.
+
 ## 2025-03-01 - SSRF Via Injected HTTP Clients in Scraper Strategies
 
 **Vulnerability:**

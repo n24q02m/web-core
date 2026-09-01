@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -25,7 +25,8 @@ def test_requires_base_url():
         BrowserlessClient("")
 
 
-async def test_render_returns_raw_html_and_strips_trailing_slash():
+@patch("web_core.browsers.browserless.is_safe_url", return_value=True)
+async def test_render_returns_raw_html_and_strips_trailing_slash(mock_is_safe_url):
     http = MagicMock()
     http.post = AsyncMock(return_value=_resp(text="<html>browserless</html>"))
     client = BrowserlessClient("https://browserless.example.com/", http_client=http)
@@ -40,7 +41,8 @@ async def test_render_returns_raw_html_and_strips_trailing_slash():
     assert kwargs["params"] is None
 
 
-async def test_render_passes_token_as_query_param():
+@patch("web_core.browsers.browserless.is_safe_url", return_value=True)
+async def test_render_passes_token_as_query_param(mock_is_safe_url):
     http = MagicMock()
     http.post = AsyncMock(return_value=_resp(text="<html/>"))
     client = BrowserlessClient("https://bl.example.com", token="secret-token", http_client=http)
@@ -52,7 +54,8 @@ async def test_render_passes_token_as_query_param():
     assert kwargs["json"]["gotoOptions"]["waitUntil"] == "load"
 
 
-async def test_render_propagates_http_error_for_escalation():
+@patch("web_core.browsers.browserless.is_safe_url", return_value=True)
+async def test_render_propagates_http_error_for_escalation(mock_is_safe_url):
     http = MagicMock()
     err = httpx.ConnectTimeout("timeout")
     http.post = AsyncMock(return_value=_resp(raise_exc=err))
