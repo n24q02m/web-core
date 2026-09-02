@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from web_core.http.client import safe_httpx_client
+from web_core.http.client import is_safe_url, safe_httpx_client
 
 _CF_CONTENT_API = "https://api.cloudflare.com/client/v4/accounts/{account_id}/browser-rendering/content"
 
@@ -57,6 +57,9 @@ class CFBrowserRenderingClient:
         failure and propagates ``httpx`` errors (5xx/timeout) so the agent's
         escalation chain can fall back to the next backend.
         """
+        if not is_safe_url(url):
+            raise ValueError(f"SSRF blocked: {url}")
+
         endpoint = _CF_CONTENT_API.format(account_id=self._account_id)
         payload = {"url": url, "gotoOptions": {"waitUntil": wait_until}}
         headers = {"Authorization": f"Bearer {self._api_token}", "Content-Type": "application/json"}

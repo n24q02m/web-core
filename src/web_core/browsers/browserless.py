@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from web_core.http.client import safe_httpx_client
+from web_core.http.client import is_safe_url, safe_httpx_client
 
 
 class BrowserlessClient:
@@ -50,6 +50,9 @@ class BrowserlessClient:
         markup, not a JSON wrapper). Propagates ``httpx`` errors (5xx/timeout)
         so the agent's escalation chain can fall back to the next backend.
         """
+        if not is_safe_url(url):
+            raise ValueError(f"SSRF blocked: {url}")
+
         endpoint = f"{self._base_url}/content"
         params = {"token": self._token} if self._token else None
         payload = {"url": url, "gotoOptions": {"waitUntil": wait_until}}
