@@ -63,3 +63,15 @@ async def test_render_propagates_http_error_for_escalation(mock_is_safe_url):
 
     with pytest.raises(httpx.ConnectTimeout):
         await client.render("https://example.com")
+
+
+@patch("web_core.browsers.browserless.is_safe_url", return_value=False)
+async def test_render_blocks_unsafe_url_ssrf(mock_is_safe_url):
+    http = MagicMock()
+    http.post = AsyncMock(return_value=_resp(text="<html/>"))
+    client = BrowserlessClient("https://bl.example.com", http_client=http)
+
+    with pytest.raises(ValueError, match="SSRF blocked"):
+        await client.render("http://169.254.169.254/latest/meta-data")
+
+    http.post.assert_not_called()
