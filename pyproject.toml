@@ -39,7 +39,7 @@ dev = [
     "pytest-cov>=7.1.0",
     "pytest-timeout>=2.4.0",
     "ruff>=0.16.4",
-    "ty>=0.0.74",
+    "ty>=0.0.75",
 ]
 
 [project.urls]
