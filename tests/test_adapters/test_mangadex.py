@@ -689,7 +689,8 @@ class TestGetChapterImages:
 class TestDownloadImage:
     """Test download_image with mocked HTTP."""
 
-    async def test_download_standard(self):
+    @patch("web_core.adapters.mangadex.is_safe_url", return_value=True)
+    async def test_download_standard(self, mock_is_safe_url):
         image_bytes = b"fake-image-data"
         mock_resp = _make_mock_response(content=image_bytes)
         mock_client = AsyncMock()
@@ -709,7 +710,8 @@ class TestDownloadImage:
         call_args = mock_client.get.call_args
         assert call_args.args[0] == "https://server.example.com/data/abcdef/page1.png"
 
-    async def test_download_saver(self):
+    @patch("web_core.adapters.mangadex.is_safe_url", return_value=True)
+    async def test_download_saver(self, mock_is_safe_url):
         mock_resp = _make_mock_response(content=b"saver-data")
         mock_client = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_resp)
@@ -728,7 +730,8 @@ class TestDownloadImage:
         call_args = mock_client.get.call_args
         assert call_args.args[0] == "https://server.example.com/data-saver/abcdef/page1.jpg"
 
-    async def test_download_image_http_error(self):
+    @patch("web_core.adapters.mangadex.is_safe_url", return_value=True)
+    async def test_download_image_http_error(self, mock_is_safe_url):
         mock_resp = _make_mock_response()
         mock_resp.status_code = 404
         mock_resp.raise_for_status.side_effect = httpx.HTTPStatusError(
@@ -748,7 +751,8 @@ class TestDownloadImage:
                     "page1.png",
                 )
 
-    async def test_download_image_with_reused_client(self):
+    @patch("web_core.adapters.mangadex.is_safe_url", return_value=True)
+    async def test_download_image_with_reused_client(self, mock_is_safe_url):
         image_bytes = b"reused-client-data"
         mock_resp = _make_mock_response(content=image_bytes)
         mock_client = AsyncMock()
@@ -766,7 +770,8 @@ class TestDownloadImage:
                 assert result == image_bytes
                 mock_client.get.assert_called_once()
 
-    async def test_download_image_http_error_reused_client(self):
+    @patch("web_core.adapters.mangadex.is_safe_url", return_value=True)
+    async def test_download_image_http_error_reused_client(self, mock_is_safe_url):
         mock_resp = _make_mock_response()
         mock_resp.status_code = 500
         mock_resp.raise_for_status.side_effect = httpx.HTTPStatusError(
@@ -881,7 +886,8 @@ class TestSsrfSafety:
             await client._get("/test")
             mock_factory.assert_called_once_with(timeout=30.0)
 
-    async def test_download_uses_safe_client(self):
+    @patch("web_core.adapters.mangadex.is_safe_url", return_value=True)
+    async def test_download_uses_safe_client(self, mock_is_safe_url):
         """download_image must also use safe_httpx_client."""
         mock_resp = _make_mock_response(content=b"img")
         mock_client = AsyncMock()
@@ -893,6 +899,12 @@ class TestSsrfSafety:
             client = MangaDexClient()
             await client.download_image("https://s.example.com", "h", "f.png")
             mock_factory.assert_called_once_with(timeout=60.0)
+
+    @patch("web_core.adapters.mangadex.is_safe_url", return_value=False)
+    async def test_download_blocks_unsafe_url(self, mock_is_safe_url):
+        client = MangaDexClient()
+        with pytest.raises(ValueError, match="SSRF blocked:"):
+            await client.download_image("http://127.0.0.1", "h", "f.png")
 
     async def test_pagination_parallel_fetching(self):
         """Verify that multiple pages are fetched when total > batch size."""
