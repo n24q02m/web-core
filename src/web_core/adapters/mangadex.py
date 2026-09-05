@@ -16,7 +16,7 @@ import time
 import httpx
 from pydantic import BaseModel
 
-from web_core.http import safe_httpx_client
+from web_core.http import is_safe_url, safe_httpx_client
 
 logger = logging.getLogger(__name__)
 
@@ -352,9 +352,17 @@ class MangaDexClient:
         -------
         bytes
             Raw image content.
+
+        Raises
+        ------
+        ValueError
+            If the image URL is unsafe, before any HTTP request is sent.
         """
         quality = "data-saver" if saver else "data"
         url = f"{base_url}/{quality}/{hash}/{filename}"
+        if not is_safe_url(url):
+            raise ValueError(f"SSRF blocked: {url}")
+
         await self._rate_limit()
 
         # Performance Optimization: Reuse HTTP client if available
