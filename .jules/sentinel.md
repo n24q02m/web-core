@@ -18,3 +18,14 @@ Always re-validate inputs (e.g., using `is_safe_url(url)`) directly within the c
 **Vulnerability:** The `CaptchaStrategy` in `src/web_core/scraper/strategies/captcha.py` was vulnerable to Server-Side Request Forgery (SSRF). The `solve_captcha` method makes an HTTP POST request to `self.CAPSOLVER_URL`. While a `safe_httpx_client` is used by default, it could be bypassed if a custom `http_client` was injected, as `CAPSOLVER_URL` was not validated with `is_safe_url` before the request was made. A malicious user could override `CAPSOLVER_URL` and inject an unsafe client to trigger requests to internal IPs.
 **Learning:** Security controls built into default components (like `safe_httpx_client`) only protect the default execution path. When dependency injection is used (e.g., injecting an `http_client`), input parameters like URLs must be explicitly validated at the component level to maintain the security boundary.
 **Prevention:** Always validate URLs using `is_safe_url` prior to making HTTP requests, especially when using an injected, potentially untrusted HTTP client. Do not rely solely on default client configurations for security enforcement.
+
+## 2025-03-01 - SSRF Via Injected HTTP Clients in API Adapters
+
+**Vulnerability:**
+The `MangaDexClient` adapter in `src/web_core/adapters/mangadex.py` allowed a Server-Side Request Forgery (SSRF) bypass in its `download_image` method. While the default HTTP client used for requests was wrapped with `safe_httpx_client()`, the dynamically constructed download URL (using external input from `base_url`) was not explicitly validated. If a custom `http_client` was reused or injected, the default SSRF protections were bypassed.
+
+**Learning:**
+The requirement to explicitly validate URLs with `web_core.http.client.is_safe_url` extends to API adapters (e.g., `src/web_core/adapters/`) when dynamically constructing fetch URLs from external data. Injected dependencies (like `http_client`) don't automatically enforce the same default safety hooks.
+
+**Prevention:**
+Always explicitly re-validate inputs, particularly dynamically constructed URLs from external inputs, using `is_safe_url` directly prior to executing an HTTP request in component execution paths. Never rely solely on default client initializers to provide comprehensive SSRF boundary protection when dependency injection is supported.
