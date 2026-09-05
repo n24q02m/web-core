@@ -378,7 +378,10 @@ class TestGetManga:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             client = MangaDexClient()
             result = await client.get_manga("manga-001")
 
@@ -397,7 +400,10 @@ class TestGetChapter:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             client = MangaDexClient()
             result = await client.get_chapter("ch-1")
 
@@ -416,7 +422,10 @@ class TestSearchManga:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             client = MangaDexClient()
             results = await client.search_manga("One Piece")
 
@@ -436,7 +445,10 @@ class TestSearchManga:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             client = MangaDexClient()
             results = await client.search_manga("Naruto")
 
@@ -451,7 +463,10 @@ class TestSearchManga:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             client = MangaDexClient()
             results = await client.search_manga("NonexistentManga12345")
 
@@ -464,7 +479,10 @@ class TestSearchManga:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             client = MangaDexClient(user_agent="TestBot/1.0")
             await client.search_manga("test", limit=5)
 
@@ -486,7 +504,10 @@ class TestSearchManga:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             client = MangaDexClient()
             with pytest.raises(httpx.HTTPStatusError):
                 await client.search_manga("error")
@@ -502,7 +523,10 @@ class TestGetChapterFeed:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             client = MangaDexClient()
             chapters = await client.get_chapter_feed("manga-001")
 
@@ -521,7 +545,10 @@ class TestGetChapterFeed:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             client = MangaDexClient()
             await client.get_chapter_feed("manga-001", language="vi")
 
@@ -537,7 +564,10 @@ class TestGetChapterFeed:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             client = MangaDexClient()
             chapters = await client.get_chapter_feed("manga-001", limit=500)
 
@@ -553,7 +583,10 @@ class TestGetChapterFeed:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             client = MangaDexClient()
             await client.get_chapter_feed("manga-001", limit=1)
 
@@ -592,7 +625,10 @@ class TestGetChapterFeed:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             client = MangaDexClient()
             chapters = await client.get_chapter_feed("manga-001", limit=500)
 
@@ -639,7 +675,10 @@ class TestGetChapterImages:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             client = MangaDexClient()
             images = await client.get_chapter_images("ch-1")
 
@@ -657,7 +696,10 @@ class TestGetChapterImages:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             client = MangaDexClient()
             await client.get_chapter_images("chapter-uuid-xyz")
 
@@ -697,7 +739,10 @@ class TestDownloadImage:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             client = MangaDexClient()
             result = await client.download_image(
                 "https://server.example.com",
@@ -716,7 +761,10 @@ class TestDownloadImage:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             client = MangaDexClient()
             await client.download_image(
                 "https://server.example.com",
@@ -739,7 +787,10 @@ class TestDownloadImage:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             client = MangaDexClient()
             with pytest.raises(httpx.HTTPStatusError):
                 await client.download_image(
@@ -756,7 +807,10 @@ class TestDownloadImage:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             async with MangaDexClient() as client:
                 result = await client.download_image(
                     "https://server.example.com",
@@ -777,7 +831,10 @@ class TestDownloadImage:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             async with MangaDexClient() as client:
                 with pytest.raises(httpx.HTTPStatusError):
                     await client.download_image(
@@ -831,7 +888,10 @@ class TestSsrfSafety:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client) as mock_factory:
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client) as mock_factory,
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             async with MangaDexClient() as client, client:
                 pass
             # Factory should only be called once
@@ -876,7 +936,10 @@ class TestSsrfSafety:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client) as mock_factory:
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client) as mock_factory,
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             client = MangaDexClient()
             await client._get("/test")
             mock_factory.assert_called_once_with(timeout=30.0)
@@ -889,7 +952,10 @@ class TestSsrfSafety:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client) as mock_factory:
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client) as mock_factory,
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             client = MangaDexClient()
             await client.download_image("https://s.example.com", "h", "f.png")
             mock_factory.assert_called_once_with(timeout=60.0)
@@ -926,7 +992,10 @@ class TestSsrfSafety:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             client = MangaDexClient()
             chapters = await client.get_chapter_feed("manga-001", limit=1200)
 
@@ -940,7 +1009,10 @@ class TestSsrfSafety:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client) as mock_factory:
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client) as mock_factory,
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             client = MangaDexClient()
             async with client, client:
                 pass
