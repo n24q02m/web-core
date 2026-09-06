@@ -575,7 +575,7 @@ wheels = [
 
 [[package]]
 name = "gdown"
-version = "6.1.1"
+version = "6.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "beautifulsoup4" },
@@ -583,9 +583,9 @@ dependencies = [
     { name = "requests", extra = ["socks"] },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4e/2a/d25ab185c35c0875dd0fb1d869baae844e8662ee19ef82721dfa32bfc901/gdown-6.1.1.tar.gz", hash = "sha256:34cd14ac1280bc9085266e4771df2a3bea125e7853313d902e976640068389d5", size = 285852, upload-time = "2026-09-04T06:13:01.042Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/39/54/95355a2bce205f67276236a7469d12f90dbe4c5b155f163a5ea5bd2353bc/gdown-6.2.0.tar.gz", hash = "sha256:0bbf25d3761262263a2d9d4a6cb26ebc7e0f225ad8f13483209992508bccdc54", size = 337785, upload-time = "2026-09-06T06:03:11.345Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a3/d0/78c1619c418fd2f43cd80773cba5298f7fb83a24f0177090dc682a538589/gdown-6.1.1-py3-none-any.whl", hash = "sha256:3f269042526d398bbcdedf8cf97b059640a716824438828c46c0f01f2281d680", size = 20559, upload-time = "2026-09-04T06:12:59.805Z" },
+    { url = "https://files.pythonhosted.org/packages/c3/40/64585bb47dc79d9b03cbd4f009db2e39d6d0fc2115819a0b627c47ffda9d/gdown-6.2.0-py3-none-any.whl", hash = "sha256:72541f5671dff3f412b8a66e2b995895c9df0569284cc135b64745e501667f55", size = 44686, upload-time = "2026-09-06T06:03:10.059Z" },
 ]
 
 [[package]]
@@ -1167,7 +1167,7 @@ requires-dist = [
     { name = "capsolver", specifier = ">=1.0.7" },
     { name = "crawl4ai", specifier = ">=0.9.2" },
     { name = "curl-cffi", specifier = ">=0.16.2" },
-    { name = "gdown", specifier = ">=6.1.0" },
+    { name = "gdown", specifier = ">=6.2.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "langgraph", specifier = ">=1.2.11" },
     { name = "patchright", specifier = ">=1.62.2" },
