@@ -17,6 +17,7 @@ import httpx
 from pydantic import BaseModel
 
 from web_core.http import safe_httpx_client
+from web_core.http.client import is_safe_url
 
 logger = logging.getLogger(__name__)
 
@@ -355,6 +356,10 @@ class MangaDexClient:
         """
         quality = "data-saver" if saver else "data"
         url = f"{base_url}/{quality}/{hash}/{filename}"
+
+        if not is_safe_url(url):
+            raise ValueError(f"SSRF blocked: {url}")
+
         await self._rate_limit()
 
         # Performance Optimization: Reuse HTTP client if available

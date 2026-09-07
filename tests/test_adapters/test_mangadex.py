@@ -697,7 +697,10 @@ class TestDownloadImage:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             client = MangaDexClient()
             result = await client.download_image(
                 "https://server.example.com",
@@ -716,7 +719,10 @@ class TestDownloadImage:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             client = MangaDexClient()
             await client.download_image(
                 "https://server.example.com",
@@ -739,7 +745,10 @@ class TestDownloadImage:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             client = MangaDexClient()
             with pytest.raises(httpx.HTTPStatusError):
                 await client.download_image(
@@ -756,7 +765,10 @@ class TestDownloadImage:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             async with MangaDexClient() as client:
                 result = await client.download_image(
                     "https://server.example.com",
@@ -777,7 +789,10 @@ class TestDownloadImage:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client):
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client),
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             async with MangaDexClient() as client:
                 with pytest.raises(httpx.HTTPStatusError):
                     await client.download_image(
@@ -785,6 +800,16 @@ class TestDownloadImage:
                         "abcdef",
                         "page1.png",
                     )
+
+    async def test_download_image_ssrf_blocked(self):
+        """Verify that downloading an image with an unsafe URL raises a ValueError."""
+        client = MangaDexClient()
+        with pytest.raises(ValueError, match="SSRF blocked"):
+            await client.download_image(
+                "http://127.0.0.1",
+                "abcdef",
+                "page1.png",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -889,7 +914,10 @@ class TestSsrfSafety:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client) as mock_factory:
+        with (
+            patch("web_core.adapters.mangadex.safe_httpx_client", return_value=mock_client) as mock_factory,
+            patch("web_core.adapters.mangadex.is_safe_url", return_value=True),
+        ):
             client = MangaDexClient()
             await client.download_image("https://s.example.com", "h", "f.png")
             mock_factory.assert_called_once_with(timeout=60.0)
