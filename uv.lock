@@ -1167,7 +1167,7 @@ requires-dist = [
     { name = "capsolver", specifier = ">=1.0.7" },
     { name = "crawl4ai", specifier = ">=0.9.2" },
     { name = "curl-cffi", specifier = ">=0.16.2" },
-    { name = "gdown", specifier = ">=6.1.0" },
+    { name = "gdown", specifier = ">=6.2.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "langgraph", specifier = ">=1.2.11" },
     { name = "patchright", specifier = ">=1.62.2" },
