@@ -54,7 +54,16 @@ class TestStrategyCache:
 
     def test_default_min_attempts(self):
         cache = StrategyCache()
-        assert cache.min_attempts == 3
+        assert cache.min_attempts == 1
+
+    async def test_persistent_backend_round_trip_and_clear(self):
+        backend: dict[str, object] = {}
+        cache = StrategyCache(backend=backend)
+        await cache.record("https://example.com", "basic_http", True, 100.0)
+        restored = StrategyCache(backend=backend)
+        assert (await restored.recommend("https://example.com"))[0] == "basic_http"
+        await restored.clear()
+        assert backend == {}
 
     def test_custom_min_attempts(self):
         cache = StrategyCache(min_attempts=5)

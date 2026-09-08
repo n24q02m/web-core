@@ -1,4 +1,4 @@
-"""Patchright browser provider (current baseline)."""
+"""Patchright browser provider with optional Chrome persistent contexts."""
 
 from __future__ import annotations
 
@@ -8,8 +8,6 @@ from collections.abc import Callable
 from typing import Any
 
 logger = logging.getLogger(__name__)
-
-# Cache for the lazy-loaded async_playwright function
 _async_playwright_func: Callable | None = None
 
 
@@ -28,7 +26,7 @@ async def _get_async_playwright() -> Callable:
 
 
 class PatchrightProvider:
-    """Patchright-based browser provider. Drop-in Playwright with CDP leak patches."""
+    """Patchright provider; persistent Chrome context is opt-in."""
 
     def __init__(self, headless: bool = True):
         self._headless = headless
@@ -44,21 +42,29 @@ class PatchrightProvider:
         return True
 
     async def launch(self, config: dict[str, Any] | None = None) -> Any:
-        """Launch Patchright browser."""
+        """Launch a browser or an app-owned persistent Chrome context."""
+        launch_config = dict(config or {})
+        user_data_dir = launch_config.pop("user_data_dir", None)
+        channel = launch_config.pop("channel", None)
+        no_viewport = launch_config.pop("no_viewport", None)
+        if any(value is not None for value in (channel, no_viewport)) and user_data_dir is None:
+            raise ValueError("user_data_dir is required for persistent Patchright contexts")
         async_playwright = await _get_async_playwright()
-
         self._playwright = await async_playwright().start()
-        launch_args: dict[str, Any] = {
-            "headless": self._headless,
-            "args": ["--disable-blink-features=AutomationControlled"],
-        }
-        if config:
-            launch_args.update(config)
-        self._browser = await self._playwright.chromium.launch(**launch_args)
+        launch_config.setdefault("headless", self._headless)
+        if user_data_dir is not None:
+            context_config = {"user_data_dir": user_data_dir, **launch_config}
+            if channel is not None:
+                context_config["channel"] = channel
+            if no_viewport is not None:
+                context_config["no_viewport"] = no_viewport
+            self._browser = await self._playwright.chromium.launch_persistent_context(**context_config)
+        else:
+            self._browser = await self._playwright.chromium.launch(**launch_config)
         return self._browser
 
     async def close(self) -> None:
-        """Close browser and playwright."""
+        """Close browser/context and playwright."""
         if self._browser:
             await self._browser.close()
             self._browser = None
