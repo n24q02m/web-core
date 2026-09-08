@@ -150,12 +150,16 @@ class MangaDexClient:
 
         Raises ``httpx.HTTPStatusError`` on 4xx/5xx responses.
         """
+        url = f"{self.BASE_URL}{path}"
+        if not is_safe_url(url):
+            raise ValueError(f"SSRF blocked: {url}")
+
         await self._rate_limit()
 
         # Performance Optimization: Reuse HTTP client if available
         if self._client is not None:
             resp = await self._client.get(
-                f"{self.BASE_URL}{path}",
+                url,
                 params=params,
                 headers={"User-Agent": self._user_agent},
             )
@@ -164,7 +168,7 @@ class MangaDexClient:
 
         async with safe_httpx_client(timeout=30.0) as client:
             resp = await client.get(
-                f"{self.BASE_URL}{path}",
+                url,
                 params=params,
                 headers={"User-Agent": self._user_agent},
             )
