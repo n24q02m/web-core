@@ -1,3 +1,3 @@
-## 2024-05-15 - Regex Alternation Anti-pattern in Large Documents
-**Learning:** Combining multiple regular expressions into a single alternation pattern forces the regex engine into parallel search mode if the individual patterns lack a common prefix. This prevents the use of fast-path literal string searching (like Boyer-Moore), causing significant performance regressions on large payloads like HTML documents.
-**Action:** Instead of large alternations (`|`), iterate sequentially over independent, compiled regexes. This allows `pattern.search()` to utilize fast literal string searching for constant prefixes, dramatically speeding up evaluation when there are no matches.
+## 2023-10-27 - Split script/style regex alternation for fast-path optimization
+**Learning:** Combining multiple regular expressions into a single alternation pattern (like `<(script|style)`) forces the regex engine into parallel search mode if the individual patterns lack a common prefix. This disables fast-path literal string searching (like Boyer-Moore) which is highly effective on large documents.
+**Action:** Iterate sequentially over independent, compiled regexes (e.g., one for `<script>` and one for `<style>`) to allow the engine to utilize fast-paths.
