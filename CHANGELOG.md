@@ -2,6 +2,119 @@
 
 <!-- version list -->
 
+## v2.6.0 (2026-09-11)
+
+### Bug Fixes
+
+- Add SSRF block negative tests for browser rendering clients
+  ([#750](https://github.com/n24q02m/web-core/pull/750),
+  [`66c5b4a`](https://github.com/n24q02m/web-core/commit/66c5b4af6779ec14bde1b9c729677606a83b6537))
+
+- Block unsafe MangaDex image URLs
+  ([`32103e7`](https://github.com/n24q02m/web-core/commit/32103e7c19966c93da501445c2d903365961814d))
+
+- 🛡️ sentinel: [CRITICAL] fix SSRF vulnerability via custom HTTP client injection in remote
+  rendering clients ([#749](https://github.com/n24q02m/web-core/pull/749),
+  [`2afcf30`](https://github.com/n24q02m/web-core/commit/2afcf30da1258220075f3c291535208a5d9c6d97))
+
+- 🛡️ sentinel: [medium] fix SSRF via dynamically constructed URLs in MangaDex API adapter
+  ([#772](https://github.com/n24q02m/web-core/pull/772),
+  [`8c41b56`](https://github.com/n24q02m/web-core/commit/8c41b561d4ad0b1b43e3d422529d30af2e1b37b1))
+
+- **deps**: Lock file maintenance ([#775](https://github.com/n24q02m/web-core/pull/775),
+  [`9831408`](https://github.com/n24q02m/web-core/commit/98314082d7ec5b2bc937c898e175f621e58a139b))
+
+- **deps**: Lock file maintenance ([#771](https://github.com/n24q02m/web-core/pull/771),
+  [`7f647ef`](https://github.com/n24q02m/web-core/commit/7f647ef87140a5049dcbe626830b9f504d53220d))
+
+- **deps**: Lock file maintenance ([#765](https://github.com/n24q02m/web-core/pull/765),
+  [`f0a21ef`](https://github.com/n24q02m/web-core/commit/f0a21ef4b34e8878394dae8698d2850c8334700b))
+
+- **deps**: Lock file maintenance ([#763](https://github.com/n24q02m/web-core/pull/763),
+  [`3228f65`](https://github.com/n24q02m/web-core/commit/3228f65359049a296f802823c5469e051ed3cf57))
+
+- **deps**: Lock file maintenance ([#760](https://github.com/n24q02m/web-core/pull/760),
+  [`46137b8`](https://github.com/n24q02m/web-core/commit/46137b80416654a8875e99a843f02e437edea13b))
+
+- **deps**: Lock file maintenance ([#755](https://github.com/n24q02m/web-core/pull/755),
+  [`6be3055`](https://github.com/n24q02m/web-core/commit/6be30554008ee29345cf385d884981e2d3099695))
+
+- **deps**: Lock file maintenance ([#752](https://github.com/n24q02m/web-core/pull/752),
+  [`2875c70`](https://github.com/n24q02m/web-core/commit/2875c70b7b32996391b0e0db08636161eb4b6bdb))
+
+- **deps**: Lock file maintenance ([#745](https://github.com/n24q02m/web-core/pull/745),
+  [`40b6951`](https://github.com/n24q02m/web-core/commit/40b69515de6f1dd597b7041eac6a8019270cff2a))
+
+- **deps**: Lock file maintenance ([#744](https://github.com/n24q02m/web-core/pull/744),
+  [`137777e`](https://github.com/n24q02m/web-core/commit/137777e2cfe862fd84e600f190a8ec97bc1022fc))
+
+- **deps**: Update curl-cffi to >=0.16.2 ([#748](https://github.com/n24q02m/web-core/pull/748),
+  [`cac6bb4`](https://github.com/n24q02m/web-core/commit/cac6bb4b2e699ba5b16d4cba4db6c22afd7201d4))
+
+- **deps**: Update curl-cffi to >=0.16.3 ([#774](https://github.com/n24q02m/web-core/pull/774),
+  [`bd80b6a`](https://github.com/n24q02m/web-core/commit/bd80b6aca43042c3ce8c80654d4e49d8629ab416))
+
+- **deps**: Update dawidd6/action-send-mail action to v20
+  ([#770](https://github.com/n24q02m/web-core/pull/770),
+  [`d9bc26e`](https://github.com/n24q02m/web-core/commit/d9bc26e854a61ae6eafc5abbc49ee1d4563d5f97))
+
+- **deps**: Update gdown to >=6.2.0 ([#764](https://github.com/n24q02m/web-core/pull/764),
+  [`f50fb97`](https://github.com/n24q02m/web-core/commit/f50fb97d5c7f910ff06f2607c60da9139e711612))
+
+- **deps**: Update ghcr.io/astral-sh/uv:latest docker digest to 73d2665
+  ([#758](https://github.com/n24q02m/web-core/pull/758),
+  [`66d1007`](https://github.com/n24q02m/web-core/commit/66d10070eefba570f5779043d224754fc3c89e90))
+
+- **deps**: Update github/codeql-action action to v4.38.0
+  ([#762](https://github.com/n24q02m/web-core/pull/762),
+  [`fea0a92`](https://github.com/n24q02m/web-core/commit/fea0a92f81a014ab2037631bc7239d56c4d95f8f))
+
+- **deps**: Update n24q02m/better-semantic-release action to v1.6.0
+  ([#753](https://github.com/n24q02m/web-core/pull/753),
+  [`7ffbdc6`](https://github.com/n24q02m/web-core/commit/7ffbdc648417cf28d5cb39ab14148d1a0bfefb88))
+
+- **deps**: Update patch dependencies ([#769](https://github.com/n24q02m/web-core/pull/769),
+  [`2b0c128`](https://github.com/n24q02m/web-core/commit/2b0c128a8d4e8b70dc6490a43d8f448d23e9b635))
+
+- **deps**: Update patch dependencies ([#759](https://github.com/n24q02m/web-core/pull/759),
+  [`f94e957`](https://github.com/n24q02m/web-core/commit/f94e957ec188c33609715364b30128ed40159813))
+
+- **deps**: Update patch dependencies ([#751](https://github.com/n24q02m/web-core/pull/751),
+  [`9343df9`](https://github.com/n24q02m/web-core/commit/9343df9d7a34af270d08929386f43828b7edab62))
+
+- **deps**: Update python:3.13-slim-bookworm docker digest to ed86c82
+  ([#747](https://github.com/n24q02m/web-core/pull/747),
+  [`5927b81`](https://github.com/n24q02m/web-core/commit/5927b8194f3ae4a99f551ac6ba27c6ba8078b07a))
+
+- **deps**: Update ruff to >=0.16.5 ([#754](https://github.com/n24q02m/web-core/pull/754),
+  [`b466dc2`](https://github.com/n24q02m/web-core/commit/b466dc254c641e8523bd15f2f84fa4adc64ccfb6))
+
+### Chores
+
+- Stop inapplicable palette task on backend repo
+  ([#773](https://github.com/n24q02m/web-core/pull/773),
+  [`6b8b4c8`](https://github.com/n24q02m/web-core/commit/6b8b4c87c7efbe20bae690689bfe34de2c7ea0ba))
+
+### Continuous Integration
+
+- Wire unified merge=release ladder (push staging=beta, main=stable)
+  ([`ebfb235`](https://github.com/n24q02m/web-core/commit/ebfb2351d73e46de90543a006132ecd59ca85028))
+
+### Features
+
+- Stop inapplicable palette task on backend repo
+  ([#773](https://github.com/n24q02m/web-core/pull/773),
+  [`6b8b4c8`](https://github.com/n24q02m/web-core/commit/6b8b4c87c7efbe20bae690689bfe34de2c7ea0ba))
+
+- ⚡ Bolt: Split script/style regex alternation for fast-path optimization
+  ([#776](https://github.com/n24q02m/web-core/pull/776),
+  [`67bf159`](https://github.com/n24q02m/web-core/commit/67bf159aa2c31feaa4d4a94161c4b2b546db2a8e))
+
+- 🎨 palette: stop inapplicable task on backend repo
+  ([#773](https://github.com/n24q02m/web-core/pull/773),
+  [`6b8b4c8`](https://github.com/n24q02m/web-core/commit/6b8b4c87c7efbe20bae690689bfe34de2c7ea0ba))
+
+
 ## v2.5.1 (2026-08-31)
 
 
