@@ -2,6 +2,29 @@
 
 <!-- version list -->
 
+## v2.7.0 (2026-09-12)
+
+### Chores
+
+- Pin BSR action to v1.6.1 stable (6e688489) ([#777](https://github.com/n24q02m/web-core/pull/777),
+  [`c609247`](https://github.com/n24q02m/web-core/commit/c609247a406cb9867331f19407c9b3ffeee82187))
+
+- **release**: Fix stale two-branch comment (single-main lane)
+  ([`8204280`](https://github.com/n24q02m/web-core/commit/82042805db47bf230a9785c4d5911a213cda0532))
+
+- **release**: Single-main release lane (staging branch retired)
+  ([`47f617d`](https://github.com/n24q02m/web-core/commit/47f617d8c55d8955ebc45fd3130069dfccaa5d89))
+
+- **rulesets**: Align IaC with repo-bootstrap template
+  ([`99759f7`](https://github.com/n24q02m/web-core/commit/99759f777773725dbab0dc78c857f6f0f8f16500))
+
+### Features
+
+- **web-core**: Harden scraping identity and cache
+  ([#768](https://github.com/n24q02m/web-core/pull/768),
+  [`6619ae1`](https://github.com/n24q02m/web-core/commit/6619ae13a33174aa1a693d58952163c96fb80a1c))
+
+
 ## v2.6.0 (2026-09-11)
 
 ### Bug Fixes
