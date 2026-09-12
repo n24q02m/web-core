@@ -69,7 +69,6 @@ class TestHeadlessStrategy:
                 headless=True,
                 browser_type="chromium",
                 enable_stealth=True,
-                user_agent_mode="random",
                 verbose=False,
             )
 
@@ -84,7 +83,6 @@ class TestHeadlessStrategy:
                 headless=True,
                 browser_type="chromium",
                 enable_stealth=False,
-                user_agent_mode="random",
                 verbose=False,
             )
 
@@ -277,13 +275,11 @@ class TestHeadlessStrategy:
             # AsyncWebCrawler should be created with BrowserConfig
             mock_cls.assert_called_once_with(config=mock_browser_config)
             # BrowserConfig should have stealth enabled
-            mock_bc.assert_called_once_with(
-                headless=True,
-                browser_type="chromium",
-                enable_stealth=True,
-                user_agent_mode="random",
-                verbose=False,
-            )
+            mock_bc.assert_called_once()
+            config = mock_bc.call_args.kwargs
+            assert config["enable_stealth"] is True
+            assert config["user_agent"].startswith("Mozilla/")
+            assert config["viewport_width"] > 0
             # CrawlerRunConfig should have correct defaults
             mock_crc.assert_called_once_with(
                 wait_for="css:body",

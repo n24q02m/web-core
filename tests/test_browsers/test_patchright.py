@@ -67,6 +67,31 @@ class TestPatchrightProvider:
             call_kwargs = mock_pw.chromium.launch.call_args[1]
             assert call_kwargs["slow_mo"] == 100
 
+    async def test_persistent_context_requires_isolated_directory(self):
+        mock_pw = MagicMock()
+        mock_start = AsyncMock(return_value=mock_pw)
+        mock_async_pw = MagicMock()
+        mock_async_pw.return_value.start = mock_start
+        with (
+            patch("web_core.browsers.patchright._get_async_playwright", AsyncMock(return_value=mock_async_pw)),
+            pytest.raises(ValueError, match="user_data_dir"),
+        ):
+            await PatchrightProvider().launch(config={"channel": "chrome"})
+        mock_start.assert_not_awaited()
+
+    async def test_persistent_context_uses_explicit_directory(self):
+        mock_context = MagicMock()
+        mock_pw = MagicMock()
+        mock_pw.chromium.launch_persistent_context = AsyncMock(return_value=mock_context)
+        mock_start = AsyncMock(return_value=mock_pw)
+        mock_async_pw = MagicMock()
+        mock_async_pw.return_value.start = mock_start
+        with patch("web_core.browsers.patchright._get_async_playwright", AsyncMock(return_value=mock_async_pw)):
+            await PatchrightProvider().launch(
+                config={"channel": "chrome", "user_data_dir": "C:/tmp/web-core-session", "no_viewport": True}
+            )
+        mock_pw.chromium.launch_persistent_context.assert_awaited_once()
+
     async def test_close(self):
         p = PatchrightProvider()
         mock_browser = AsyncMock()

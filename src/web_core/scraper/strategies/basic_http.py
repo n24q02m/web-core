@@ -15,8 +15,7 @@ class BasicHTTPStrategy(BaseStrategy):
     DEFAULT_HEADERS: ClassVar[dict[str, str]] = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/131.0.0.0 Safari/537.36"
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
         ),
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.5",
@@ -29,31 +28,34 @@ class BasicHTTPStrategy(BaseStrategy):
         timeout: float = 30.0,
         headers: dict[str, str] | None = None,
         http_client: Any = None,
+        proxy: str | None = None,
     ):
         self.timeout = timeout
         self.headers = headers or self.DEFAULT_HEADERS.copy()
+        self.proxy = proxy
         self._http_client = http_client
 
     async def fetch(self, url: str, selectors: dict[str, str] | None = None) -> ScrapingResult:
-        """Fetch *url* via plain HTTP GET with browser-like headers.
-
-        Supports optional cookies via selectors["cookies"] (dict[str, str]).
-        """
+        """Fetch *url* via plain HTTP GET with browser-like headers."""
         if not is_safe_url(url):
             raise ValueError(f"SSRF blocked: {url}")
-
         cookies: dict[str, str] = {}
         if selectors and isinstance(selectors.get("cookies"), dict):
             cookies = selectors["cookies"]
-
+        request_kwargs = {
+            "headers": self.headers,
+            "timeout": self.timeout,
+            "follow_redirects": True,
+            "cookies": cookies,
+        }
         if self._http_client is not None:
-            response = await self._http_client.get(
-                url, headers=self.headers, timeout=self.timeout, follow_redirects=True, cookies=cookies
-            )
+            response = await self._http_client.get(url, **request_kwargs)
         else:
-            async with safe_httpx_client(timeout=self.timeout) as client:
+            client_kwargs: dict[str, Any] = {"timeout": self.timeout}
+            if self.proxy is not None:
+                client_kwargs["proxy"] = self.proxy
+            async with safe_httpx_client(**client_kwargs) as client:
                 response = await client.get(url, headers=self.headers, follow_redirects=True, cookies=cookies)
-
         return ScrapingResult(
             content=response.text,
             url=str(response.url),
@@ -62,5 +64,6 @@ class BasicHTTPStrategy(BaseStrategy):
             metadata={
                 "content_type": response.headers.get("content-type", ""),
                 "content_length": len(response.text),
+                "proxy": self.proxy is not None,
             },
         )
