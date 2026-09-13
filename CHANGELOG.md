@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v2.7.2 (2026-09-13)
+
+### Bug Fixes
+
+- **deps**: Lock file maintenance ([#788](https://github.com/n24q02m/web-core/pull/788),
+  [`8ffff64`](https://github.com/n24q02m/web-core/commit/8ffff64d5004790a984147246ddc62e185dd31b8))
+
+### Documentation
+
+- Add status and tech badge rows, pip install snippet
+  ([#787](https://github.com/n24q02m/web-core/pull/787),
+  [`4678aac`](https://github.com/n24q02m/web-core/commit/4678aac1bd3663b1d5973649818f2144d3ae4bcb))
+
+
 ## v2.7.1 (2026-09-13)
 
 ### Bug Fixes
