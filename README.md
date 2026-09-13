@@ -2,6 +2,17 @@
 
 **Shared web infrastructure for search, scraping, HTTP security, and stealth browsers -- powers wet-mcp and downstream apps.**
 
+<!-- Badge Row 1: Status -->
+[![CI](https://github.com/n24q02m/web-core/actions/workflows/ci.yml/badge.svg)](https://github.com/n24q02m/web-core/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/n24q02m/web-core/graph/badge.svg)](https://codecov.io/gh/n24q02m/web-core)
+[![PyPI](https://img.shields.io/pypi/v/n24q02m-web-core?logo=pypi&logoColor=white)](https://pypi.org/project/n24q02m-web-core/)
+[![License: Apache-2.0](https://img.shields.io/github/license/n24q02m/web-core)](LICENSE)
+
+<!-- Badge Row 2: Tech -->
+[![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)](#)
+[![semantic-release](https://img.shields.io/badge/semantic--release-e10079?logo=semantic-release&logoColor=white)](https://github.com/python-semantic-release/python-semantic-release)
+[![Renovate](https://img.shields.io/badge/renovate-enabled-1A1F6C?logo=renovatebot&logoColor=white)](https://developer.mend.io/)
+
 <!-- BEGIN: AUTO-GENERATED-CROSS-PROMO -->
 <details>
   <summary><strong>Sister projects from n24q02m</strong> (click to expand)</summary>
@@ -62,6 +73,9 @@ uv add n24q02m-web-core
 
 # Or pin to v2.x (current stable line)
 uv add "n24q02m-web-core>=2.0.0"
+
+# Or pip
+pip install n24q02m-web-core
 ```
 
 ## Quick Usage
