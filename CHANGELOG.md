@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.8.0 (2026-09-17)
+
+### Features
+
+- ⚡ bolt: Optimize whitespace collapsing in visible_text
+  ([#794](https://github.com/n24q02m/web-core/pull/794),
+  [`a596a6e`](https://github.com/n24q02m/web-core/commit/a596a6e2e5e94982d35f8e167d66f0d309c9dd60))
+
+
 ## v2.7.7 (2026-09-17)
 
 ### Bug Fixes
