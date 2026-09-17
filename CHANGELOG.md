@@ -2,6 +2,27 @@
 
 <!-- version list -->
 
+## v2.7.7 (2026-09-17)
+
+### Bug Fixes
+
+- **deps**: Update dawidd6/action-send-mail action to v22
+  ([#791](https://github.com/n24q02m/web-core/pull/791),
+  [`86ebd4f`](https://github.com/n24q02m/web-core/commit/86ebd4fb7fa847df093f4c9d5fd44717c9f4a477))
+
+- **deps**: Update ghcr.io/astral-sh/uv:latest docker digest to 62f8c04
+  ([#781](https://github.com/n24q02m/web-core/pull/781),
+  [`986c182`](https://github.com/n24q02m/web-core/commit/986c1821c30c5621a3960cbcf4561434a2b9307f))
+
+- **deps**: Update minor dependencies ([#783](https://github.com/n24q02m/web-core/pull/783),
+  [`e233dbc`](https://github.com/n24q02m/web-core/commit/e233dbc659a49f6d0e6d1fcfd79ab0b6d59b2690))
+
+### Continuous Integration
+
+- Consolidate workflows into ci.yml + cd.yml
+  ([`d37d64b`](https://github.com/n24q02m/web-core/commit/d37d64b36341d5e66fe170da9a2004e6c3ed4644))
+
+
 ## v2.7.6 (2026-09-17)
 
 ### Bug Fixes
