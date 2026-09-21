@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v2.8.3 (2026-09-21)
+
+### Bug Fixes
+
+- **deps**: Lock file maintenance ([#806](https://github.com/n24q02m/web-core/pull/806),
+  [`308577a`](https://github.com/n24q02m/web-core/commit/308577a51c22d67767b2b1b1f50033ecb32e7bb4))
+
+
 ## v2.8.2 (2026-09-20)
 
 ### Bug Fixes
