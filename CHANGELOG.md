@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v2.9.0 (2026-09-21)
+
+### Bug Fixes
+
+- **deps**: Update n24q02m/better-semantic-release action to v1.7.0
+  ([#797](https://github.com/n24q02m/web-core/pull/797),
+  [`62969b6`](https://github.com/n24q02m/web-core/commit/62969b6cd44b55084da9067dded1b9fbabb2ca5c))
+
+- **deps**: Update python:3.13-slim-bookworm docker digest to 2325bb2
+  ([#801](https://github.com/n24q02m/web-core/pull/801),
+  [`3ff7725`](https://github.com/n24q02m/web-core/commit/3ff7725ea7b83467a6982ba9e02a545ee1235c8a))
+
+### Features
+
+- ⚡ Bolt: pre-compile Chrome version regex in fingerprinting
+  ([#807](https://github.com/n24q02m/web-core/pull/807),
+  [`822b585`](https://github.com/n24q02m/web-core/commit/822b585edc3e0f416c1a21f9953544c8a9cf65ee))
+
+
 ## v2.8.3 (2026-09-21)
 
 ### Bug Fixes
