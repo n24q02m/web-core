@@ -2,6 +2,18 @@
 
 <!-- version list -->
 
+## v2.9.1 (2026-09-21)
+
+### Bug Fixes
+
+- **deps**: Update ghcr.io/astral-sh/uv:latest docker digest to 10787c6
+  ([#795](https://github.com/n24q02m/web-core/pull/795),
+  [`db7f7fb`](https://github.com/n24q02m/web-core/commit/db7f7fbe10715746d5ba219b6f0bf09625b32073))
+
+- **deps**: Update patch dependencies ([#796](https://github.com/n24q02m/web-core/pull/796),
+  [`1424956`](https://github.com/n24q02m/web-core/commit/14249565123d8d7e8602044ba7336855e0878b8d))
+
+
 ## v2.9.0 (2026-09-21)
 
 ### Bug Fixes
