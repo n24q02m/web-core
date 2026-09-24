@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v2.9.4 (2026-09-24)
+
+### Bug Fixes
+
+- Document semver policy in README ([#818](https://github.com/n24q02m/web-core/pull/818),
+  [`44e678d`](https://github.com/n24q02m/web-core/commit/44e678db5d009c60a7430eba177214c3f7275aa2))
+
+
 ## v2.9.3 (2026-09-24)
 
 ### Bug Fixes
