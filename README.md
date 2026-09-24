@@ -49,6 +49,7 @@
 - [Configuration](#configuration)
 - [Architecture](#architecture)
 - [Development](#development)
+- [Versioning](#versioning)
 - [License](#license)
 
 Shared web infrastructure package providing:
@@ -276,6 +277,12 @@ uv run pytest --cov -q
 - `asyncio_mode = "auto"` -- no `@pytest.mark.asyncio` needed
 - Coverage threshold: 95% (enforced in pyproject.toml)
 - Test files mirror source module structure under `tests/`
+
+## Versioning
+
+Releases follow [semantic versioning](https://semver.org/) and are cut
+automatically by semantic-release from `main`. Breaking changes bump the major
+version and are recorded in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
