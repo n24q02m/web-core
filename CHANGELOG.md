@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.10.0 (2026-09-25)
+
+### Features
+
+- Port model_selection picker from knowledge-core with MTEB fetchers and OR auto-promotion
+  constraint ([#821](https://github.com/n24q02m/web-core/pull/821),
+  [`6cd8361`](https://github.com/n24q02m/web-core/commit/6cd8361e941b6abce0560ac3ed771c726dfb3004))
+
+
 ## v2.9.5 (2026-09-25)
 
 ### Bug Fixes
