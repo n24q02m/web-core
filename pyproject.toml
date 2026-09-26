@@ -35,15 +35,15 @@ dependencies = [
 [project.optional-dependencies]
 # MTEB leaderboard fetchers (model_selection) aggregate the public
 # mteb/results HF dataset, which ships as parquet — pyarrow is the reader.
-mteb = ["pyarrow>=15.0.0"]
+mteb = ["pyarrow>=25.0.1"]
 dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "pytest-timeout>=2.4.0",
-    "ruff>=0.16.7",
-    "ty>=0.0.80",
-    "pyarrow>=15.0.0",
+    "ruff>=0.16.8",
+    "ty>=0.0.82",
+    "pyarrow>=25.0.1",
 ]
 
 [project.urls]
