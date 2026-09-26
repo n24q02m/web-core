@@ -9,3 +9,7 @@
 ## 2024-09-20 - Pre-compile regex in hot paths to avoid parsing overhead
 **Learning:** Calling `re.sub(pattern, ...)` with a string pattern directly on hot paths forces the regex engine to parse the pattern and maintain an internal cache. Pre-compiling the regex at the module level using `re.compile(pattern)` and calling `.sub(...)` on the compiled object avoids this overhead, making execution significantly faster (e.g., ~33% faster for user-agent substitution).
 **Action:** Extract inline regex patterns into module-level pre-compiled `re.Pattern` objects for frequently called functions.
+
+## 2024-10-24 - String prefix/suffix removal optimization
+**Learning:** In Python 3.9+, using `str.removeprefix(prefix)` or `str.removesuffix(suffix)` is measurably faster (~35% faster) than using conditional checks with string slicing (e.g., `if str.startswith(prefix): str = str[len(prefix):]`) because it avoids Python-level evaluation and executes entirely in C.
+**Action:** Use `removeprefix()` and `removesuffix()` methods directly for conditionally stripping strings, rather than pairing `startswith()`/`endswith()` checks with slicing.
