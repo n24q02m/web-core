@@ -98,8 +98,9 @@ def normalize_url(url: str) -> str:
     scheme = (parsed.scheme or "").lower()
     netloc = (parsed.netloc or "").lower()
 
-    if netloc.startswith("www."):
-        netloc = netloc[4:]
+    # Performance Optimization: removeprefix() is a fast C-level string operation
+    # that is faster than a conditional .startswith() check followed by slicing.
+    netloc = netloc.removeprefix("www.")
 
     path = parsed.path.rstrip("/") or ""
 
