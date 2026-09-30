@@ -195,6 +195,30 @@ def safe_httpx_client(**kwargs: Any) -> httpx.AsyncClient:
     return httpx.AsyncClient(event_hooks=hooks, **kwargs)
 
 
+def safe_httpx_sync_client(**kwargs: Any) -> httpx.Client:
+    """Create an httpx.Client with SSRF protection.
+
+    The SSRF event hook is always inserted as the *first* request hook so
+    it cannot be bypassed by earlier hooks.  Any additional ``event_hooks``
+    passed via *kwargs* are preserved.
+
+    Optional Parameter:
+    - ``allow_private``: If ``True``, allows requests to loopback and private IPs.
+      Defaults to ``False``.
+
+    Usage::
+
+        with safe_httpx_sync_client() as client:
+            resp = client.get("https://example.com")
+    """
+    allow_private = kwargs.pop("allow_private", False)
+    hooks = kwargs.pop("event_hooks", {})
+    request_hooks = list(hooks.get("request", []))
+    request_hooks.insert(0, _ssrf_event_hook_factory(allow_private))
+    hooks["request"] = request_hooks
+    return httpx.Client(event_hooks=hooks, **kwargs)
+
+
 # ---------------------------------------------------------------------------
 # Browser SSRF protection
 # ---------------------------------------------------------------------------
