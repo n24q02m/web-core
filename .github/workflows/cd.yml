@@ -208,7 +208,7 @@ jobs:
           app-id: ${{ vars.CI_APP_ID }}
           private-key: ${{ secrets.CI_APP_KEY }}
           owner: n24q02m
-          repositories: wet-mcp,knowledge-core
+          repositories: wet,knowledge-core
 
       - name: Create issues in downstream repos
         env:
@@ -217,7 +217,7 @@ jobs:
           TAG: ${{ needs.release.outputs.tag }}
         run: |
           set -euo pipefail
-          DOWNSTREAM="wet-mcp knowledge-core"
+          DOWNSTREAM="wet knowledge-core"
           PKG_NAME="n24q02m-web-core"
           CHANGELOG_URL="https://github.com/n24q02m/web-core/releases/tag/${TAG}"
 
