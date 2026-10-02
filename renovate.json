@@ -25,12 +25,18 @@
   },
   "packageRules": [
     {
+      "description": "Hold every update for 7 days so a malicious or yanked release is caught before it lands",
+      "matchPackageNames": ["*"],
+      "minimumReleaseAge": "7 days"
+    },
+    {
       "description": "Group minor updates for review (prod scope by default)",
       "matchUpdateTypes": [
         "minor"
       ],
       "groupName": "minor dependencies",
-      "groupSlug": "all-minor"
+      "groupSlug": "all-minor",
+      "minimumReleaseAge": "7 days"
     },
     {
       "description": "Auto-merge dev-scope minor updates after cooldown",
@@ -80,7 +86,8 @@
       "matchManagers": [
         "github-actions"
       ],
-      "pinDigests": true
+      "pinDigests": true,
+      "minimumReleaseAge": "7 days"
     },
     {
       "description": "Pin PSR to v10",
@@ -90,14 +97,16 @@
       "matchManagers": [
         "github-actions"
       ],
-      "allowedVersions": ">=10.0.0"
+      "allowedVersions": ">=10.0.0",
+      "minimumReleaseAge": "7 days"
     },
     {
       "description": "Pin Python runtime to 3.13.x",
       "matchPackageNames": [
         "python"
       ],
-      "allowedVersions": ">=3.13.0 <3.14.0"
+      "allowedVersions": ">=3.13.0 <3.14.0",
+      "minimumReleaseAge": "7 days"
     },
     {
       "description": "Disable Python major updates (pip/pep621)",
@@ -108,7 +117,8 @@
       "matchUpdateTypes": [
         "major"
       ],
-      "enabled": false
+      "enabled": false,
+      "minimumReleaseAge": "7 days"
     },
     {
       "description": "Disable Python runtime version updates in mise",
@@ -118,14 +128,16 @@
       "matchPackageNames": [
         "python"
       ],
-      "enabled": false
+      "enabled": false,
+      "minimumReleaseAge": "7 days"
     },
     {
       "description": "Pin pydantic <2.13 to keep cohere>=6.1.0 compatibility (cohere requires pydantic-core<2.44.0; pydantic 2.13.x ships pydantic-core 2.46+)",
       "matchPackageNames": [
         "pydantic"
       ],
-      "allowedVersions": "<2.13"
+      "allowedVersions": "<2.13",
+      "minimumReleaseAge": "7 days"
     }
   ],
   "semanticCommits": "enabled",
