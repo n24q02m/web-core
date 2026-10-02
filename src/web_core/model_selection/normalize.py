@@ -35,6 +35,7 @@ _EMBEDDED_AA_SCORES = {
 }
 
 _COST_UNKNOWN = math.inf
+_VERSION_RE = re.compile(r"v?(\d+)")
 
 
 @dataclass
@@ -169,12 +170,12 @@ def version_guard(candidates: list[ModelCandidate]) -> None:
     newest: dict[str, int] = {}
     for cand in candidates:
         for source, ver in cand.board_versions.items():
-            m = re.match(r"v?(\d+)", ver)
+            m = _VERSION_RE.match(ver)
             if m:
                 newest[source] = max(newest.get(source, 0), int(m.group(1)))
     for cand in candidates:
         for source, ver in list(cand.board_versions.items()):
-            m = re.match(r"v?(\d+)", ver)
+            m = _VERSION_RE.match(ver)
             if m and int(m.group(1)) < newest[source]:
                 logger.warning(
                     "model_selection version guard drop: source=%s model=%s version=%s newest=v%d",
