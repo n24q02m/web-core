@@ -30,6 +30,7 @@ from typing import Any, Protocol, runtime_checkable
 
 import httpx
 
+from web_core.http.client import is_safe_url
 from web_core.model_selection.mteb_tasks import task_family
 
 logger = logging.getLogger(__name__)
@@ -100,16 +101,25 @@ class Source(Protocol):
         ...
 
 
+def _ssrf_event_hook(request: httpx.Request) -> None:
+    """Sync httpx request event hook that blocks SSRF attempts (including redirects)."""
+    url_str = str(request.url)
+    if not is_safe_url(url_str):
+        raise httpx.RequestError(f"SSRF blocked: {url_str}", request=request)
+
+
 def _get_json(url: str, *, headers: dict[str, str] | None = None, params: dict[str, str] | None = None) -> Any:
-    resp = httpx.get(url, headers=headers, params=params, timeout=DEFAULT_TIMEOUT, follow_redirects=True)
-    resp.raise_for_status()
-    return resp.json()
+    with httpx.Client(event_hooks={"request": [_ssrf_event_hook]}) as client:
+        resp = client.get(url, headers=headers, params=params, timeout=DEFAULT_TIMEOUT, follow_redirects=True)
+        resp.raise_for_status()
+        return resp.json()
 
 
 def _get_bytes(url: str, *, headers: dict[str, str] | None = None) -> bytes:
-    resp = httpx.get(url, headers=headers, timeout=DEFAULT_TIMEOUT, follow_redirects=True)
-    resp.raise_for_status()
-    return resp.content
+    with httpx.Client(event_hooks={"request": [_ssrf_event_hook]}) as client:
+        resp = client.get(url, headers=headers, timeout=DEFAULT_TIMEOUT, follow_redirects=True)
+        resp.raise_for_status()
+        return resp.content
 
 
 def _float(value: Any) -> float | None:

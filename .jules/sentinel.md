@@ -23,3 +23,11 @@ Always re-validate inputs (e.g., using `is_safe_url(url)`) directly within the c
 **Vulnerability:** The `MangaDexClient._get` method in `src/web_core/adapters/mangadex.py` constructed fetch URLs dynamically from user-provided paths without validating them using `is_safe_url`. This creates an SSRF risk if the HTTP client is reused or injected and bypasses default safety hooks.
 **Learning:** Security controls embedded in factory methods only protect the default execution path. When dynamically constructing URLs from external data in API adapters, they must be explicitly re-validated at the component level to maintain the security boundary.
 **Prevention:** Always validate constructed URLs directly within the component's method (e.g., `MangaDexClient._get`) using `is_safe_url` before passing them to the HTTP client.
+
+## 2025-03-01 - SSRF Bypass via follow_redirects=True
+
+**Vulnerability:** In `src/web_core/model_selection/sources.py`, the `_get_json` and `_get_bytes` functions used `httpx.get` with `follow_redirects=True`. A simple `is_safe_url(url)` check before the request is fundamentally insecure because an attacker can provide a safe external URL that redirects to a local or private IP, completely bypassing the initial validation.
+
+**Learning:** When using HTTP clients that follow redirects, pre-request static URL validation is insufficient for SSRF protection. The validation must occur at every step of the redirect chain.
+
+**Prevention:** Instantiate an `httpx.Client` equipped with a request event hook (e.g., `event_hooks={"request": [_ssrf_event_hook]}`) to validate the resolved `request.url` on the initial request and all subsequent redirects.
