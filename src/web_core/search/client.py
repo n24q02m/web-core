@@ -64,8 +64,10 @@ def _apply_domain_cap(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         url = item.get("url") or ""
         domain = extract_domain(url)
 
-        if domain.startswith("www."):
-            domain = domain[4:]
+        # Performance Optimization: removeprefix() is a fast C-level string operation
+        # that is faster than a conditional .startswith() check followed by slicing.
+        domain = domain.removeprefix("www.")
+
         count = domain_counts.get(domain, 0)
         if count < _MAX_PER_DOMAIN:
             result.append(item)
