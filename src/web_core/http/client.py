@@ -230,3 +230,32 @@ async def setup_browser_ssrf_protection(page: Any, *, allow_private: bool | Iter
         await route.continue_()
 
     await page.route("**/*", _route_handler)
+
+
+def _sync_ssrf_event_hook_factory(allow_private: bool | Iterable[str]) -> Any:
+    """Create a synchronous SSRF event hook with specific settings."""
+    if isinstance(allow_private, Iterable) and not isinstance(allow_private, (str, bytes)):
+        allow_private = frozenset(allow_private)
+
+    def _ssrf_event_hook(request: httpx.Request) -> None:
+        """Synchronous httpx request event hook that blocks SSRF attempts."""
+        url_str = str(request.url)
+        if not is_safe_url(url_str, allow_private=allow_private):
+            raise httpx.RequestError(f"SSRF blocked: {url_str}", request=request)
+
+    return _ssrf_event_hook
+
+
+def safe_httpx_sync_client(**kwargs: Any) -> httpx.Client:
+    """Create an httpx.Client with SSRF protection.
+
+    The SSRF event hook is always inserted as the *first* request hook so
+    it cannot be bypassed by earlier hooks.  Any additional ``event_hooks``
+    passed via *kwargs* are preserved.
+    """
+    allow_private = kwargs.pop("allow_private", False)
+    hooks = kwargs.pop("event_hooks", {})
+    request_hooks = list(hooks.get("request", []))
+    request_hooks.insert(0, _sync_ssrf_event_hook_factory(allow_private))
+    hooks["request"] = request_hooks
+    return httpx.Client(event_hooks=hooks, **kwargs)

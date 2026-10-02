@@ -60,25 +60,22 @@ def test_openrouter_models_source_parses_rows():
             {"name": "no id"},  # skip
         ]
     }
-    with patch("web_core.model_selection.sources.httpx.get", return_value=_resp(payload)):
+    with patch("web_core.model_selection.sources.safe_httpx_sync_client") as mock_client:
+        mock_client.return_value.__enter__.return_value.get.return_value = _resp(payload)
         recs = OpenRouterModelsSource().fetch()
     assert set(recs) == {"m/a", "m/b"}
     assert recs["m/a"].raw["pricing"]["prompt"] == "1"
 
 
 def test_openrouter_models_source_list_payload():
-    with patch(
-        "web_core.model_selection.sources.httpx.get",
-        return_value=_resp([{"id": "m/x"}]),
-    ):
+    with patch("web_core.model_selection.sources.safe_httpx_sync_client") as mock_client:
+        mock_client.return_value.__enter__.return_value.get.return_value = _resp([{"id": "m/x"}])
         assert set(OpenRouterModelsSource().fetch()) == {"m/x"}
 
 
 def test_source_fail_open_on_http_error():
-    with patch(
-        "web_core.model_selection.sources.httpx.get",
-        side_effect=ConnectionError("down"),
-    ):
+    with patch("web_core.model_selection.sources.safe_httpx_sync_client") as mock_client:
+        mock_client.return_value.__enter__.return_value.get.side_effect = ConnectionError("down")
         assert OpenRouterModelsSource().fetch() == {}
 
 
@@ -107,9 +104,10 @@ def test_aa_source_parses_evaluations(monkeypatch):
             "not-a-dict",  # skip
         ]
     }
-    with patch("web_core.model_selection.sources.httpx.get", return_value=_resp(payload)) as get:
+    with patch("web_core.model_selection.sources.safe_httpx_sync_client") as mock_client:
+        mock_client.return_value.__enter__.return_value.get.return_value = _resp(payload)
         recs = ArtificialAnalysisSource(api_key="k").fetch()
-    assert get.call_args.kwargs["headers"]["x-api-key"] == "k"
+    assert mock_client.return_value.__enter__.return_value.get.call_args.kwargs["headers"]["x-api-key"] == "k"
     assert recs["GPT-6"].score == 52.3  # dict key = raw slug, record.key = slugified
     assert recs["GPT-6"].board_version == "v4"
     assert recs["flat-row"].score == 40.0
@@ -120,10 +118,8 @@ def test_aa_source_parses_evaluations(monkeypatch):
 
 def test_livebench_csv_parse():
     csv_text = "model,global_average,ci\nGPT-6,72.5,1.2\nGrok,60.0,\nbad-row,,\n"
-    with patch(
-        "web_core.model_selection.sources.httpx.get",
-        return_value=_resp(content=csv_text.encode()),
-    ):
+    with patch("web_core.model_selection.sources.safe_httpx_sync_client") as mock_client:
+        mock_client.return_value.__enter__.return_value.get.return_value = _resp(content=csv_text.encode())
         recs = LiveBenchSource().fetch()
     assert recs["gpt-6"].score == 72.5
     assert recs["gpt-6"].score_ci == 1.2
@@ -133,10 +129,8 @@ def test_livebench_csv_parse():
 
 def test_ugi_csv_parse():
     csv_text = "model,ugi\nModel X,88.0\n"
-    with patch(
-        "web_core.model_selection.sources.httpx.get",
-        return_value=_resp(content=csv_text.encode()),
-    ):
+    with patch("web_core.model_selection.sources.safe_httpx_sync_client") as mock_client:
+        mock_client.return_value.__enter__.return_value.get.return_value = _resp(content=csv_text.encode())
         recs = UGISource().fetch()
     assert recs["model-x"].score == 88.0
 
@@ -169,10 +163,8 @@ def test_arena_parquet_parse_with_pandas():
     )
     buf = io.BytesIO()
     df.to_parquet(buf, index=False)
-    with patch(
-        "web_core.model_selection.sources.httpx.get",
-        return_value=_resp(content=buf.getvalue()),
-    ):
+    with patch("web_core.model_selection.sources.safe_httpx_sync_client") as mock_client:
+        mock_client.return_value.__enter__.return_value.get.return_value = _resp(content=buf.getvalue())
         recs = ArenaSource().fetch()
     assert recs["gpt-6"].score == 1400.0
     assert recs["gpt-6"].score_ci == 12.0
@@ -191,10 +183,8 @@ def test_arena_parquet_parse_with_pyarrow():
     import pyarrow.parquet as pq
 
     pq.write_table(df, buf)
-    with patch(
-        "web_core.model_selection.sources.httpx.get",
-        return_value=_resp(content=buf.getvalue()),
-    ):
+    with patch("web_core.model_selection.sources.safe_httpx_sync_client") as mock_client:
+        mock_client.return_value.__enter__.return_value.get.return_value = _resp(content=buf.getvalue())
         recs = ArenaSource().fetch()
     assert recs["gpt-6"].score == 1400.0
     assert "noscore" not in recs
@@ -208,10 +198,8 @@ def test_arena_parquet_no_parser_raises_runtime_error(monkeypatch):
 
 
 def test_arena_parquet_bad_blob_fail_open():
-    with patch(
-        "web_core.model_selection.sources.httpx.get",
-        return_value=_resp(content=b"not parquet"),
-    ):
+    with patch("web_core.model_selection.sources.safe_httpx_sync_client") as mock_client:
+        mock_client.return_value.__enter__.return_value.get.return_value = _resp(content=b"not parquet")
         assert ArenaSource().fetch() == {}
 
 
@@ -227,7 +215,8 @@ def test_fetch_endpoint_stats_aggregates():
             {"uptime_last_1d": "bad", "latency_last_30m": None},
         ]
     }
-    with patch("web_core.model_selection.sources.httpx.get", return_value=_resp(payload)):
+    with patch("web_core.model_selection.sources.safe_httpx_sync_client") as mock_client:
+        mock_client.return_value.__enter__.return_value.get.return_value = _resp(payload)
         stats = fetch_endpoint_stats("m/a")
     assert stats["uptime_1d"] == 99.9
     assert stats["zdr_available"] is True
@@ -235,10 +224,8 @@ def test_fetch_endpoint_stats_aggregates():
 
 
 def test_fetch_endpoint_stats_fail_open():
-    with patch(
-        "web_core.model_selection.sources.httpx.get",
-        side_effect=TimeoutError("slow"),
-    ):
+    with patch("web_core.model_selection.sources.safe_httpx_sync_client") as mock_client:
+        mock_client.return_value.__enter__.return_value.get.side_effect = TimeoutError("slow")
         assert fetch_endpoint_stats("m/a") == {}
 
 
