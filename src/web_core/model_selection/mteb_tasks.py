@@ -938,10 +938,11 @@ def task_family(task_name: str) -> str | None:
     for suffix, family in _FALLBACK_SUFFIXES:
         if task_name.endswith(suffix):
             return family
-    if task_name.endswith(_HARD_NEGATIVES_SUFFIX):
-        base = task_name[: -len(_HARD_NEGATIVES_SUFFIX)]
-        if base:
-            return task_family(base) or _EXACT_CI.get(base.casefold())
+    # Performance Optimization: removesuffix is faster than endswith + slicing
+    # since it does both in C without python-level overhead.
+    base = task_name.removesuffix(_HARD_NEGATIVES_SUFFIX)
+    if base != task_name and base:
+        return task_family(base) or _EXACT_CI.get(base.casefold())
     for prefix, family in _FALLBACK_PREFIXES:
         if task_name.startswith(prefix):
             return family
