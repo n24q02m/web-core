@@ -1168,22 +1168,22 @@ mteb = [
 requires-dist = [
     { name = "browserforge", specifier = ">=1.2.4" },
     { name = "capsolver", specifier = ">=1.0.7" },
-    { name = "crawl4ai", specifier = ">=0.9.3" },
+    { name = "crawl4ai", specifier = ">=0.9.4" },
     { name = "curl-cffi", specifier = ">=0.16.3" },
     { name = "gdown", specifier = ">=6.4.0" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "langgraph", specifier = ">=1.2.11" },
+    { name = "langgraph", specifier = ">=1.2.12" },
     { name = "patchright", specifier = ">=1.63.0" },
     { name = "pillow", specifier = ">=12.3.0" },
-    { name = "pyarrow", marker = "extra == 'dev'", specifier = ">=15.0.0" },
-    { name = "pyarrow", marker = "extra == 'mteb'", specifier = ">=15.0.0" },
+    { name = "pyarrow", marker = "extra == 'dev'", specifier = ">=25.0.1" },
+    { name = "pyarrow", marker = "extra == 'mteb'", specifier = ">=25.0.1" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.1.1" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=1.4.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=7.1.0" },
     { name = "pytest-timeout", marker = "extra == 'dev'", specifier = ">=2.4.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.16.7" },
-    { name = "ty", marker = "extra == 'dev'", specifier = ">=0.0.80" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.16.9" },
+    { name = "ty", marker = "extra == 'dev'", specifier = ">=0.0.84" },
 ]
 provides-extras = ["mteb", "dev"]
 
