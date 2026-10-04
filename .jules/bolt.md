@@ -9,3 +9,7 @@
 ## 2024-09-20 - Pre-compile regex in hot paths to avoid parsing overhead
 **Learning:** Calling `re.sub(pattern, ...)` with a string pattern directly on hot paths forces the regex engine to parse the pattern and maintain an internal cache. Pre-compiling the regex at the module level using `re.compile(pattern)` and calling `.sub(...)` on the compiled object avoids this overhead, making execution significantly faster (e.g., ~33% faster for user-agent substitution).
 **Action:** Extract inline regex patterns into module-level pre-compiled `re.Pattern` objects for frequently called functions.
+
+## 2025-02-12 - Pre-compile regex in hot paths to avoid parsing overhead
+**Learning:** Calling `re.match` with a string pattern directly inside tight loops (like in `version_guard`) forces the regex engine to parse the pattern or rely on its internal cache, introducing measurable overhead. Pre-compiling the regex at the module level using `re.compile(pattern)` and calling `.match(...)` on the compiled object avoids this parsing overhead, resulting in a measurable performance improvement.
+**Action:** Extract inline regex patterns into module-level pre-compiled `re.Pattern` objects for frequently called functions, particularly those used in tight loops over large datasets.
