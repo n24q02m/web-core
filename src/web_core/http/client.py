@@ -171,6 +171,44 @@ def _ssrf_event_hook_factory(allow_private: bool | Iterable[str]) -> Any:
     return _ssrf_event_hook
 
 
+def _ssrf_sync_event_hook_factory(allow_private: bool | Iterable[str]) -> Any:
+    """Create a synchronous SSRF event hook with specific settings."""
+    if isinstance(allow_private, Iterable) and not isinstance(allow_private, (str, bytes)):
+        allow_private = frozenset(allow_private)
+
+    def _ssrf_sync_event_hook(request: httpx.Request) -> None:
+        """httpx synchronous request event hook that blocks SSRF attempts."""
+        url_str = str(request.url)
+        if not is_safe_url(url_str, allow_private=allow_private):
+            raise httpx.RequestError(f"SSRF blocked: {url_str}", request=request)
+
+    return _ssrf_sync_event_hook
+
+
+def safe_httpx_sync_client(**kwargs: Any) -> httpx.Client:
+    """Create an httpx.Client with SSRF protection.
+
+    The SSRF event hook is always inserted as the *first* request hook so
+    it cannot be bypassed by earlier hooks.  Any additional ``event_hooks``
+    passed via *kwargs* are preserved.
+
+    Optional Parameter:
+    - ``allow_private``: If ``True``, allows requests to loopback and private IPs.
+      Defaults to ``False``.
+
+    Usage::
+
+        with safe_httpx_sync_client() as client:
+            resp = client.get("https://example.com")
+    """
+    allow_private = kwargs.pop("allow_private", False)
+    hooks = kwargs.pop("event_hooks", {})
+    request_hooks = list(hooks.get("request", []))
+    request_hooks.insert(0, _ssrf_sync_event_hook_factory(allow_private))
+    hooks["request"] = request_hooks
+    return httpx.Client(event_hooks=hooks, **kwargs)
+
+
 def safe_httpx_client(**kwargs: Any) -> httpx.AsyncClient:
     """Create an httpx.AsyncClient with SSRF protection.
 
