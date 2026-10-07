@@ -40,7 +40,14 @@ def _dominates(a: ModelCandidate, b: ModelCandidate) -> bool:
 def frontier(candidates: list[ModelCandidate]) -> list[ModelCandidate]:
     """Non-dominated set among cost-known candidates, sorted by cost ascending."""
     known = [c for c in candidates if c.cost_1m_blended is not None]
-    result = [c for c in known if not any(_dominates(other, c) for other in known if other is not c)]
+    # ⚡ Bolt: Replace generator expression with flat for-else loop to avoid generator overhead in O(N^2) operation
+    result = []
+    for c in known:
+        for other in known:
+            if other is not c and _dominates(other, c):
+                break
+        else:
+            result.append(c)
     return sorted(result, key=lambda c: (c.cost_1m_blended, -c.quality))
 
 
