@@ -109,7 +109,7 @@ def test_aa_source_parses_evaluations(monkeypatch):
     }
     with patch("web_core.http.client.httpx.Client.get", return_value=_resp(payload)) as get:
         recs = ArtificialAnalysisSource(api_key="k").fetch()
-    assert get.call_args.kwargs["headers"]["x-api-key"] == "k"
+    assert get.call_args[1]["headers"]["x-api-key"] == "k"
     assert recs["GPT-6"].score == 52.3  # dict key = raw slug, record.key = slugified
     assert recs["GPT-6"].board_version == "v4"
     assert recs["flat-row"].score == 40.0
