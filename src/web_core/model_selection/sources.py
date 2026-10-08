@@ -28,10 +28,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
-import httpx
-
-from web_core.model_selection.mteb_tasks import task_family
 from web_core.http.client import safe_httpx_sync_client
+from web_core.model_selection.mteb_tasks import task_family
 
 logger = logging.getLogger(__name__)
 
