@@ -1183,7 +1183,7 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=1.4.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=7.1.0" },
     { name = "pytest-timeout", marker = "extra == 'dev'", specifier = ">=2.4.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.16.7" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.16.10" },
     { name = "ty", marker = "extra == 'dev'", specifier = ">=0.0.80" },
 ]
 provides-extras = ["mteb", "dev"]
