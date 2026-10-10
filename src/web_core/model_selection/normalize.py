@@ -26,9 +26,6 @@ from web_core.model_selection.tasks import Constraints, TaskProfile
 
 logger = logging.getLogger(__name__)
 
-# Pre-compile the regex to avoid repetitive internal parsing overhead within the hot loop
-_VERSION_RE = re.compile(r"v?(\d+)")
-
 # AA scores embedded in OR /api/v1/models rows -> aggregate source names.
 # Missing on a row = missing, NOT 0.
 _EMBEDDED_AA_SCORES = {
@@ -172,12 +169,12 @@ def version_guard(candidates: list[ModelCandidate]) -> None:
     newest: dict[str, int] = {}
     for cand in candidates:
         for source, ver in cand.board_versions.items():
-            m = _VERSION_RE.match(ver)
+            m = re.match(r"v?(\d+)", ver)
             if m:
                 newest[source] = max(newest.get(source, 0), int(m.group(1)))
     for cand in candidates:
         for source, ver in list(cand.board_versions.items()):
-            m = _VERSION_RE.match(ver)
+            m = re.match(r"v?(\d+)", ver)
             if m and int(m.group(1)) < newest[source]:
                 logger.warning(
                     "model_selection version guard drop: source=%s model=%s version=%s newest=v%d",
