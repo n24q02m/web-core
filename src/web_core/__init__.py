@@ -7,14 +7,7 @@ from web_core.browsers import (
     CFBrowserRenderingError,
     PatchrightProvider,
 )
-from web_core.http import (
-    is_safe_url,
-    is_valid_domain,
-    normalize_url,
-    safe_httpx_client,
-    safe_httpx_sync_client,
-    strip_tracking_params,
-)
+from web_core.http import is_safe_url, is_valid_domain, normalize_url, safe_httpx_client, strip_tracking_params
 from web_core.scraper import ScrapingAgent, StrategyCache
 from web_core.scraper.strategies import RemoteRenderStrategy, RenderClient
 from web_core.search import SearchResult, ensure_searxng, shutdown_searxng
@@ -35,7 +28,6 @@ __all__ = [
     "is_valid_domain",
     "normalize_url",
     "safe_httpx_client",
-    "safe_httpx_sync_client",
     "shutdown_searxng",
     "strip_tracking_params",
 ]

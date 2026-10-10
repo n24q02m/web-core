@@ -28,7 +28,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
-from web_core.http.client import safe_httpx_sync_client
+import httpx
+
 from web_core.model_selection.mteb_tasks import task_family
 
 logger = logging.getLogger(__name__)
@@ -100,17 +101,15 @@ class Source(Protocol):
 
 
 def _get_json(url: str, *, headers: dict[str, str] | None = None, params: dict[str, str] | None = None) -> Any:
-    with safe_httpx_sync_client(timeout=DEFAULT_TIMEOUT, follow_redirects=True) as client:
-        resp = client.get(url, headers=headers, params=params)
-        resp.raise_for_status()
-        return resp.json()
+    resp = httpx.get(url, headers=headers, params=params, timeout=DEFAULT_TIMEOUT, follow_redirects=True)
+    resp.raise_for_status()
+    return resp.json()
 
 
 def _get_bytes(url: str, *, headers: dict[str, str] | None = None) -> bytes:
-    with safe_httpx_sync_client(timeout=DEFAULT_TIMEOUT, follow_redirects=True) as client:
-        resp = client.get(url, headers=headers)
-        resp.raise_for_status()
-        return resp.content
+    resp = httpx.get(url, headers=headers, timeout=DEFAULT_TIMEOUT, follow_redirects=True)
+    resp.raise_for_status()
+    return resp.content
 
 
 def _float(value: Any) -> float | None:
