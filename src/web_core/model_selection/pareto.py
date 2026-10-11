@@ -40,8 +40,16 @@ def _dominates(a: ModelCandidate, b: ModelCandidate) -> bool:
 def frontier(candidates: list[ModelCandidate]) -> list[ModelCandidate]:
     """Non-dominated set among cost-known candidates, sorted by cost ascending."""
     known = [c for c in candidates if c.cost_1m_blended is not None]
-    result = [c for c in known if not any(_dominates(other, c) for other in known if other is not c)]
-    return sorted(result, key=lambda c: (c.cost_1m_blended, -c.quality))
+    # Fast-path: pre-sort by cost asc/quality desc and check only against accumulated results.
+    known.sort(key=lambda c: (c.cost_1m_blended, -c.quality))
+    result: list[ModelCandidate] = []
+    for c in known:
+        for other in result:
+            if _dominates(other, c):
+                break
+        else:
+            result.append(c)
+    return result
 
 
 def assign_pareto_ranks(candidates: list[ModelCandidate]) -> None:
