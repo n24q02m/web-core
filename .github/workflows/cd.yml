@@ -35,7 +35,7 @@ jobs:
       is_prerelease: ${{ steps.release.outputs.is_prerelease }}
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
         with:
           egress-policy: audit
 
@@ -55,7 +55,7 @@ jobs:
       # learn the version it WOULD publish, so the PyPI-collision guard below can fire
       # BEFORE the real run creates a git tag or GitHub Release. Same action + SHA and
       # same prerelease inputs as the real step, run against the same untouched checkout.
-      - uses: n24q02m/better-semantic-release@a994102ce3aa588fe3038e79707ae7ae3971b336 # v1.7.0
+      - uses: n24q02m/better-semantic-release@0e57c64481cb78492ad1ff8025b0cd368dbb695f # v1.13.0
         id: dryrun
         with:
           github_token: ${{ steps.app-token.outputs.token }}
@@ -121,14 +121,14 @@ jobs:
           echo "::error::Could not verify whether ${PKG}==${COMPUTED_VERSION} exists on PyPI: unexpected HTTP status ${http_code} from ${URL} (likely a transient network/registry error, rate limit, or outage). Refusing to proceed so a genuine collision cannot slip through as a false 'free'. Re-run the release once the registry is reachable."
           exit 1
 
-      - uses: n24q02m/better-semantic-release@a994102ce3aa588fe3038e79707ae7ae3971b336 # v1.7.0
+      - uses: n24q02m/better-semantic-release@0e57c64481cb78492ad1ff8025b0cd368dbb695f # v1.13.0
         id: release
         with:
           github_token: ${{ steps.app-token.outputs.token }}
           prerelease: ${{ env.RELEASE_TYPE == 'beta' }}
           prerelease_token: beta
 
-      - uses: python-semantic-release/publish-action@6d89e2de8d40ecb3717316ecbbf15a6fa8ea9039 # v10.6.2
+      - uses: python-semantic-release/publish-action@99d4062dd393b5a7a62c5fe9ed78fb364b5674f2 # v10.7.0
         if: steps.release.outputs.released == 'true'
         with:
           github_token: ${{ steps.app-token.outputs.token }}
@@ -142,7 +142,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
         with:
           egress-policy: audit
 
@@ -150,7 +150,7 @@ jobs:
         with:
           ref: ${{ needs.release.outputs.tag }}
 
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
 
       - run: uv build
 
@@ -165,7 +165,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
         with:
           egress-policy: audit
 
@@ -197,7 +197,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
         with:
           egress-policy: audit
 
