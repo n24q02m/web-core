@@ -9,3 +9,7 @@
 ## 2024-09-20 - Pre-compile regex in hot paths to avoid parsing overhead
 **Learning:** Calling `re.sub(pattern, ...)` with a string pattern directly on hot paths forces the regex engine to parse the pattern and maintain an internal cache. Pre-compiling the regex at the module level using `re.compile(pattern)` and calling `.sub(...)` on the compiled object avoids this overhead, making execution significantly faster (e.g., ~33% faster for user-agent substitution).
 **Action:** Extract inline regex patterns into module-level pre-compiled `re.Pattern` objects for frequently called functions.
+
+## 2024-10-25 - Avoid temporary set creation for intersection checks
+**Learning:** Using `not set_obj.isdisjoint(dict_obj)` is significantly faster and more memory-efficient than using `set_obj & set(dict_obj)` for determining if a set and a dictionary share any keys. It avoids creating a temporary set from the dictionary and short-circuits upon finding the first match.
+**Action:** Replace `set_obj & set(dict_obj)` with `not set_obj.isdisjoint(dict_obj)` for fast-path intersection checks where only a boolean result is needed.
