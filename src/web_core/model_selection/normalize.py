@@ -213,7 +213,9 @@ def blend_quality(candidates: list[ModelCandidate], task: TaskProfile) -> None:
     spec = set(task.specialized_sources)
     agg = set(task.aggregate_sources)
     scored = [c for c in candidates if c.scores]
-    covered = sum(1 for c in scored if spec & set(c.scores))
+    # Bolt: Replace `spec & set(...)` with `not spec.isdisjoint(...)` to avoid allocating
+    # a temporary set, short-circuit earlier, and improve list processing speed.
+    covered = sum(1 for c in scored if not spec.isdisjoint(c.scores))
     w_spec = task.quality_weight if scored and covered / len(scored) >= 0.8 else min(task.quality_weight, 0.5)
     for cand in candidates:
         spec_vals = [v for s, v in cand.scores.items() if s in spec]
